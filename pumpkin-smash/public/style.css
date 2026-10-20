@@ -590,6 +590,10 @@ body.hunting #fx {
   font-size: clamp(26px, 4vw, 44px);
   line-height: 1.15;
 }
+.credit.fine .names {
+  font: 400 15px/1.3 var(--ui);
+  color: var(--ash);
+}
 .credit .names .who + .who::before {
   content: '&';
   margin: 0 0.35em;

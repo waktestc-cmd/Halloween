@@ -16,7 +16,16 @@ Fonts below.
 | 12 costume silhouettes, pumpkins, hammer, souls, ghosts | `public/common.js` | Drawn in code at runtime (SVG paths / Canvas 2D) | Same as above |
 | House facade, mantel, candle timer, floor plan | `public/host.js` | Drawn in code at runtime | Same as above |
 | QR code | `/qr.svg` | Generated at runtime by the `qrcode` npm package (MIT) | MIT (library); the output is ours |
-| All sound | `public/common.js` | Synthesised at runtime with the Web Audio API (no audio files) | Same as above |
+| All other sound | `public/common.js` | Synthesised at runtime with the Web Audio API | Same as above |
+
+## Recorded sounds
+
+Each author listed here also appears under "Sounds" in the end credits (`SOUND_CREDITS` in
+`public/shared.js`), as CC BY requires.
+
+| Sound | File | Source | Author | Licence |
+| --- | --- | --- | --- | --- |
+| Zombie wind-up snarl (played at 0.74–0.84× speed) | `public/sounds/zombie-snarl.wav` | [Orc Grunt 3](https://freesound.org/people/qubodup/sounds/738439/) on Freesound | qubodup | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 Regenerate the rooms with `python3 tools/paint_rooms.py` (needs numpy and Pillow; add
 `--preview DIR` for torch-lit previews). It is deterministic, so the same code gives the same rooms.

@@ -423,6 +423,11 @@
     add('Most souls', aw.souls, 'souls', 0);
     add('Most haunted', aw.haunted, 'deaths', 1);
     add('Hammer hero', aw.hammer, '', 2);
+    const snd = document.createElement('div');
+    snd.className = 'credit fine';
+    snd.style.animationDelay = delay + 3 * 0.5 + 's';
+    snd.innerHTML = `<div class="label">Sounds</div><div class="names">${S.SOUND_CREDITS.join(', ')}</div>`;
+    box.appendChild(snd);
     return box;
   }
 

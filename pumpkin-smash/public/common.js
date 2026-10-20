@@ -898,7 +898,11 @@
       if (ctx.state === 'suspended') ctx.resume();
       return ctx;
     }
-    api.unlock = ensure;
+    api.unlock = () => {
+      const c = ensure();
+      if (c && api.preload) api.preload();
+      return c;
+    };
     api.isMuted = () => muted;
     api.setMuted = (m) => {
       muted = m;
@@ -1137,8 +1141,51 @@
     };
     api.shuffle = (pan, vol = 0.07) => noise({ f: 320, f2: 180, q: 0.8, vol, dur: 0.35, ft: 'lowpass', pan });
     // the wind-up before a swipe: a short rising snarl, the warning you get
+    // Recorded sounds (see ASSETS.md). Fetched up front, decoded once audio is unlocked;
+    // until then, or if a file fails, the synthesised version plays instead.
+    const samples = {};
+    function sample(name, url) {
+      const raw = fetch(url)
+        .then((r) => (r.ok ? r.arrayBuffer() : null))
+        .catch(() => null);
+      samples[name] = { raw, buf: null, pending: false };
+    }
+    function decoded(name) {
+      const sm = samples[name];
+      if (!sm || !ensure()) return null;
+      if (!sm.buf && !sm.pending) {
+        sm.pending = true;
+        sm.raw
+          .then((ab) => ab && ctx.decodeAudioData(ab))
+          .then((b) => (sm.buf = b || null))
+          .catch(() => {});
+      }
+      return sm.buf;
+    }
+    function play(buf, o = {}) {
+      if (muted) return;
+      const t = ctx.currentTime + (o.at || 0);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = o.rate || 1;
+      const g = ctx.createGain();
+      g.gain.value = o.vol != null ? o.vol : 1;
+      src.connect(g);
+      g.connect(out(o.pan));
+      src.start(t);
+    }
+    sample('snarl', '/sounds/zombie-snarl.wav');
+    api.preload = () => Object.keys(samples).forEach(decoded);
+
     api.snarl = (pan) => {
       const v = api.mild ? 0.08 : 0.16;
+      const buf = decoded('snarl');
+      if (buf) {
+        // an orc grunt, slowed and deepened into something that used to be a man
+        play(buf, { pan, rate: rand(0.74, 0.84), vol: api.mild ? 0.35 : 0.8 });
+        noise({ f: 300, q: 0.8, vol: v * 0.4, dur: 0.6, ft: 'lowpass', pan });
+        return;
+      }
       [0, 7].forEach((det) => tone({ f: 70 + det, f2: 150 + det, glide: 0.5, type: 'sawtooth', vol: v, dur: 0.6, lp: 700, vib: [11, 9], pan }));
       noise({ f: 900, f2: 1600, q: 1.5, vol: v * 0.6, dur: 0.55, pan });
     };

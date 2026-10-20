@@ -55,11 +55,14 @@
     { name: 'Soul harvest', ordinal: 'three', sub: 'Souls everywhere. Ghosts in a hurry.' },
   ];
 
+  // Recorded sounds need their authors in the end credits (CC BY). See ASSETS.md.
+  const SOUND_CREDITS = ['qubodup'];
+
   // The game's name, in one place.
   const TITLE = 'Pumpkin Smash';
 
   const NUM_PUMPKINS = 6;
   const MAX_NAME = 16;
 
-  return { TITLE, ROOMS, GHOSTS, ZOMBIES, COSTUMES, EVENTS, ACTS, NUM_PUMPKINS, MAX_NAME };
+  return { TITLE, SOUND_CREDITS, ROOMS, GHOSTS, ZOMBIES, COSTUMES, EVENTS, ACTS, NUM_PUMPKINS, MAX_NAME };
 });

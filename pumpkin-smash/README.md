@@ -7,7 +7,8 @@ to smash. One of the six secretly holds **Friday afternoon off**, an exact 1-in-
 
 * Node.js + Express + Socket.io, all state in memory, single process, single room.
 * Plain HTML/CSS/JS. The hunt is a WebGL torch lighting five painted rooms (with a Canvas 2D fallback);
-  everything else is drawn in code. Every sound is synthesised with Web Audio.
+  everything else is drawn in code. Sound is synthesised with Web Audio, plus a few CC BY recordings
+  credited in `ASSETS.md` and the end credits.
 * Full spec: [SPEC.md](SPEC.md). Visual direction: [ART_DIRECTION.md](ART_DIRECTION.md) ("light is the only colour").
 * Every asset, its source and licence: [ASSETS.md](ASSETS.md).
 

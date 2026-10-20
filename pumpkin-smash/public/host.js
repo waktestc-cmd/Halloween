@@ -254,6 +254,11 @@
       add('Most souls', r.awards.souls, 'souls', 0);
       add('Most haunted', r.awards.haunted, 'deaths', 1);
       add('Hammer hero', r.awards.hammer, '', 2);
+      const snd = el('div', 'credit fine');
+      snd.style.animationDelay = 4.6 + 3 * 0.6 + 's';
+      snd.appendChild(el('div', 'label', 'Sounds'));
+      snd.appendChild(el('div', 'names', S.SOUND_CREDITS.join(', ')));
+      cr.appendChild(snd);
       v.appendChild(cr);
     },
   };
