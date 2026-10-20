@@ -83,7 +83,7 @@
         return;
       }
       // come: frozen while lit, otherwise a little closer
-      if (L > 0.42) {
+      if (L > 0.3) {
         r.lit += dt;
         if (r.lit > 3) {
           r.st = 'go';
@@ -155,7 +155,7 @@
       }
       if (r.st === 'appear' && r.id === 'samara') h *= 0.4 + 0.6 * ease.out(r.a);
       // a breath when frozen in the light, so you know it is alive
-      if (r.L > 0.42) o.rot = Math.sin(tt * 30) * 0.004;
+      if (r.L > 0.3) o.rot = Math.sin(tt * 30) * 0.004;
       PS.drawLitSprite(ctx, img, sp.x, sp.y, h, o);
     }
     function frameLit(R) {

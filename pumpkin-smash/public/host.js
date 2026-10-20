@@ -253,7 +253,7 @@
         cr.appendChild(d);
       };
       add('Most souls', r.awards.souls, 'souls', 0);
-      add('Most haunted', r.awards.haunted, 'deaths', 1);
+      add('Most haunted', r.awards.haunted, 'times', 1);
       add('Hammer hero', r.awards.hammer, '', 2);
       const snd = el('div', 'credit fine');
       snd.style.animationDelay = 4.6 + 3 * 0.6 + 's';
@@ -569,7 +569,7 @@
       const shut = ri >= (state.open || S.ROOMS.length);
       c.strokeStyle = hexA(T.bone, shut ? 0.14 : 0.5);
       c.lineWidth = 1;
-      c.setLineDash(shut || room.id === 'lake' ? [3, 5] : []);
+      c.setLineDash(shut ? [3, 5] : []);
       c.strokeRect(x + 0.5, y + 0.5, rw, rh);
       c.setLineDash([]);
       c.fillStyle = shut ? hexA(T.ash, 0.4) : T.ash;

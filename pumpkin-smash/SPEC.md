@@ -42,7 +42,7 @@ A real-time multiplayer Halloween game for a 20–30 person team meeting (~12 mi
 
 ## The dark house (player screen during HUNT)
 
-* 5 rooms: Hall, Attic, Crypt, Swamp, Chapel. Each has its own accent colour and ambient drone. Each player starts in a random room. The room name is shown faintly in a corner.
+* *(Since grown: the house now has twelve painted rooms, hidden pumpkins and a resident per room; see README.)* 5 rooms: Hall, Attic, Crypt, Swamp, Chapel. Each has its own accent colour and ambient drone. Each player starts in a random room. The room name is shown faintly in a corner.
 * The full-screen canvas is near-black. The torch is a soft radial light (~8% of screen width) following the mouse or finger, with a slight flicker. Items are only visible inside the torch light. The player's costume glyph sits at the torch centre. Hide the system cursor.
 * Doors: every 5–8s a glowing door fades in at a random spot for 3.5s. Clicking it moves the player to a random other room (creak sound and a short transition).
 * Hints: if the player has collected nothing for 30s, a faint pulsing glow appears at the screen edge, pointing toward the nearest door or item in the current room.

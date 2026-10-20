@@ -423,7 +423,7 @@
       box.appendChild(d);
     };
     add('Most souls', aw.souls, 'souls', 0);
-    add('Most haunted', aw.haunted, 'deaths', 1);
+    add('Most haunted', aw.haunted, 'times', 1);
     add('Hammer hero', aw.hammer, '', 2);
     const snd = document.createElement('div');
     snd.className = 'credit fine';
@@ -1076,12 +1076,15 @@
     ctx.font = `italic 600 ${size}px Fraunces, Georgia, serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const ly = y + presenceSize(Hunt.baseRadius()) * 0.75 + 10;
+    const ly = Math.min(y + presenceSize(Hunt.baseRadius()) * 0.75 + 10, H - size * 3);
+    // keep the words on screen near the edges
+    const half = ctx.measureText(text).width / 2 + 14;
+    const lx = clamp(x, half, Math.max(half, W - half));
     ctx.fillStyle = hexA(T.ink, 0.7);
-    ctx.fillText(text, x + 1, ly + 1);
+    ctx.fillText(text, lx + 1, ly + 1);
     ctx.fillStyle = T.bone;
     ctx.globalAlpha = 0.92;
-    ctx.fillText(text, x, ly);
+    ctx.fillText(text, lx, ly);
     ctx.restore();
   }
   const EMPTY = ['Empty. Just dust.', 'Nothing in here but cobwebs.', 'Empty.', 'Nothing. Something was here once.'];

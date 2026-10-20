@@ -56,6 +56,10 @@ app.get('/qr.svg', async (req, res) => {
   }
 });
 
+// the paintings and sprites are big and rarely change: let browsers keep them for an hour
+for (const dir of ['rooms', 'sprites', 'sounds']) {
+  app.use('/' + dir, express.static(path.join(__dirname, 'public', dir), { index: false, maxAge: FAST ? 0 : '1h' }));
+}
 app.use(express.static(path.join(__dirname, 'public'), { index: false, maxAge: FAST ? 0 : '5m' }));
 
 io.on('connection', (socket) => {
