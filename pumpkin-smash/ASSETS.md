@@ -37,6 +37,10 @@ Each author listed here also appears under "Sounds" in the end credits (`SOUND_C
 | --- | --- | --- | --- | --- |
 | The house laughing as the game starts (host and phones) | `public/sounds/evil-laugh.wav` | `evillaugh.ogg`, supplied by the team; converted to WAV so older iPhones can play it. Originally from Plants vs. Zombies (PopCap/EA). | PopCap/EA | **Not cleared yet**: the team is obtaining the rights. Replace it if they can't be obtained. |
 | Zombie groan, near you in the dark (pitch varied 0.88–1.04×) | `public/sounds/zombie-groan.wav` | `Firefly-zombie_attack_and_bite.wav`, supplied by the team (the file name suggests Adobe Firefly); mixed to mono | Supplied by the team | **To confirm**: the team is handling the rights |
+| Ghostface: "Do you like scary movies?" when you answer the phone | `public/sounds/voice-ghostface.mp3` | Supplied by the team; trimmed and levelled | From the film *Scream* | **Team's responsibility**: internal use only |
+| Jason: "ki ki ki, ma ma ma" as he rises from the lake | `public/sounds/voice-jason.mp3` | Supplied by the team; trimmed and levelled | From the *Friday the 13th* films | **Team's responsibility**: internal use only |
+| Freddy: "One, two, Freddy's coming for you" when you stand still | `public/sounds/voice-freddy.mp3` | Supplied by the team; levelled | From *A Nightmare on Elm Street* | **Team's responsibility**: internal use only |
+| Pennywise: "They float" when your light finds him | `public/sounds/voice-pennywise.mp3` | Supplied by the team; levelled | From *It* | **Team's responsibility**: internal use only |
 | Zombie wind-up snarl (played at 0.74–0.84× speed) | `public/sounds/zombie-snarl.wav` | [Orc Grunt 3](https://freesound.org/people/qubodup/sounds/738439/) on Freesound | qubodup | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 Rebuild the rooms and sprites from the raw images with `python3 tools/build_rooms.py RAW_DIR`

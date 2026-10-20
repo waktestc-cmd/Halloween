@@ -6,44 +6,67 @@
    "id": "hall",
    "doors": [
     {
-     "x": 0.905,
-     "y": 0.2,
-     "w": 0.085,
-     "h": 0.53,
-     "kind": "side"
+     "x": 0.917,
+     "y": 0.27,
+     "w": 0.068,
+     "h": 0.465,
+     "kind": "door",
+     "q": [
+      [
+       0.917,
+       0.285
+      ],
+      [
+       0.985,
+       0.27
+      ],
+      [
+       0.985,
+       0.735
+      ],
+      [
+       0.917,
+       0.7
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the chest",
+     "do": "Open the chest",
+     "where": "in the chest",
      "x": 0.7,
      "y": 0.53,
      "w": 0.11,
      "h": 0.12
     },
     {
-     "name": "the clock",
+     "do": "Look inside the clock",
+     "where": "inside the clock",
      "x": 0.12,
      "y": 0.22,
      "w": 0.06,
      "h": 0.42
     },
     {
-     "name": "the side table",
+     "do": "Look under the side table",
+     "where": "under the side table",
      "x": 0.2,
      "y": 0.53,
      "w": 0.09,
      "h": 0.12
     },
     {
-     "name": "the sofa",
+     "do": "Search the sofa",
+     "where": "in the sofa",
      "x": 0.0,
      "y": 0.52,
      "w": 0.16,
      "h": 0.2
     },
     {
-     "name": "the stairs",
+     "do": "Look under the stairs",
+     "where": "under the stairs",
      "x": 0.4,
      "y": 0.4,
      "w": 0.2,
@@ -84,51 +107,75 @@
    "id": "drawing",
    "doors": [
     {
-     "x": 0.11,
-     "y": 0.21,
-     "w": 0.065,
-     "h": 0.47,
-     "kind": "left"
+     "x": 0.115,
+     "y": 0.27,
+     "w": 0.05,
+     "h": 0.42,
+     "kind": "door",
+     "q": [
+      [
+       0.165,
+       0.3
+      ],
+      [
+       0.115,
+       0.27
+      ],
+      [
+       0.115,
+       0.69
+      ],
+      [
+       0.165,
+       0.66
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the bookcase",
+     "do": "Search the bookcase",
+     "where": "in the bookcase",
      "x": 0.2,
      "y": 0.2,
      "w": 0.15,
      "h": 0.46
     },
     {
-     "name": "the fireplace",
+     "do": "Look in the fireplace",
+     "where": "in the fireplace",
      "x": 0.4,
      "y": 0.43,
      "w": 0.2,
      "h": 0.23
     },
     {
-     "name": "the sofa",
+     "do": "Search the sofa",
+     "where": "in the sofa",
      "x": 0.63,
      "y": 0.5,
      "w": 0.2,
      "h": 0.15
     },
     {
-     "name": "the china cabinet",
+     "do": "Open the china cabinet",
+     "where": "in the china cabinet",
      "x": 0.915,
      "y": 0.2,
      "w": 0.085,
      "h": 0.55
     },
     {
-     "name": "the armchair",
+     "do": "Search the armchair",
+     "where": "in the armchair",
      "x": 0.17,
      "y": 0.5,
      "w": 0.1,
      "h": 0.19
     },
     {
-     "name": "the console table",
+     "do": "Open the console drawer",
+     "where": "in the console drawer",
      "x": 0.0,
      "y": 0.55,
      "w": 0.12,
@@ -156,57 +203,92 @@
     }
    ],
    "candles": [],
-   "spots": {}
+   "spots": {
+    "frame": [
+     0.44,
+     0.15,
+     0.12,
+     0.25
+    ],
+    "home": [
+     0.5,
+     0.72
+    ]
+   }
   },
   {
    "id": "parlour",
    "doors": [
     {
-     "x": 0.01,
-     "y": 0.12,
-     "w": 0.09,
-     "h": 0.61,
-     "kind": "left"
+     "x": 0.015,
+     "y": 0.15,
+     "w": 0.07,
+     "h": 0.57,
+     "kind": "door",
+     "q": [
+      [
+       0.085,
+       0.19
+      ],
+      [
+       0.015,
+       0.15
+      ],
+      [
+       0.015,
+       0.72
+      ],
+      [
+       0.085,
+       0.69
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the sideboard",
+     "do": "Open the sideboard",
+     "where": "in the sideboard",
      "x": 0.16,
      "y": 0.5,
      "w": 0.14,
      "h": 0.17
     },
     {
-     "name": "the cabinet",
+     "do": "Open the cabinet",
+     "where": "in the cabinet",
      "x": 0.42,
      "y": 0.545,
      "w": 0.155,
      "h": 0.125
     },
     {
-     "name": "the bookcase",
+     "do": "Search the bookcase",
+     "where": "in the bookcase",
      "x": 0.785,
      "y": 0.23,
      "w": 0.12,
      "h": 0.46
     },
     {
-     "name": "the armchair",
+     "do": "Search the armchair",
+     "where": "in the armchair",
      "x": 0.31,
      "y": 0.49,
      "w": 0.1,
      "h": 0.2
     },
     {
-     "name": "the other armchair",
+     "do": "Search the other armchair",
+     "where": "in the other armchair",
      "x": 0.585,
      "y": 0.49,
      "w": 0.1,
      "h": 0.2
     },
     {
-     "name": "the side table",
+     "do": "Look under the side table",
+     "where": "under the side table",
      "x": 0.885,
      "y": 0.55,
      "w": 0.1,
@@ -248,36 +330,58 @@
    "doors": [
     {
      "x": 0.885,
-     "y": 0.17,
-     "w": 0.09,
-     "h": 0.55,
-     "kind": "side"
+     "y": 0.21,
+     "w": 0.08,
+     "h": 0.52,
+     "kind": "door",
+     "q": [
+      [
+       0.885,
+       0.24
+      ],
+      [
+       0.965,
+       0.21
+      ],
+      [
+       0.965,
+       0.73
+      ],
+      [
+       0.885,
+       0.7
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the pantry",
+     "do": "Open the pantry",
+     "where": "in the pantry",
      "x": 0.02,
      "y": 0.2,
      "w": 0.145,
      "h": 0.53
     },
     {
-     "name": "the butcher's block",
+     "do": "Look under the butcher's block",
+     "where": "under the butcher's block",
      "x": 0.21,
      "y": 0.51,
      "w": 0.135,
      "h": 0.16
     },
     {
-     "name": "the oven",
+     "do": "Open the oven",
+     "where": "in the oven",
      "x": 0.42,
      "y": 0.51,
      "w": 0.17,
      "h": 0.16
     },
     {
-     "name": "the sink",
+     "do": "Look under the sink",
+     "where": "under the sink",
      "x": 0.655,
      "y": 0.47,
      "w": 0.155,
@@ -316,44 +420,67 @@
    "id": "chapel",
    "doors": [
     {
-     "x": 0.905,
-     "y": 0.19,
-     "w": 0.08,
-     "h": 0.54,
-     "kind": "side"
+     "x": 0.915,
+     "y": 0.26,
+     "w": 0.06,
+     "h": 0.47,
+     "kind": "door",
+     "q": [
+      [
+       0.915,
+       0.28
+      ],
+      [
+       0.975,
+       0.26
+      ],
+      [
+       0.975,
+       0.73
+      ],
+      [
+       0.915,
+       0.7
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the confessional",
+     "do": "Open the confessional",
+     "where": "in the confessional",
      "x": 0.18,
      "y": 0.2,
      "w": 0.155,
      "h": 0.46
     },
     {
-     "name": "the altar",
+     "do": "Look under the altar",
+     "where": "under the altar",
      "x": 0.4,
      "y": 0.49,
      "w": 0.2,
      "h": 0.17
     },
     {
-     "name": "the pews",
+     "do": "Check under the pews",
+     "where": "under the pews",
      "x": 0.0,
      "y": 0.53,
      "w": 0.25,
      "h": 0.25
     },
     {
-     "name": "the other pews",
+     "do": "Check under the other pews",
+     "where": "under the other pews",
      "x": 0.66,
      "y": 0.54,
      "w": 0.25,
      "h": 0.23
     },
     {
-     "name": "the statue",
+     "do": "Look behind the statue",
+     "where": "behind the statue",
      "x": 0.7,
      "y": 0.22,
      "w": 0.07,
@@ -412,61 +539,73 @@
      "s": 0.5
     }
    ],
-   "spots": {
-    "frame": [
-     0.44,
-     0.15,
-     0.115,
-     0.25
-    ],
-    "home": [
-     0.5,
-     0.72
-    ]
-   }
+   "spots": {}
   },
   {
    "id": "nursery",
    "doors": [
     {
-     "x": 0.905,
-     "y": 0.17,
-     "w": 0.085,
-     "h": 0.57,
-     "kind": "side"
+     "x": 0.915,
+     "y": 0.22,
+     "w": 0.07,
+     "h": 0.525,
+     "kind": "door",
+     "q": [
+      [
+       0.915,
+       0.25
+      ],
+      [
+       0.985,
+       0.22
+      ],
+      [
+       0.985,
+       0.745
+      ],
+      [
+       0.915,
+       0.71
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the toy chest",
+     "do": "Open the toy chest",
+     "where": "in the toy chest",
      "x": 0.0,
      "y": 0.58,
      "w": 0.13,
      "h": 0.15
     },
     {
-     "name": "the doll shelf",
+     "do": "Search the doll shelf",
+     "where": "on the doll shelf",
      "x": 0.0,
      "y": 0.16,
      "w": 0.11,
      "h": 0.41
     },
     {
-     "name": "the cot",
+     "do": "Look in the cot",
+     "where": "in the cot",
      "x": 0.14,
      "y": 0.45,
      "w": 0.21,
      "h": 0.23
     },
     {
-     "name": "the wardrobe",
+     "do": "Open the wardrobe",
+     "where": "in the wardrobe",
      "x": 0.665,
      "y": 0.3,
      "w": 0.1,
      "h": 0.36
     },
     {
-     "name": "the fireplace",
+     "do": "Look in the fireplace",
+     "where": "in the fireplace",
      "x": 0.4,
      "y": 0.43,
      "w": 0.2,
@@ -524,36 +663,58 @@
    "doors": [
     {
      "x": 0.02,
-     "y": 0.12,
-     "w": 0.1,
-     "h": 0.61,
-     "kind": "left"
+     "y": 0.17,
+     "w": 0.08,
+     "h": 0.55,
+     "kind": "door",
+     "q": [
+      [
+       0.1,
+       0.21
+      ],
+      [
+       0.02,
+       0.17
+      ],
+      [
+       0.02,
+       0.72
+      ],
+      [
+       0.1,
+       0.68
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the dressing table",
+     "do": "Open the dressing table",
+     "where": "in the dressing table",
      "x": 0.2,
      "y": 0.36,
      "w": 0.14,
      "h": 0.3
     },
     {
-     "name": "the bed",
+     "do": "Look under the bed",
+     "where": "under the bed",
      "x": 0.38,
      "y": 0.4,
      "w": 0.24,
      "h": 0.17
     },
     {
-     "name": "the blanket chest",
+     "do": "Open the blanket chest",
+     "where": "in the blanket chest",
      "x": 0.42,
      "y": 0.57,
      "w": 0.16,
      "h": 0.12
     },
     {
-     "name": "the wardrobe",
+     "do": "Open the wardrobe",
+     "where": "in the wardrobe",
      "x": 0.68,
      "y": 0.24,
      "w": 0.14,
@@ -587,51 +748,75 @@
    "id": "cellar",
    "doors": [
     {
-     "x": 0.01,
-     "y": 0.13,
-     "w": 0.12,
-     "h": 0.6,
-     "kind": "left"
+     "x": 0.02,
+     "y": 0.19,
+     "w": 0.09,
+     "h": 0.53,
+     "kind": "door",
+     "q": [
+      [
+       0.11,
+       0.23
+      ],
+      [
+       0.02,
+       0.19
+      ],
+      [
+       0.02,
+       0.72
+      ],
+      [
+       0.11,
+       0.69
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the wine rack",
+     "do": "Search the wine rack",
+     "where": "in the wine rack",
      "x": 0.19,
      "y": 0.2,
      "w": 0.1,
      "h": 0.45
     },
     {
-     "name": "the barrels",
+     "do": "Look behind the barrels",
+     "where": "behind the barrels",
      "x": 0.72,
      "y": 0.41,
      "w": 0.13,
      "h": 0.25
     },
     {
-     "name": "the wine niche",
+     "do": "Search the wine niche",
+     "where": "in the wine niche",
      "x": 0.42,
      "y": 0.39,
      "w": 0.15,
      "h": 0.25
     },
     {
-     "name": "the bottle crate",
+     "do": "Open the bottle crate",
+     "where": "in the bottle crate",
      "x": 0.12,
      "y": 0.51,
      "w": 0.08,
      "h": 0.16
     },
     {
-     "name": "the tall rack",
+     "do": "Search the tall rack",
+     "where": "in the tall rack",
      "x": 0.85,
      "y": 0.2,
      "w": 0.07,
      "h": 0.48
     },
     {
-     "name": "the crate",
+     "do": "Open the crate",
+     "where": "in the crate",
      "x": 0.28,
      "y": 0.51,
      "w": 0.06,
@@ -674,51 +859,75 @@
    "id": "attic",
    "doors": [
     {
-     "x": 0.9,
-     "y": 0.29,
-     "w": 0.075,
-     "h": 0.41,
-     "kind": "side"
+     "x": 0.905,
+     "y": 0.3,
+     "w": 0.06,
+     "h": 0.4,
+     "kind": "door",
+     "q": [
+      [
+       0.905,
+       0.32
+      ],
+      [
+       0.965,
+       0.3
+      ],
+      [
+       0.965,
+       0.7
+      ],
+      [
+       0.905,
+       0.69
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the trunks",
+     "do": "Open the trunks",
+     "where": "in the trunks",
      "x": 0.08,
      "y": 0.5,
      "w": 0.14,
      "h": 0.2
     },
     {
-     "name": "the covered chair",
+     "do": "Lift the sheet off the chair",
+     "where": "under the sheet",
      "x": 0.0,
      "y": 0.42,
      "w": 0.13,
      "h": 0.33
     },
     {
-     "name": "the trunk",
+     "do": "Open the trunk",
+     "where": "in the trunk",
      "x": 0.41,
      "y": 0.5,
      "w": 0.12,
      "h": 0.14
     },
     {
-     "name": "the dust sheet",
+     "do": "Lift the dust sheet",
+     "where": "under the dust sheet",
      "x": 0.53,
      "y": 0.5,
      "w": 0.08,
      "h": 0.14
     },
     {
-     "name": "the crates",
+     "do": "Open the crates",
+     "where": "in the crates",
      "x": 0.655,
      "y": 0.42,
      "w": 0.095,
      "h": 0.23
     },
     {
-     "name": "the mannequin",
+     "do": "Look behind the mannequin",
+     "where": "behind the mannequin",
      "x": 0.27,
      "y": 0.4,
      "w": 0.05,
@@ -752,37 +961,59 @@
    "id": "boiler",
    "doors": [
     {
-     "x": 0.905,
-     "y": 0.2,
-     "w": 0.085,
-     "h": 0.55,
-     "kind": "side"
+     "x": 0.915,
+     "y": 0.22,
+     "w": 0.065,
+     "h": 0.52,
+     "kind": "door",
+     "q": [
+      [
+       0.915,
+       0.25
+      ],
+      [
+       0.98,
+       0.22
+      ],
+      [
+       0.98,
+       0.74
+      ],
+      [
+       0.915,
+       0.7
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the lockers",
+     "do": "Open the lockers",
+     "where": "in the lockers",
      "x": 0.165,
      "y": 0.35,
      "w": 0.165,
      "h": 0.32
     },
     {
-     "name": "the furnace",
+     "do": "Open the furnace",
+     "where": "in the furnace",
      "x": 0.4,
      "y": 0.4,
      "w": 0.2,
      "h": 0.27
     },
     {
-     "name": "the toolbox",
+     "do": "Open the toolbox",
+     "where": "in the toolbox",
      "x": 0.7,
      "y": 0.36,
      "w": 0.12,
      "h": 0.31
     },
     {
-     "name": "the workbench",
+     "do": "Look under the workbench",
+     "where": "under the workbench",
      "x": 0.0,
      "y": 0.54,
      "w": 0.17,
@@ -821,44 +1052,67 @@
    "id": "crypt",
    "doors": [
     {
-     "x": 0.04,
-     "y": 0.13,
-     "w": 0.09,
-     "h": 0.61,
-     "kind": "gate"
+     "x": 0.045,
+     "y": 0.17,
+     "w": 0.08,
+     "h": 0.55,
+     "kind": "gate",
+     "q": [
+      [
+       0.125,
+       0.2
+      ],
+      [
+       0.045,
+       0.17
+      ],
+      [
+       0.045,
+       0.72
+      ],
+      [
+       0.125,
+       0.69
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the small tomb",
+     "do": "Open the small tomb",
+     "where": "in the small tomb",
      "x": 0.17,
      "y": 0.52,
      "w": 0.105,
      "h": 0.17
     },
     {
-     "name": "the sarcophagus",
+     "do": "Open the sarcophagus",
+     "where": "in the sarcophagus",
      "x": 0.385,
      "y": 0.46,
      "w": 0.235,
      "h": 0.2
     },
     {
-     "name": "the big tomb",
+     "do": "Open the big tomb",
+     "where": "in the big tomb",
      "x": 0.75,
      "y": 0.47,
      "w": 0.24,
      "h": 0.29
     },
     {
-     "name": "the urn",
+     "do": "Look in the urn",
+     "where": "in the urn",
      "x": 0.28,
      "y": 0.33,
      "w": 0.07,
      "h": 0.19
     },
     {
-     "name": "the other urn",
+     "do": "Look in the other urn",
+     "where": "in the other urn",
      "x": 0.66,
      "y": 0.33,
      "w": 0.07,
@@ -892,44 +1146,67 @@
    "id": "lake",
    "doors": [
     {
-     "x": 0.05,
-     "y": 0.08,
-     "w": 0.1,
-     "h": 0.69,
-     "kind": "left"
+     "x": 0.06,
+     "y": 0.1,
+     "w": 0.08,
+     "h": 0.66,
+     "kind": "door",
+     "q": [
+      [
+       0.14,
+       0.14
+      ],
+      [
+       0.06,
+       0.1
+      ],
+      [
+       0.06,
+       0.76
+      ],
+      [
+       0.14,
+       0.72
+      ]
+     ]
     }
    ],
    "containers": [
     {
-     "name": "the barrel",
+     "do": "Look in the barrel",
+     "where": "in the barrel",
      "x": 0.21,
      "y": 0.53,
      "w": 0.06,
      "h": 0.16
     },
     {
-     "name": "the boat",
+     "do": "Search the boat",
+     "where": "in the boat",
      "x": 0.66,
      "y": 0.58,
      "w": 0.21,
      "h": 0.24
     },
     {
-     "name": "the fishing net",
+     "do": "Check the fishing net",
+     "where": "in the fishing net",
      "x": 0.17,
      "y": 0.24,
      "w": 0.04,
      "h": 0.41
     },
     {
-     "name": "the reeds",
+     "do": "Search the reeds",
+     "where": "in the reeds",
      "x": 0.23,
      "y": 0.36,
      "w": 0.15,
      "h": 0.32
     },
     {
-     "name": "the far reeds",
+     "do": "Search the far reeds",
+     "where": "in the far reeds",
      "x": 0.87,
      "y": 0.36,
      "w": 0.13,

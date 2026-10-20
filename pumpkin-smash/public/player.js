@@ -1067,7 +1067,7 @@
     }
     if (!text) {
       const hit = containerAt(x, y);
-      if (hit) text = `Open ${hit.k.name}`;
+      if (hit) text = hit.k.do;
     }
     fx.style.cursor = text ? 'pointer' : '';
     if (!text) return;
@@ -1103,7 +1103,7 @@
       Hunt.lastCollect = performance.now();
       if (res.found === 'p' || res.found === 'h') {
         if (res.kept === false) {
-          if (res.found === 'p') toast(`Pumpkin ${res.n} is in ${k.name}. You already carry ${me.hammer ? 'the hammer' : 'Pumpkin ' + me.pumpkin}. Leave it for someone else.`, 3600);
+          if (res.found === 'p') toast(`Pumpkin ${res.n} is ${k.where}. You already carry ${me.hammer ? 'the hammer' : 'Pumpkin ' + me.pumpkin}. Leave it for someone else.`, 3600);
           return;
         }
         Sound.claim();
@@ -1111,12 +1111,12 @@
         const size = 135 * view.view.scale;
         Hunt.ignite.push({ t: performance.now(), x: cx, y: cy, size, n: res.n, kind: res.found });
         particles.emit(cx, cy, { count: isMild() ? 20 : 60, color: [T.ember, T.flame], speed: 260, life: 1.4, size: 4, gravity: -60, shape: 'ember' });
-        if (res.found === 'p') banner(`Pumpkin ${res.n} is yours.`, `It was in ${k.name}. It is safe now. You will pitch it later.`, true);
+        if (res.found === 'p') banner(`Pumpkin ${res.n} is yours.`, `It was ${k.where}. It is safe now. You will pitch it later.`, true);
         else banner('The hammer is yours.', 'You will be the one who swings it.', true);
       } else if (res.found === 's') {
         Sound.ping(clamp((cx - W / 2) / (W / 2), -1, 1));
         particles.emit(cx, cy, { count: 10, color: [T.bone], speed: 80, life: 0.9, size: 2.5, shape: 'ember' });
-        toast(`A soul was hiding in ${k.name}.`, 2200);
+        toast(`A soul was hiding ${k.where}.`, 2200);
       } else toast(pick(EMPTY), 1600);
     });
   }
@@ -1132,17 +1132,87 @@
     el.classList.toggle('mild', mild);
     el.classList.add('go');
     el.hidden = false;
-    if (mild) Sound.moan();
+    // Ghostface says his line instead of a scream
+    if (id === 'ghostface') Sound.voice('ghostface', 0, () => (mild ? Sound.moan() : Sound.scream()));
+    else if (mild) Sound.moan();
     else Sound.scream();
     shaker.add(mild ? 3 : 20);
     clearTimeout(scare.timer);
-    scare.timer = setTimeout(() => (el.hidden = true), mild ? 2000 : 1500);
+    scare.timer = setTimeout(() => (el.hidden = true), id === 'ghostface' ? 2300 : mild ? 2000 : 1500);
     Hunt.graceUntil = Math.max(Hunt.graceUntil, performance.now() + 2500);
     if (!loss) return;
     const tr = torchRoom();
     socket.emit('scared', { x: tr.u, y: tr.v }, (res) => {
       if (res && res.ok && res.dropped) setTimeout(() => toast('You dropped a soul. It is on the floor somewhere.', 2600), mild ? 2000 : 1500);
     });
+  }
+
+  // the light of an opening door, drawn on the painted door itself (q: its four corners, the back
+  // edge first, where the gap opens)
+  function drawDoorLight(d, t) {
+    const q = d.q || [[d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, d.y + d.h], [d.x, d.y + d.h]];
+    const P = q.map(([u, v]) => view.toScreen(u, v));
+    const [bt, ft, fb, bb] = P;
+    const k = d.k * flicker(t, 2, 0.05);
+    const mix = (p, r, f) => ({ x: p.x + (r.x - p.x) * f, y: p.y + (r.y - p.y) * f });
+    const leafW = Math.hypot(ft.x - bt.x, ft.y - bt.y);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (d.kind === 'gate') {
+      // light through the bars: the whole gateway glows from behind
+      const cx = (bt.x + fb.x) / 2;
+      const cy = (bt.y + fb.y) / 2 + Math.abs(bb.y - bt.y) * 0.1;
+      const hh = Math.abs(bb.y - bt.y) * 0.5;
+      ctx.save();
+      ctx.beginPath();
+      P.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.clip();
+      // an oval of light that fades to nothing before it reaches the gateway's edges
+      ctx.translate(cx, cy);
+      ctx.scale(Math.max(0.3, (leafW / hh) * 0.45), 1);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, hh);
+      g.addColorStop(0, hexA(T.ember, 0.4 * k));
+      g.addColorStop(0.5, hexA(T.flame, 0.15 * k));
+      g.addColorStop(1, hexA(T.flame, 0));
+      ctx.fillStyle = g;
+      ctx.fillRect(-hh, -hh, hh * 2, hh * 2);
+      ctx.restore();
+    } else {
+      // the gap: a sliver of the door's width at the latch edge, brightest at the frame
+      const gap = 0.02 + 0.07 * k;
+      const gt = mix(bt, ft, gap);
+      const gb = mix(bb, fb, gap);
+      const lg = ctx.createLinearGradient(bt.x, bt.y, gt.x, gt.y);
+      lg.addColorStop(0, hexA(T.ember, 0.95 * k));
+      lg.addColorStop(0.6, hexA(T.flame, 0.7 * k));
+      lg.addColorStop(1, hexA(T.flame, 0));
+      ctx.shadowColor = hexA(T.flame, 0.8 * k);
+      ctx.shadowBlur = 22 * k;
+      ctx.fillStyle = lg;
+      ctx.beginPath();
+      ctx.moveTo(bt.x, bt.y);
+      ctx.lineTo(gt.x, gt.y);
+      ctx.lineTo(gb.x, gb.y);
+      ctx.lineTo(bb.x, bb.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    // the spill on the floor in front of the gap: a soft ellipse, no edges
+    const sx = d.kind === 'gate' ? (bb.x + fb.x) / 2 : bb.x;
+    const sy = d.kind === 'gate' ? (bb.y + fb.y) / 2 : bb.y;
+    const rx = Math.max(30, leafW * 1.4);
+    ctx.translate(sx, sy);
+    ctx.scale(1, 0.28);
+    const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    sg.addColorStop(0, hexA(T.flame, 0.3 * k));
+    sg.addColorStop(1, hexA(T.flame, 0));
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, TAU);
+    ctx.fill();
+    ctx.restore();
   }
 
   function doorRect(d) {
@@ -1259,7 +1329,8 @@
     const lights = [];
     if (Hunt.door) {
       const d = Hunt.door;
-      lights.push({ u: d.x + d.w / 2, v: d.y + d.h * 0.92, intensity: 2.6 * d.k * flicker(t, 3, 0.04), color: [1, 0.48, 0.1] });
+      const base = d.q ? { u: d.q[3][0], v: d.q[3][1] - 0.03 } : { u: d.x + d.w / 2, v: d.y + d.h * 0.92 };
+      lights.push({ u: base.u, v: base.v, intensity: 2.4 * d.k * flicker(t, 3, 0.04), color: [1, 0.48, 0.1] });
     }
     if (Hunt.flare) lights.push({ u: Hunt.flare.x, v: Hunt.flare.y, intensity: 1.4 * Hunt.flare.k * flicker(t, 5, 0.04), color: [1, 0.62, 0.25] });
     for (const ig of Hunt.ignite) {
@@ -1322,41 +1393,8 @@
       ctx.restore();
     }
 
-    // the crack of light from an opening door
-    if (Hunt.door) {
-      const d = Hunt.door;
-      const r = doorRect(d);
-      const k = d.k * flicker(t, 2, 0.04);
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      let cx;
-      let w;
-      if (d.kind === 'double') {
-        cx = r.x + r.w / 2;
-        w = Math.max(2, r.w * 0.05 * k);
-      } else if (d.kind === 'gate') {
-        cx = r.x + r.w / 2;
-        w = r.w * 0.8 * k;
-      } else if (d.kind === 'side') {
-        cx = r.x + r.w * 0.15;
-        w = Math.max(2, r.w * 0.12 * k);
-      } else {
-        cx = r.x + r.w * 0.9;
-        w = Math.max(2, r.w * 0.08 * k);
-      }
-      const g = ctx.createLinearGradient(cx - w, 0, cx + w, 0);
-      g.addColorStop(0, hexA(T.flame, 0));
-      g.addColorStop(0.5, hexA(T.ember, 0.95 * k));
-      g.addColorStop(1, hexA(T.flame, 0));
-      ctx.fillStyle = g;
-      ctx.fillRect(cx - w, r.y, w * 2, r.h);
-      const spill = ctx.createRadialGradient(cx, r.y + r.h, 0, cx, r.y + r.h, r.w * 1.2);
-      spill.addColorStop(0, hexA(T.flame, 0.35 * k));
-      spill.addColorStop(1, hexA(T.flame, 0));
-      ctx.fillStyle = spill;
-      ctx.fillRect(cx - r.w * 1.2, r.y + r.h - r.w * 0.3, r.w * 2.4, r.w * 0.6);
-      ctx.restore();
-    }
+    // the door comes ajar: a crack of warm light down its latch edge, spilling onto the floor
+    if (Hunt.door) drawDoorLight(Hunt.door, t);
     // a candle flame
     if (Hunt.flare) {
       const sp = view.toScreen(Hunt.flare.x, Hunt.flare.y);
@@ -1709,6 +1747,10 @@
       get zombieStates() {
         return Hunt.zombies.map((z) => z.st);
       },
+      openDoor: () => {
+        const m = Hunt.meta();
+        if (m.doors.length) Hunt.door = Object.assign({ t0: performance.now(), life: 6000 }, m.doors[0]);
+      },
       door: (to) => {
         Hunt.debugTo = to;
         useDoor();
@@ -1719,7 +1761,7 @@
       get containers() {
         return (Hunt.meta().containers || []).map((k, c) => {
           const r = containerRect(k);
-          return { c, name: k.name, x: r.x + r.w / 2, y: r.y + r.h / 2, has: hiddenIn(c) ? hiddenIn(c).t : null };
+          return { c, name: k.do, x: r.x + r.w / 2, y: r.y + r.h / 2, has: hiddenIn(c) ? hiddenIn(c).t : null };
         });
       },
       get zombies() {

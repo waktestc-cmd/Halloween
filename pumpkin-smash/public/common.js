@@ -1255,6 +1255,8 @@
     sample('snarl', '/sounds/zombie-snarl.wav');
     sample('laugh', '/sounds/evil-laugh.wav');
     sample('groan', '/sounds/zombie-groan.wav');
+    // the residents' own voices (see ASSETS.md)
+    for (const who of ['ghostface', 'jason', 'freddy', 'pennywise']) sample('voice-' + who, `/sounds/voice-${who}.mp3`);
     api.preload = () => Object.keys(samples).forEach(decoded);
 
     api.snarl = (pan) => {
@@ -1268,6 +1270,13 @@
       }
       [0, 7].forEach((det) => tone({ f: 70 + det, f2: 150 + det, glide: 0.5, type: 'sawtooth', vol: v, dur: 0.6, lp: 700, vib: [11, 9], pan }));
       noise({ f: 900, f2: 1600, q: 1.5, vol: v * 0.6, dur: 0.55, pan });
+    };
+    // a resident speaks; if their voice has not loaded, the fallback plays instead
+    api.voice = (who, pan, fallback) => {
+      const buf = ensure() && decoded('voice-' + who);
+      if (buf && !muted) play(buf, { pan: pan * 0.6, vol: api.mild ? 0.55 : 1 });
+      else if (fallback) fallback();
+      return !!buf;
     };
     // the house laughs as the doors open
     api.laugh = () => {

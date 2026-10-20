@@ -54,7 +54,7 @@
     hall: { id: 'ghostface', name: 'Ghostface', rule: 'The telephone rings. Brave people answer it.' },
     parlour: { id: 'samara', name: 'Samara', rule: 'The television turns itself on. Keep your light on whatever comes out.' },
     kitchen: { id: 'michael', name: 'Michael Myers', rule: 'He walks. Your light stops him.' },
-    chapel: { id: 'valak', name: 'Valak', rule: 'Keep an eye on the painting.' },
+    drawing: { id: 'valak', name: 'Valak', rule: 'Keep an eye on the painting above the fireplace.' },
     nursery: { id: 'annabelle', name: 'Annabelle', rule: 'She only moves in the dark.' },
     cellar: { id: 'pennywise', name: 'Pennywise', rule: 'Do not take the balloon.' },
     boiler: { id: 'freddy', name: 'Freddy', rule: 'Do not stand still.' },

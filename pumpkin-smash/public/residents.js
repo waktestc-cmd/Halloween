@@ -59,7 +59,10 @@
           r.lit = 0;
           r.f = r.u < 0.5 ? 1 : -1;
           tell();
-          if (r.id === 'jason') PS.Sound.splash(pan(r.u));
+          if (r.id === 'jason') {
+            PS.Sound.splash(pan(r.u));
+            setTimeout(() => PS.Sound.voice('jason', pan(r.u)), 500);
+          }
           if (r.id === 'samara') r.tvOn = t;
           if (r.id === 'valak') env.toast('She is not in the painting.', 2600);
         }
@@ -200,8 +203,8 @@
       r.still += dt / Math.max(0.35, env.fast());
       if (r.still > 8 && !r.warned) {
         r.warned = true;
-        PS.Sound.lullaby();
-        env.toast('One, two. Freddy is coming for you.', 3000);
+        PS.Sound.voice('freddy', 0, () => PS.Sound.lullaby());
+        env.toast('One, two. Freddy is coming for you.', 3600);
       }
       if (r.still > 13 && !r.show) r.show = now();
       if (r.show && now() - r.show > 700) {
@@ -317,10 +320,12 @@
       const sp = view.toScreen(home[0], home[1] - 0.04);
       const h = hpx(home[1] - 0.04, 1.85);
       r.L = env.lightAt(sp.x, sp.y - h * 0.6, R);
-      if (r.L > 0.35 && !r.seen) {
+      // the first time your light finds him, and now and then after, he speaks
+      if (r.L > 0.35 && now() > (r.nextVoice || 0)) {
+        r.nextVoice = now() + slow(25000);
+        PS.Sound.voice('pennywise', pan(home[0]), () => PS.Sound.giggle(pan(home[0])));
+        if (!r.seen) tell();
         r.seen = true;
-        PS.Sound.giggle(pan(home[0]));
-        tell();
       }
     }
     function drawBalloon(ctx, R, tt) {
