@@ -161,7 +161,9 @@
       doJoin({ name: n, costume, token });
     };
     $('j-go').onclick = go;
-    name.onkeydown = (e) => e.key === 'Enter' && go();
+    name.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') go();
+    });
   }
 
   function doJoin(data) {
