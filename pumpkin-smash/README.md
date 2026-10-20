@@ -113,7 +113,9 @@ The command prints the service URL. Players use `https://…run.app/`, and you o
 * `public/player.js`: the hunt in room space (items rest on the painted surfaces; the camera pans toward the
   torch so phones in portrait can look around), client-side ghosts (Hollow Butler, Rag Doll Wraith, Bone
   Warden, Drowned Bride, Choir Shade) and floor-bound zombies (one per room, two in act 3) that shamble toward
-  your light, the other players in your room as their lanterns and silhouettes (their light reveals the room
+  your light. A zombie never kills on touch: it rears up and snarls (the warning), then swipes; move the light
+  away in time and it misses. Your lantern takes three hits (the three flames in the HUD) and relights one
+  notch after 20 s without a hit. The other players in your room as their lanterns and silhouettes (their light reveals the room
   around them), doors that open a crack of light, dust in the beam, hints, death and respawn; plus join,
   pitches, vote, smash and result.
 * `public/host.js`: the broadcast: house-facade lobby, the mantel of six pumpkins, a candle timer, the séance
@@ -125,3 +127,8 @@ The command prints the service URL. Players use `https://…run.app/`, and you o
   See [ASSETS.md](ASSETS.md) for swapping in painted rooms.
 * `public/shared.js`: rooms, costumes, ghosts and events, shared by the server, clients and bots.
 * `bots.js`: the bot simulator.
+
+## Renaming the game
+
+The name lives in one place: `TITLE` in `public/shared.js`. The pages, the host screen and the server log all
+read it from there.

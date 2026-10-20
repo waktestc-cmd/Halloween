@@ -155,50 +155,156 @@ body.hunting #fx {
   width: min(440px, 100%);
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--bone);
+  border-bottom: 1px solid var(--ash);
   border-radius: 0;
   color: var(--bone);
-  font: 800 clamp(30px, 5vw, 44px) / 1.1 var(--display);
+  font: 800 clamp(26px, 3.4vw, 34px) / 1.1 var(--display);
   font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 144;
   text-align: center;
   padding: 6px 0 10px;
   outline: none;
+  transition: border-color 0.25s;
 }
 .field::placeholder {
-  color: #3a352d;
+  color: #4a443a;
 }
 .field:focus {
   border-bottom-color: var(--ember);
 }
-.picker {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px 4px;
-  margin: 48px auto 10px;
-  max-width: 760px;
+
+/* ---- join: standing in the hall with a torch, choosing who to be */
+#join-bg {
+  --lx: 30vw;
+  --ly: 40vh;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
 }
-@media (max-width: 600px) {
-  .picker {
-    grid-template-columns: repeat(4, 1fr);
+#join-bg i {
+  position: absolute;
+  inset: 0;
+  background: url(/rooms/hall/albedo.jpg) center / cover no-repeat;
+}
+#join-bg .dim {
+  filter: brightness(0.07) saturate(0.4);
+}
+#join-bg .lit {
+  filter: brightness(1.25) sepia(0.6) saturate(1.6);
+  -webkit-mask-image: radial-gradient(circle at var(--lx) var(--ly), #000 0, rgba(0, 0, 0, 0.55) 9vmax, transparent 26vmax);
+  mask-image: radial-gradient(circle at var(--lx) var(--ly), #000 0, rgba(0, 0, 0, 0.55) 9vmax, transparent 26vmax);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: joinFlicker 3.2s infinite;
+}
+#join-bg::after {
+  /* a heavy vignette, and a scrim so type always reads */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(10, 9, 8, 0.1), rgba(10, 9, 8, 0.8) 80%);
+}
+@keyframes joinFlicker {
+  0%, 100% { opacity: 1; }
+  37% { opacity: 0.94; }
+  41% { opacity: 1; }
+  68% { opacity: 0.97; }
+}
+@media (hover: none) {
+  /* no pointer: the light wanders on its own until you touch */
+  #join-bg .lit {
+    animation: joinFlicker 3.2s infinite, joinWander 14s ease-in-out infinite alternate;
   }
 }
-.pick {
-  position: relative;
-  aspect-ratio: 1 / 1.15;
-  color: #2a2620;
+@keyframes joinWander {
+  0% { -webkit-mask-position: -18vw -8vh; mask-position: -18vw -8vh; }
+  50% { -webkit-mask-position: 22vw 10vh; mask-position: 22vw 10vh; }
+  100% { -webkit-mask-position: -6vw 24vh; mask-position: -6vw 24vh; }
+}
+
+.join {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas: 'intro' 'who' 'go';
+  justify-items: center;
+  width: min(1080px, 100%);
+}
+.j-intro .title {
+  font-size: clamp(42px, 11vw, 64px);
+  margin: 0 0 10px;
+}
+.j-intro .lede {
+  font-size: 15px;
+  margin: 0 auto 18px;
+}
+.j-intro {
+  grid-area: intro;
+}
+.j-who {
+  grid-area: who;
+  width: 100%;
+  max-width: 420px;
+}
+.j-go {
+  grid-area: go;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  padding-bottom: 4px;
+}
+.j-hero {
+  position: relative;
+  width: clamp(110px, 30vw, 260px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  color: var(--bone);
+}
+.j-hero::before {
+  /* the selected one stands in a pool of light */
+  content: '';
+  position: absolute;
+  inset: -22%;
+  background: radial-gradient(circle at 50% 58%, rgba(255, 196, 107, 0.42), rgba(255, 122, 26, 0.14) 36%, transparent 64%);
+  animation: joinFlicker 2.3s infinite;
+}
+.j-hero .sil {
+  position: relative;
+}
+.j-hero.pop .sil {
+  animation: heroIn 0.45s var(--pop) both;
+}
+@keyframes heroIn {
+  0% { transform: translateY(8%) scale(0.88); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+.chosen {
+  min-height: 1.4em;
+  color: var(--bone);
+  font: italic 600 18px/1.3 var(--display);
+  margin: 6px 0 12px;
+}
+.picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  margin: 0 auto 22px;
+}
+.pick {
+  position: relative;
+  aspect-ratio: 1;
+  color: #3a352d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
   transition: color 0.35s var(--settle);
 }
 .pick::before {
   /* a small torch passing over */
   content: '';
   position: absolute;
-  inset: -20% -20% 10%;
-  background: radial-gradient(circle at 50% 50%, rgba(255, 196, 107, 0.32), rgba(255, 122, 26, 0.1) 38%, transparent 66%);
+  inset: -10%;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 196, 107, 0.3), rgba(255, 122, 26, 0.08) 40%, transparent 68%);
   opacity: 0;
   transform: scale(0.6);
   transition: opacity 0.35s var(--settle), transform 0.5s var(--settle);
@@ -206,24 +312,18 @@ body.hunting #fx {
 }
 .pick .sil {
   position: relative;
-  width: 78%;
+  width: 76%;
   height: auto;
   aspect-ratio: 1;
-}
-.pick small {
-  position: relative;
-  font-size: 12px;
-  color: var(--ash);
-  opacity: 0;
-  transition: opacity 0.3s;
 }
 .pick:hover,
 .pick:focus-visible {
   color: var(--ash);
   outline: none;
 }
-.pick:hover::before {
-  opacity: 0.55;
+.pick:hover::before,
+.pick:focus-visible::before {
+  opacity: 0.6;
   transform: scale(1);
 }
 .pick.on {
@@ -233,14 +333,11 @@ body.hunting #fx {
   opacity: 1;
   transform: scale(1);
 }
-.pick.on small,
-.pick:hover small {
-  opacity: 1;
+.j-go .field {
+  margin-bottom: 18px;
 }
-.chosen {
-  min-height: 1.4em;
-  color: var(--ash);
-  margin-bottom: 36px;
+.j-go .cta {
+  width: min(440px, 100%);
 }
 .row {
   display: flex;
@@ -248,14 +345,48 @@ body.hunting #fx {
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 26px;
+  margin-top: 12px;
 }
 .err {
   color: var(--bone);
   min-height: 1.4em;
-  margin-top: 16px;
+  margin-top: 10px;
 }
-
+/* wide screens: the house on the left, who you are on the right */
+@media (min-width: 900px) and (min-height: 560px) {
+  .join {
+    grid-template-columns: 1.1fr 1fr;
+    grid-template-areas: 'intro who' 'go who';
+    column-gap: 7vw;
+    align-items: center;
+    text-align: left;
+  }
+  .j-intro {
+    align-self: end;
+    justify-self: stretch;
+  }
+  .j-intro .title {
+    font-size: clamp(64px, 7.4vw, 112px);
+    margin-bottom: 18px;
+  }
+  .j-intro .lede {
+    font-size: 19px;
+    margin: 0 0 40px;
+  }
+  .j-go {
+    align-self: start;
+    align-items: flex-start;
+  }
+  .j-go .field {
+    text-align: left;
+  }
+  .j-go .row {
+    justify-content: flex-start;
+  }
+  .j-who {
+    text-align: center;
+  }
+}
 .window {
   position: relative;
   width: 168px;
@@ -524,6 +655,25 @@ body.hunting #fx {
   background: radial-gradient(circle, var(--bone) 0 30%, rgba(237, 227, 207, 0.25) 60%, transparent 72%);
   margin-right: 7px;
   vertical-align: 2px;
+}
+/* the lantern's health: three small flames, lit or spent */
+.hp {
+  display: inline-flex;
+  gap: 5px;
+  align-items: flex-end;
+}
+.hp i {
+  width: 9px;
+  height: 14px;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: radial-gradient(circle at 50% 70%, var(--ember) 0 25%, var(--flame) 60%);
+  box-shadow: 0 0 10px rgba(255, 122, 26, 0.55);
+  transition: background 0.4s, box-shadow 0.4s, transform 0.4s var(--pop);
+}
+.hp i.out {
+  background: #2a2620;
+  box-shadow: none;
+  transform: scale(0.75);
 }
 #hud-ticker {
   position: absolute;

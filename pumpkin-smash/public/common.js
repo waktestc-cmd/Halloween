@@ -527,81 +527,239 @@
     ctx.restore();
   }
 
-  // A zombie: a hunched cut-paper figure, arms out, feet at (x, y). Only light reveals it.
-  // o: facing, light (0..1, how much torchlight falls on it), t
-  function drawZombie(ctx, x, y, h, o = {}) {
+  // A zombie: gaunt, hunched, head lolling, one arm reaching and one hanging dead, a dragged
+  // foot. Feet at (x, y), h tall. Only light reveals it; the side facing the lantern catches a rim.
+  // o: facing, light (0..1), t, seed, alpha, rim (-1..1: which side the lantern is on, screen x),
+  //    shine (eyeshine in the dark, 0..1), wind (rearing up to swipe), lunge, stagger (all 0..1)
+  let zbuf = null;
+  function drawZombie(dest, x, y, h, o = {}) {
     if (!(h > 6)) return;
+    // painted opaque into a buffer first, so overlapping limbs never show through each other
+    const m = dest.getTransform ? dest.getTransform() : { a: 1, b: 0 };
+    const px = Math.max(0.5, Math.min(2, Math.hypot(m.a, m.b)));
+    const BW = 1.6;
+    const BH = 1.42;
+    const FOOT = 0.06;
+    if (!zbuf) zbuf = document.createElement('canvas');
+    const bw = Math.ceil(BW * h * px);
+    const bh = Math.ceil(BH * h * px);
+    if (zbuf.width < bw || zbuf.height < bh) {
+      zbuf.width = Math.max(zbuf.width, bw);
+      zbuf.height = Math.max(zbuf.height, bh);
+    }
+    const ctx = zbuf.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, bw + 2, bh + 2);
     const f = o.facing < 0 ? -1 : 1;
     const t = o.t || 0;
     const L = clamp(o.light || 0, 0, 1);
-    const step = Math.sin(t * 2.2 + (o.seed || 0));
-    const r = Math.round(lerp(13, 122, L));
-    const gcol = Math.round(lerp(11, 112, L));
-    const b = Math.round(lerp(9, 96, L));
-    ctx.save();
-    ctx.globalAlpha = o.alpha != null ? o.alpha : 0.1 + 0.9 * L;
-    ctx.translate(x, y);
-    ctx.scale(f, 1);
-    ctx.rotate(0.05 * step);
-    ctx.fillStyle = `rgb(${r},${gcol},${b})`;
-    // the dragging back leg and the stepping front leg
-    ctx.beginPath();
-    ctx.moveTo(-h * 0.08, -h * 0.42);
-    ctx.lineTo(-h * 0.01, -h * 0.42);
-    ctx.lineTo(-h * 0.1, -h * 0.03);
-    ctx.lineTo(-h * 0.2, 0);
-    ctx.lineTo(-h * 0.21, -h * 0.03);
-    ctx.lineTo(-h * 0.15, -h * 0.06);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(-h * 0.01, -h * 0.42);
-    ctx.lineTo(h * 0.08, -h * 0.42);
-    ctx.lineTo(h * (0.12 + 0.04 * step), -h * 0.04);
-    ctx.lineTo(h * (0.18 + 0.04 * step), -h * 0.01);
-    ctx.lineTo(h * (0.04 + 0.04 * step), 0);
-    ctx.closePath();
-    ctx.fill();
-    // hunched torso with a torn hem
-    ctx.beginPath();
-    ctx.moveTo(-h * 0.13, -h * 0.36);
-    for (let i = 0; i <= 6; i++) ctx.lineTo(-h * 0.13 + (i / 6) * h * 0.25, -h * (i % 2 ? 0.31 : 0.37));
-    ctx.lineTo(h * 0.14, -h * 0.44);
-    ctx.lineTo(h * 0.22, -h * 0.74);
-    ctx.lineTo(h * 0.08, -h * 0.82);
-    ctx.lineTo(-h * 0.06, -h * 0.76);
-    ctx.closePath();
-    ctx.fill();
-    // arms reaching out, a little out of step with each other
-    for (const [dy, k] of [
-      [-0.74, 1],
-      [-0.69, -1],
-    ]) {
-      const sway = Math.sin(t * 1.7 + k) * h * 0.02;
+    const wind = clamp(o.wind || 0, 0, 1);
+    const lunge = clamp(o.lunge || 0, 0, 1);
+    const stag = clamp(o.stagger || 0, 0, 1);
+    const s = Math.sin(t * 2.2 + (o.seed || 0));
+    const sway = Math.sin(t * 1.7) * 0.015;
+    const mix = (p, q, k) => [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k];
+    const pose = (walk, w, l, st) => mix(mix(mix(walk, w, wind), l, lunge), st, stag);
+
+    const hip = [0, -0.46 + 0.012 * Math.abs(s)];
+    const sh = pose([0.13 + 0.015 * s, -0.79], [0.0, -0.85], [0.22, -0.75], [-0.05, -0.8]);
+    const head = [sh[0] + 0.075 - 0.035 * wind, sh[1] - 0.085 - 0.02 * wind];
+    const tilt = 0.45 + 0.08 * Math.sin(t * 1.3 + 1) - 0.65 * wind + 0.2 * stag;
+    const jaw = 0.25 + 0.15 * Math.max(0, Math.sin(t * 0.9)) + 0.6 * wind + 0.3 * lunge;
+    // far arm reaches; the near one hangs dead until it is time to swipe
+    const farE = pose([sh[0] + 0.2, sh[1] + 0.05 + sway], [sh[0] + 0.1, sh[1] - 0.13], [sh[0] + 0.26, sh[1] + 0.07], [sh[0] + 0.06, sh[1] + 0.2]);
+    const farH = pose([sh[0] + 0.42, sh[1] + 0.03 + sway * 2], [sh[0] + 0.19, sh[1] - 0.34], [sh[0] + 0.5, sh[1] + 0.2], [sh[0] + 0.1, sh[1] + 0.38]);
+    const nearE = pose([sh[0] + 0.03, sh[1] + 0.17], [sh[0] + 0.05, sh[1] - 0.15], [sh[0] + 0.22, sh[1] + 0.1], [sh[0] + 0.0, sh[1] + 0.18]);
+    const nearH = pose([sh[0] + 0.09 + 0.03 * s, sh[1] + 0.33], [sh[0] + 0.13, sh[1] - 0.36], [sh[0] + 0.45, sh[1] + 0.25], [sh[0] + 0.03, sh[1] + 0.35]);
+
+    const dark = [16, 14, 12];
+    const shade = (c, k) => `rgb(${dark.map((d, i) => Math.round(d + (c[i] - d) * L * k)).join(',')})`;
+    const SKIN = [140, 148, 116];
+    const CLOTH = [66, 57, 47];
+
+    function limb(a, b, c, w1, w2) {
+      ctx.lineWidth = w1;
       ctx.beginPath();
-      ctx.moveTo(h * 0.12, h * dy);
-      ctx.lineTo(h * 0.5, h * (dy + 0.03) + sway);
-      ctx.lineTo(h * 0.56, h * (dy + 0.015) + sway);
-      ctx.lineTo(h * 0.55, h * (dy + 0.045) + sway);
-      ctx.lineTo(h * 0.5, h * (dy + 0.07) + sway);
-      ctx.lineTo(h * 0.13, h * (dy + 0.07));
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.stroke();
+      ctx.lineWidth = w2;
+      ctx.beginPath();
+      ctx.moveTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]);
+      ctx.stroke();
+    }
+    function hand(e, hd, col) {
+      const a = Math.atan2(hd[1] - e[1], hd[0] - e[0]);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(hd[0], hd[1], 0.026, 0, TAU);
+      ctx.fill();
+      ctx.lineWidth = 0.011;
+      for (const k of [-0.5, 0, 0.45]) {
+        const b = a + k + 0.15 * Math.sin(t * 3 + k);
+        ctx.beginPath();
+        ctx.moveTo(hd[0], hd[1]);
+        ctx.quadraticCurveTo(hd[0] + Math.cos(b) * 0.05, hd[1] + Math.sin(b) * 0.05, hd[0] + Math.cos(b + 0.4) * 0.075, hd[1] + Math.sin(b + 0.4) * 0.075);
+        ctx.stroke();
+      }
+    }
+    // the whole figure; rim = true draws it flat in one colour for the lantern's edge light
+    function figure(rim) {
+      const C = (c, k) => (rim ? rim : shade(c, k));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      // far side first, darker
+      ctx.strokeStyle = C(CLOTH, 0.55);
+      limb([hip[0] - 0.03, hip[1]], [-0.07, -0.23], [-0.14 - 0.02 * s, -0.025], 0.062, 0.046);
+      ctx.beginPath();
+      ctx.lineWidth = 0.035;
+      ctx.moveTo(-0.14 - 0.02 * s, -0.025);
+      ctx.lineTo(-0.19 - 0.02 * s, 0.0); // the dragged foot, toes down
+      ctx.stroke();
+      ctx.strokeStyle = C(CLOTH, 0.5);
+      limb([sh[0] + 0.03, sh[1] + 0.03], farE, farE, 0.055, 0.055);
+      ctx.strokeStyle = C(SKIN, 0.55);
+      limb(farE, farH, farH, 0.04, 0.04);
+      hand(farE, farH, C(SKIN, 0.55));
+      // near leg, stepping
+      ctx.strokeStyle = C(CLOTH, 0.8);
+      const knee = [0.06 + 0.04 * s, -0.24];
+      const foot = [0.08 + 0.06 * s, -0.025];
+      limb([hip[0] + 0.03, hip[1]], knee, foot, 0.066, 0.05);
+      ctx.lineWidth = 0.04;
+      ctx.beginPath();
+      ctx.moveTo(foot[0] - 0.02, foot[1] + 0.01);
+      ctx.lineTo(foot[0] + 0.07, foot[1] + 0.02);
+      ctx.stroke();
+      // neck
+      ctx.strokeStyle = C(SKIN, 0.7);
+      ctx.lineWidth = 0.045;
+      ctx.beginPath();
+      ctx.moveTo(sh[0] + 0.01, sh[1] + 0.01);
+      ctx.lineTo(head[0] - 0.01, head[1] + 0.03);
+      ctx.stroke();
+      // torso: a hump of a back, a torn hem
+      ctx.fillStyle = C(CLOTH, 1);
+      ctx.beginPath();
+      ctx.moveTo(-0.085, hip[1] + 0.03);
+      for (let i = 1; i <= 6; i++) ctx.lineTo(-0.085 + (i / 6) * 0.18, hip[1] + (i % 2 ? 0.075 : 0.025) + 0.01 * Math.sin(i * 7 + t * 2));
+      ctx.lineTo(sh[0] + 0.07, sh[1] + 0.1);
+      ctx.lineTo(sh[0] + 0.045, sh[1] - 0.005);
+      ctx.lineTo(sh[0] - 0.09, sh[1] + 0.015);
+      ctx.quadraticCurveTo(sh[0] - 0.2, sh[1] + 0.12, -0.08 + sh[0] * 0.25, (hip[1] + sh[1]) / 2 + 0.06);
       ctx.closePath();
       ctx.fill();
-    }
-    // head, hanging forward
-    ctx.beginPath();
-    ctx.ellipse(h * 0.21, -h * 0.86, h * 0.085, h * 0.1, 0.5, 0, TAU);
-    ctx.fill();
-    // eyes catch the light
-    if (L > 0.12) {
-      ctx.globalAlpha *= L;
-      ctx.fillStyle = T.bone;
+      if (!rim) {
+        // the shirt is torn open over the ribs
+        ctx.fillStyle = C(SKIN, 0.75);
+        ctx.beginPath();
+        ctx.moveTo(sh[0] - 0.015, sh[1] + 0.09);
+        ctx.lineTo(sh[0] + 0.055, sh[1] + 0.085);
+        ctx.lineTo(sh[0] + 0.035, sh[1] + 0.2);
+        ctx.lineTo(sh[0] + 0.0, sh[1] + 0.245);
+        ctx.lineTo(sh[0] - 0.045, sh[1] + 0.19);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = shade(dark, 0);
+        ctx.lineWidth = 0.011;
+        for (let i = 0; i < 3; i++) {
+          const yy = sh[1] + 0.12 + i * 0.035;
+          ctx.beginPath();
+          ctx.moveTo(sh[0] - 0.03, yy + 0.01);
+          ctx.quadraticCurveTo(sh[0] + 0.01, yy - 0.012, sh[0] + 0.045, yy + 0.004);
+          ctx.stroke();
+        }
+      }
+      // head, lolling
+      ctx.save();
+      ctx.translate(head[0], head[1]);
+      ctx.rotate(tilt);
+      ctx.fillStyle = C(SKIN, 0.85);
       ctx.beginPath();
-      ctx.arc(h * 0.25, -h * 0.87, h * 0.011, 0, TAU);
-      ctx.arc(h * 0.2, -h * 0.875, h * 0.009, 0, TAU);
+      ctx.ellipse(0, -0.005, 0.064, 0.078, 0, 0, TAU);
       ctx.fill();
+      // the jaw hangs
+      ctx.beginPath();
+      ctx.moveTo(-0.035, 0.03);
+      ctx.lineTo(0.05, 0.035);
+      ctx.lineTo(0.04, 0.06 + 0.05 * jaw);
+      ctx.lineTo(-0.01, 0.065 + 0.05 * jaw);
+      ctx.closePath();
+      ctx.fill();
+      // stringy hair down the back
+      ctx.strokeStyle = C(CLOTH, 0.5);
+      ctx.lineWidth = 0.008;
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-0.05 + i * 0.012, -0.07 + i * 0.004);
+        ctx.quadraticCurveTo(-0.08 - i * 0.008, -0.02, -0.07 - i * 0.01 + 0.01 * Math.sin(t * 2 + i), 0.05 + i * 0.01);
+        ctx.stroke();
+      }
+      if (!rim) {
+        // sunken eyes and a black mouth
+        ctx.fillStyle = shade(dark, 0);
+        ctx.beginPath();
+        ctx.ellipse(0.03, -0.018, 0.016, 0.02, 0.2, 0, TAU);
+        ctx.ellipse(-0.012, -0.022, 0.014, 0.018, -0.1, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-0.005, 0.03);
+        ctx.lineTo(0.04, 0.032);
+        ctx.lineTo(0.033, 0.035 + 0.045 * jaw);
+        ctx.lineTo(0.0, 0.038 + 0.045 * jaw);
+        ctx.closePath();
+        ctx.fill();
+        if (L > 0.2) {
+          ctx.fillStyle = shade([200, 190, 160], 0.9);
+          for (let i = 0; i < 4; i++) ctx.fillRect(0.0 + i * 0.009, 0.03, 0.005, 0.01);
+        }
+      }
+      ctx.restore();
+      // near arm, in front of everything
+      ctx.strokeStyle = C(CLOTH, 0.9);
+      limb([sh[0] - 0.01, sh[1] + 0.02], nearE, nearE, 0.06, 0.06);
+      ctx.strokeStyle = C(SKIN, 0.85);
+      limb(nearE, nearH, nearH, 0.042, 0.042);
+      hand(nearE, nearH, C(SKIN, 0.85));
     }
+
+    const alpha = o.alpha != null ? o.alpha : 0.1 + 0.9 * L;
+    ctx.save();
+    ctx.translate(bw / 2, bh - FOOT * h * px);
+    ctx.scale(f * h * px, h * px);
+    ctx.rotate(0.04 * s);
+    if (L > 0.05 && o.rim != null && o.rim * f !== 0) {
+      // the lantern's light catching the edge that faces it
+      ctx.save();
+      ctx.globalAlpha = L * 0.55;
+      ctx.translate(clamp(o.rim, -1, 1) * f * 0.006, -0.004);
+      figure(hexA(T.ember, 1));
+      ctx.restore();
+    }
+    figure(null);
     ctx.restore();
+    dest.save();
+    dest.globalAlpha *= alpha;
+    dest.drawImage(zbuf, 0, 0, bw, bh, x - (BW / 2) * h, y - (BH - FOOT) * h, BW * h, BH * h);
+    dest.restore();
+    // eyeshine: your lantern caught in its eyes, even in the dark
+    const shine = Math.max(L * 0.9, o.shine || 0);
+    if (shine > 0.04) {
+      dest.save();
+      dest.translate(x, y);
+      dest.scale(f * h, h);
+      dest.rotate(0.04 * s);
+      dest.translate(head[0], head[1]);
+      dest.rotate(tilt);
+      dest.globalAlpha *= Math.min(1, shine);
+      dest.fillStyle = T.ember;
+      dest.beginPath();
+      dest.arc(0.032, -0.016, 0.006, 0, TAU);
+      dest.arc(-0.01, -0.02, 0.005, 0, TAU);
+      dest.fill();
+      dest.restore();
+    }
   }
 
   // =====================================================================
@@ -978,6 +1136,23 @@
       noise({ f: 600, q: 2, vol: vol * 0.4, dur: 1.2, pan });
     };
     api.shuffle = (pan, vol = 0.07) => noise({ f: 320, f2: 180, q: 0.8, vol, dur: 0.35, ft: 'lowpass', pan });
+    // the wind-up before a swipe: a short rising snarl, the warning you get
+    api.snarl = (pan) => {
+      const v = api.mild ? 0.08 : 0.16;
+      [0, 7].forEach((det) => tone({ f: 70 + det, f2: 150 + det, glide: 0.5, type: 'sawtooth', vol: v, dur: 0.6, lp: 700, vib: [11, 9], pan }));
+      noise({ f: 900, f2: 1600, q: 1.5, vol: v * 0.6, dur: 0.55, pan });
+    };
+    // a swipe that connects: air, then a dull thud
+    api.hurt = (pan) => {
+      noise({ f: 2400, f2: 500, q: 0.7, vol: 0.12, dur: 0.18, pan });
+      tone({ f: 120, f2: 40, type: 'sine', vol: api.mild ? 0.3 : 0.6, dur: 0.45, a: 0.004, at: 0.06 });
+      noise({ f: 300, q: 0.7, vol: 0.3, dur: 0.3, ft: 'lowpass', at: 0.06 });
+    };
+    // the lantern catching again
+    api.relight = () => {
+      noise({ f: 1800, q: 0.8, vol: 0.06, dur: 0.4, ft: 'highpass' });
+      tone({ f: 330, f2: 440, type: 'sine', vol: 0.04, dur: 0.5, a: 0.05 });
+    };
     api.moan = () => {
       tone({ f: 220, f2: 98, type: 'triangle', vol: 0.16, dur: 1.4, vib: [4, 6], lp: 900 });
       tone({ f: 165, f2: 82, type: 'sine', vol: 0.1, dur: 1.5 });

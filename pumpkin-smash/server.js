@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const express = require('express');
@@ -20,7 +21,11 @@ const io = new Server(server, {
 });
 const game = new Game(io);
 
-const sendView = (name) => (req, res) => res.sendFile(path.join(__dirname, 'views', name));
+const { TITLE } = require('./public/shared');
+// the pages carry the game's name from shared.js, so renaming it is one line
+const views = {};
+for (const f of ['index.html', 'host.html']) views[f] = fs.readFileSync(path.join(__dirname, 'views', f), 'utf8').replace(/\{\{TITLE\}\}/g, TITLE);
+const sendView = (name) => (req, res) => res.type('html').send(views[name]);
 
 app.get('/', sendView('index.html'));
 app.get('/host', (req, res) => {
@@ -67,6 +72,6 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🎃 Pumpkin Smash listening on http://localhost:${PORT}${FAST ? '  (DEV_FAST timers)' : ''}`);
+  console.log(`🎃 ${TITLE} listening on http://localhost:${PORT}${FAST ? '  (DEV_FAST timers)' : ''}`);
   console.log(`   host screen: http://localhost:${PORT}/host?key=${process.env.HOST_KEY ? '<HOST_KEY>' : HOST_KEY}`);
 });

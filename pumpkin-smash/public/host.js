@@ -147,7 +147,7 @@
       const wrap = el('div', 'house-wrap');
       v.appendChild(wrap);
       paint(canvasIn(wrap), drawHouse);
-      const title = el('div', 'htitle display', 'Pumpkin Smash');
+      const title = el('div', 'htitle display', S.TITLE);
       const sub = el('div', 'hphase', 'One of six pumpkins holds a Friday afternoon off.');
       const url = location.origin + '/';
       const inv = el('div', 'invite');
