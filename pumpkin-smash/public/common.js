@@ -1,18 +1,40 @@
-// Shared browser code: synthesised sound, particles, and every graphic drawn in code.
+// Shared browser code: tokens, cut-paper silhouettes, light-source drawing, sound, motion.
+// Art direction: light is the only colour. Flame/ember only on light sources, blood only for
+// death and the zombie result, wraith only for ghosts. Everything else is ink and bone.
 /* global SHARED */
 (function () {
   const S = window.SHARED;
   const TAU = Math.PI * 2;
+  const T = {
+    ink: '#0A0908',
+    soot: '#15120E',
+    bone: '#EDE3CF',
+    ash: '#7E7567',
+    flame: '#FF7A1A',
+    ember: '#FFC46B',
+    blood: '#C3122B',
+    wraith: '#A9E8DA',
+  };
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
-  const NEON = [S.COLORS.violet, S.COLORS.green, S.COLORS.orange, S.COLORS.magenta, S.COLORS.cyan, S.COLORS.red, '#ffe14d'];
+  const ease = {
+    outBack: (t, s = 1.7) => 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2),
+    inBack: (t, s = 1.7) => (s + 1) * t * t * t - s * t * t,
+    outExpo: (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)),
+    inOut: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+    out: (t) => 1 - Math.pow(1 - t, 3),
+  };
+  const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   function hexA(hex, a) {
-    const h = hex.replace('#', '');
-    const n = parseInt(h.length === 3 ? h.replace(/./g, '$&$&') : h.slice(0, 6), 16);
+    const n = parseInt(hex.slice(1, 7), 16);
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  // flicker for light sources only: 2–4% amplitude
+  function flicker(t, seed = 0, amp = 0.03) {
+    return 1 + amp * (0.6 * Math.sin(t * 11.3 + seed) + 0.3 * Math.sin(t * 23.7 + seed * 2.1) + 0.1 * Math.sin(t * 47.1 + seed * 3.7));
   }
 
   const store = {
@@ -34,7 +56,561 @@
   };
 
   // =====================================================================
-  // Sound: everything synthesised with Web Audio
+  // Cut-paper silhouettes (100 x 100). Solids and holes get opposite winding,
+  // so with the nonzero rule the holes are true negative space.
+  // =====================================================================
+  function ell(cx, cy, rx, ry, n = 36, rot = 0) {
+    const pts = [];
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const x = rx * Math.cos(a);
+      const y = ry * Math.sin(a);
+      pts.push([cx + x * c - y * s, cy + x * s + y * c]);
+    }
+    return pts;
+  }
+  const circ = (cx, cy, r, n = 36) => ell(cx, cy, r, r, n);
+  function bez(p0, p1, p2, p3, n = 10) {
+    const out = [];
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      const u = 1 - t;
+      out.push([
+        u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+        u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1],
+      ]);
+    }
+    return out;
+  }
+  const rect = (x0, y0, x1, y1) => [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ];
+  const mirror = (pts) => pts.map(([x, y]) => [100 - x, y]).reverse();
+  function shoulders(top = 78, w = 38, neck = 11) {
+    return [[50 - w, 101]]
+      .concat(bez([50 - w, 101], [50 - w, top + 5], [50 - neck - 12, top], [50 - neck, top]))
+      .concat([[50 + neck, top]])
+      .concat(bez([50 + neck, top], [50 + neck + 12, top], [50 + w, top + 5], [50 + w, 101]));
+  }
+  function leg(pts, w = 1.3) {
+    // thick polyline as a polygon
+    const left = [];
+    const right = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)];
+      const b = pts[Math.min(pts.length - 1, i + 1)];
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const l = Math.hypot(dx, dy) || 1;
+      const k = i === pts.length - 1 ? 0.35 : 1;
+      left.push([pts[i][0] - (dy / l) * w * k, pts[i][1] + (dx / l) * w * k]);
+      right.push([pts[i][0] + (dy / l) * w * k, pts[i][1] - (dx / l) * w * k]);
+    }
+    return left.concat(right.reverse());
+  }
+  function area(p) {
+    let a = 0;
+    for (let i = 0; i < p.length; i++) {
+      const q = p[(i + 1) % p.length];
+      a += p[i][0] * q[1] - q[0] * p[i][1];
+    }
+    return a / 2;
+  }
+  const orient = (p, pos) => ((area(p) > 0) === pos ? p : p.slice().reverse());
+  function toD(solids, holes) {
+    return solids
+      .map((p) => orient(p, true))
+      .concat(holes.map((p) => orient(p, false)))
+      .map((p) => 'M' + p.map((q) => q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('L') + 'Z')
+      .join('');
+  }
+  function pumpkinOutline(cx, cy, rx, ry, n = 72) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const k = 1 - 0.05 * Math.abs(Math.sin(a * 3));
+      pts.push([cx + rx * k * Math.cos(a), cy + ry * (0.97 + 0.03 * Math.cos(a * 5)) * Math.sin(a)]);
+    }
+    return pts;
+  }
+
+  const SIL = {
+    witch: toD(
+      [
+        shoulders(80, 38, 10),
+        rect(45, 66, 55, 82),
+        circ(50, 56, 15),
+        ell(50, 41, 33, 5.5),
+        [[35, 40]].concat(bez([35, 40], [40, 24], [52, 12], [70, 4])).concat(bez([70, 4], [60, 14], [62, 26], [65, 40])),
+      ],
+      [ell(44, 57, 2.2, 3), ell(56, 57, 2.2, 3), rect(46, 26, 54, 32)]
+    ),
+    vampire: toD(
+      [
+        shoulders(76, 40, 12),
+        rect(44, 62, 56, 78),
+        circ(50, 50, 16),
+        [[34, 48], [35, 37], [43, 32], [50, 40], [57, 32], [65, 37], [66, 48]],
+        [[18, 84], [20, 50], [34, 64], [50, 69], [66, 64], [80, 50], [82, 84]],
+      ],
+      [ell(44, 53, 3, 1.5, 16, 0.3), ell(56, 53, 3, 1.5, 16, -0.3), [[46, 60], [48.4, 60], [47.2, 64]], [[51.6, 60], [54, 60], [52.8, 64]]]
+    ),
+    mummy: toD(
+      [shoulders(78, 38, 11), rect(44, 62, 56, 80), circ(50, 48, 19)],
+      [[[38, 36.5], [62, 34.5], [62, 37.5], [38, 39.5]], [[38, 58.5], [62, 56.5], [62, 59.5], [38, 61.5]], circ(57, 47, 3.6), circ(43, 48, 2.1)]
+    ),
+    skeleton: toD(
+      [circ(50, 42, 20), [[38, 56], [62, 56], [62, 68]].concat(bez([62, 68], [62, 72], [58, 73], [50, 73])).concat(bez([50, 73], [42, 73], [38, 72], [38, 68])), shoulders(80, 36, 9), rect(47, 70, 53, 82)],
+      [circ(42, 43, 5.5), circ(58, 43, 5.5), [[48, 50], [52, 50], [50, 55]], rect(41.5, 64, 43.5, 69), rect(45.5, 64, 47.5, 69), rect(49.5, 64, 51.5, 69), rect(53.5, 64, 55.5, 69), rect(57.5, 64, 59.5, 69)]
+    ),
+    werewolf: toD(
+      [
+        [[30, 62], [27, 44], [29, 30], [31, 13], [42, 28], [50, 26], [58, 28], [69, 13], [71, 30], [73, 44], [70, 62], [62, 70], [56, 78], [50, 80], [44, 78], [38, 70]],
+        [[10, 101], [14, 84], [22, 80], [26, 73], [32, 78], [38, 72], [44, 78], [50, 74], [56, 78], [62, 72], [68, 78], [74, 73], [78, 80], [86, 84], [90, 101]],
+      ],
+      [[[36, 44], [45, 47.5], [37, 49]], mirror([[36, 44], [45, 47.5], [37, 49]]), ell(50, 65, 3.5, 2.4)]
+    ),
+    zombie: toD(
+      [
+        ell(52, 48, 17, 19, 36, 0.15),
+        [[38, 38], [39, 26], [45, 33], [48, 21], [53, 31], [58, 23], [61, 34], [67, 41]],
+        rect(45, 64, 58, 80),
+        [[8, 101], [10, 86], [24, 78], [40, 74], [60, 76], [80, 82], [92, 101]],
+        [[13, 92], [8, 64], [4, 48], [2, 42], [4, 38], [8, 40], [10, 36], [13, 38], [15, 35], [18, 40], [19, 48], [22, 66], [27, 90]],
+      ],
+      [circ(45, 48, 4.5), circ(59, 47, 2.5), [[44, 57], [48, 55], [51, 58], [55, 55], [59, 57], [57, 61], [46, 61]]]
+    ),
+    ghost: toD(
+      [
+        (() => {
+          const top = [];
+          for (let i = 0; i <= 20; i++) {
+            const a = Math.PI + (i / 20) * Math.PI;
+            top.push([50 + 26 * Math.cos(a), 44 + 26 * Math.sin(a)]);
+          }
+          return top.concat([[78, 58], [79, 88], [72, 80], [65, 91], [58, 82], [50, 93], [42, 82], [35, 91], [28, 80], [21, 88], [22, 58]]);
+        })(),
+      ],
+      [ell(41, 42, 3.5, 5), ell(59, 42, 3.5, 5), ell(50, 60, 4, 6)]
+    ),
+    pumpkin: toD(
+      [pumpkinOutline(50, 50, 28, 22), [[47, 30], [46, 20], [50, 13], [55, 15], [53, 22], [53, 30]], rect(44, 68, 56, 84), shoulders(82, 36, 10)],
+      [[[38, 46], [46, 46], [42, 38]], [[54, 46], [62, 46], [58, 38]], [[36, 54], [40, 58], [44, 54], [48, 59], [52, 54], [56, 59], [60, 54], [64, 54], [60, 62], [50, 65], [40, 62]]]
+    ),
+    bat: toD(
+      [
+        ell(50, 52, 8, 13),
+        [[43, 42], [42, 29], [46, 36], [50, 35], [54, 36], [58, 29], [57, 42]],
+        [[44, 46], [32, 34], [18, 30], [3, 36], [10, 46], [16, 44], [20, 54], [27, 50], [32, 60], [38, 56], [44, 63]],
+        mirror([[44, 46], [32, 34], [18, 30], [3, 36], [10, 46], [16, 44], [20, 54], [27, 50], [32, 60], [38, 56], [44, 63]]),
+      ],
+      [circ(46.6, 45, 1.8, 16), circ(53.4, 45, 1.8, 16)]
+    ),
+    cat: toD(
+      [
+        circ(50, 34, 13),
+        [[38, 30], [37, 13], [47, 23]],
+        [[62, 30], [63, 13], [53, 23]],
+        ell(50, 74, 23, 28).filter((p) => p[1] <= 101),
+        [[70, 94], [84, 86], [91, 70], [88, 54], [82, 47], [77, 51], [83, 58], [84, 70], [80, 82], [67, 88]],
+      ],
+      [ell(44, 34, 3.2, 1.5, 18, 0.35), ell(56, 34, 3.2, 1.5, 18, -0.35)]
+    ),
+    spider: toD(
+      [
+        rect(49.3, 0, 50.7, 33),
+        circ(50, 38, 8),
+        ell(50, 60, 14, 16),
+        ...[
+          [[44, 50], [26, 33], [14, 48]],
+          [[43, 55], [22, 45], [8, 62]],
+          [[43, 60], [22, 62], [10, 80]],
+          [[44, 65], [28, 77], [20, 95]],
+        ].flatMap((l) => [leg(l), leg(l.map(([x, y]) => [100 - x, y]))]),
+      ],
+      [circ(46.6, 37, 1.9, 16), circ(53.4, 37, 1.9, 16), [[47, 57], [53, 57], [50, 61.5]], [[47, 66], [53, 66], [50, 61.5]]]
+    ),
+    devil: toD(
+      [
+        circ(50, 52, 17),
+        [[37, 41], [31, 33], [27, 22], [29, 16], [34, 25], [40, 31], [45, 37]],
+        mirror([[37, 41], [31, 33], [27, 22], [29, 16], [34, 25], [40, 31], [45, 37]]),
+        [[45, 66], [55, 66], [50, 80]],
+        rect(45, 66, 55, 82),
+        shoulders(80, 38, 11),
+      ],
+      [[[40, 49], [47, 52.5], [41, 55]], mirror([[40, 49], [47, 52.5], [41, 55]]), [[40, 58]].concat(bez([40, 58], [44, 66], [56, 66], [60, 58])).concat(bez([60, 58], [56, 62], [44, 62], [40, 58]))]
+    ),
+  };
+  const silPaths = {};
+  const silPath = (id) => silPaths[id] || (silPaths[id] = new Path2D(SIL[id] || SIL.ghost));
+  const costumeById = (id) => S.COSTUMES.find((c) => c.id === id) || S.COSTUMES[0];
+
+  function silSVG(id, cls = '') {
+    return `<svg class="sil ${cls}" viewBox="0 0 100 100" aria-hidden="true"><path d="${SIL[id] || SIL.ghost}"/></svg>`;
+  }
+  function silEl(id, cls) {
+    const s = document.createElement('span');
+    s.className = 'silw';
+    s.innerHTML = silSVG(id, cls);
+    return s;
+  }
+  function drawSil(ctx, id, x, y, size, color = T.bone) {
+    ctx.save();
+    ctx.translate(x - size / 2, y - size / 2);
+    ctx.scale(size / 100, size / 100);
+    ctx.fillStyle = color;
+    ctx.fill(silPath(id));
+    ctx.restore();
+  }
+  // name with a small silhouette before it (names are user input: textContent only)
+  function whoEl(who, cls) {
+    const s = document.createElement('span');
+    s.className = 'who ' + (cls || '');
+    if (!who) {
+      s.appendChild(silEl('ghost'));
+      const n = document.createElement('span');
+      n.textContent = 'the House';
+      s.appendChild(n);
+      return s;
+    }
+    s.appendChild(silEl(who.costume));
+    const n = document.createElement('span');
+    n.textContent = who.name;
+    s.appendChild(n);
+    return s;
+  }
+  const nameOf = (who) => (who ? who.name : 'the House');
+  const NameOf = (who) => (who ? who.name : 'The House'); // at the start of a sentence
+
+  // =====================================================================
+  // Light sources and objects
+  // =====================================================================
+  const PUMPKIN = new Path2D(toD([pumpkinOutline(50, 54, 40, 33)], []));
+  const STEM = new Path2D(toD([[[47, 24], [45, 12], [50, 4], [56, 6], [53, 14], [54, 24]]], []));
+  const EYES = new Path2D(toD([[[30, 44], [42, 44], [36, 32]], [[58, 44], [70, 44], [64, 32]]], []));
+  const MOUTH = new Path2D(toD([[[28, 58], [34, 63], [40, 58], [46, 65], [54, 65], [60, 58], [66, 63], [72, 58], [66, 72], [50, 77], [34, 72]]], []));
+  const RIBS = [
+    [-0.42, 0.55],
+    [-0.16, 0.8],
+    [0.16, 0.8],
+    [0.42, 0.55],
+  ];
+  const FIG = '"Fraunces", Georgia, serif';
+
+  // A carved pumpkin. lit: 0 = unlit ash outline, 1 = burning. n: number carved as its mouth.
+  // o.tint: colour of torch light falling on an unlit pumpkin (0..1 strength), o.zombie: lit in blood.
+  function drawPumpkin(ctx, x, y, size, n, o = {}) {
+    if (!(size > 2)) return;
+    const lit = clamp(o.lit || 0, 0, 1);
+    const t = o.t != null ? o.t : performance.now() / 1000;
+    const fl = lit > 0 ? flicker(t, (n || 1) * 1.7, 0.035) : 1;
+    const hot = o.zombie ? T.blood : T.flame;
+    const core = o.zombie ? '#ff5a6e' : T.ember;
+    ctx.save();
+    ctx.translate(x - size / 2, y - size / 2);
+    const k = size / 100;
+    if (lit > 0 && o.glow !== false) {
+      // light falloff around the lantern: radial, no outline
+      const R = size * (0.55 + 0.65 * lit) * fl;
+      const g = ctx.createRadialGradient(50 * k, 54 * k, size * 0.1, 50 * k, 54 * k, R);
+      g.addColorStop(0, hexA(core, 0.42 * lit));
+      g.addColorStop(0.35, hexA(hot, 0.2 * lit));
+      g.addColorStop(1, hexA(hot, 0));
+      ctx.fillStyle = g;
+      ctx.fillRect(50 * k - R, 54 * k - R, R * 2, R * 2);
+    }
+    ctx.scale(k, k);
+    if (lit > 0) {
+      ctx.globalAlpha = 0.25 + 0.75 * lit;
+      ctx.fillStyle = hot;
+      ctx.fill(PUMPKIN);
+      ctx.fill(STEM);
+      ctx.globalAlpha = 1;
+      // ribs: shadow lines, not outlines
+      ctx.save();
+      ctx.clip(PUMPKIN);
+      ctx.strokeStyle = 'rgba(10,9,8,0.28)';
+      ctx.lineWidth = 2.2;
+      for (const [dx, sc] of RIBS) {
+        ctx.beginPath();
+        ctx.ellipse(50 + dx * 40, 54, 40 * 0.3 * sc, 33 * 0.96, 0, -Math.PI / 2, Math.PI / 2, dx < 0);
+        ctx.stroke();
+      }
+      ctx.restore();
+      // the carving glows from inside
+      const cg = ctx.createRadialGradient(50, 56, 2, 50, 56, 40);
+      cg.addColorStop(0, '#fff3d6');
+      cg.addColorStop(0.45, core);
+      cg.addColorStop(1, hot);
+      ctx.fillStyle = cg;
+      ctx.globalAlpha = lit * fl;
+      ctx.fill(EYES);
+      if (n) {
+        ctx.font = `900 40px ${FIG}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(n), 50, 66);
+      } else ctx.fill(MOUTH);
+      ctx.globalAlpha = 1;
+    } else {
+      const tint = o.tint || 0;
+      if (tint > 0) {
+        // torchlight falling on an unlit pumpkin
+        ctx.globalAlpha = tint;
+        ctx.fillStyle = '#5a3418';
+        ctx.fill(PUMPKIN);
+        ctx.fillStyle = '#3b2a12';
+        ctx.fill(STEM);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = T.ink;
+        ctx.fill(EYES);
+        if (n) {
+          ctx.font = `900 40px ${FIG}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(n), 50, 66);
+        } else ctx.fill(MOUTH);
+      } else {
+        ctx.strokeStyle = o.color || T.ash;
+        ctx.lineWidth = o.line || 2.2;
+        ctx.stroke(PUMPKIN);
+        ctx.stroke(STEM);
+        ctx.globalAlpha = 0.6;
+        ctx.stroke(EYES);
+        if (n) {
+          ctx.font = `800 40px ${FIG}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.lineWidth = 1.5;
+          ctx.strokeText(String(n), 50, 66);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.restore();
+  }
+
+  const HAMMER = new Path2D(toD([rect(46, 30, 54, 100), [[20, 6], [80, 6], [84, 10], [84, 30], [80, 34], [20, 34], [16, 30], [16, 10]]], [rect(26, 14, 74, 16)]));
+  // pivot at the bottom of the handle; angle 0 = head straight up
+  function drawHammer(ctx, x, y, size, angle = 0, color = T.bone) {
+    if (!(size > 2)) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.translate(-size / 2, -size);
+    ctx.scale(size / 100, size / 100);
+    ctx.fillStyle = color;
+    ctx.fill(HAMMER);
+    ctx.restore();
+  }
+
+  // Souls: pale motes of bone, only visible in light.
+  function drawSoul(ctx, x, y, size, t, alpha = 1, v = 1) {
+    if (!(size > 0.5) || alpha <= 0) return;
+    const r = size * (1 + 0.06 * Math.sin(t * 3 + x));
+    ctx.save();
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
+    g.addColorStop(0, hexA(T.bone, 0.95 * alpha));
+    g.addColorStop(0.3, hexA(T.bone, 0.35 * alpha));
+    g.addColorStop(1, hexA(T.bone, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 2.4, 0, TAU);
+    ctx.fill();
+    if (v > 1) {
+      ctx.fillStyle = hexA(T.bone, alpha);
+      ctx.font = `700 ${Math.round(Math.max(11, r * 1.4))}px "Atkinson Hyperlegible", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('×' + v, x, y - r * 2.2);
+    }
+    ctx.restore();
+  }
+
+  // Ghosts: soft wraith smoke with two dark eye holes. Each has its own outline.
+  const GHOST_SHAPES = {
+    butler: [[50, 6], [62, 10], [66, 22], [64, 34], [76, 42], [78, 60], [72, 82], [66, 96], [58, 88], [50, 98], [42, 88], [34, 96], [28, 82], [22, 60], [24, 42], [36, 34], [34, 22], [38, 10]],
+    ragdoll: [[44, 20], [60, 18], [70, 28], [70, 40], [64, 50], [74, 58], [72, 74], [62, 90], [52, 82], [44, 92], [34, 78], [28, 62], [34, 52], [28, 42], [30, 28]],
+    warden: [[50, 14], [66, 18], [74, 30], [72, 42], [88, 52], [90, 72], [80, 92], [64, 86], [50, 96], [36, 86], [20, 92], [10, 72], [12, 52], [28, 42], [26, 30], [34, 18]],
+    bride: [[50, 4], [64, 10], [70, 26], [74, 50], [82, 74], [94, 98], [72, 92], [56, 98], [40, 92], [24, 98], [14, 86], [24, 62], [28, 40], [32, 22], [38, 10]],
+    choir: [[50, 2], [68, 16], [74, 36], [78, 62], [82, 92], [66, 86], [50, 96], [34, 86], [18, 92], [22, 62], [26, 36], [32, 16]],
+  };
+  const GHOST_EYES = {
+    butler: [[43, 22, 3, 4], [57, 22, 3, 4]],
+    ragdoll: [[44, 33, 4, 3], [58, 31, 2.4, 2.4]],
+    warden: [[42, 30, 4.5, 3.5], [58, 30, 4.5, 3.5]],
+    bride: [[44, 22, 2.6, 4.5], [56, 22, 2.6, 4.5]],
+    choir: [[43, 30, 3.5, 2.2], [57, 30, 3.5, 2.2]],
+  };
+  const ghostCache = new Map();
+  function ghostSprite(gi, px) {
+    const id = S.GHOSTS[gi].id;
+    const b = Math.max(24, Math.round(px / 16) * 16);
+    const key = id + b;
+    if (ghostCache.has(key)) return ghostCache.get(key);
+    const pad = b * 0.35;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = Math.ceil(b + pad * 2);
+    const c = cv.getContext('2d');
+    const path = new Path2D(toD([GHOST_SHAPES[id]], []));
+    const k = b / 100;
+    // smoke: only the blurred shadow of the shape is drawn (works in every browser)
+    const layer = (blur, alpha, scale) => {
+      c.save();
+      c.shadowColor = hexA(T.wraith, alpha);
+      c.shadowBlur = blur;
+      c.shadowOffsetX = 10000;
+      c.translate(pad - 10000 + (b * (1 - scale)) / 2, pad + (b * (1 - scale)) / 2);
+      c.scale(k * scale, k * scale);
+      c.fillStyle = '#000';
+      c.fill(path);
+      c.restore();
+    };
+    layer(b * 0.22, 0.35, 1.06);
+    layer(b * 0.1, 0.45, 0.96);
+    layer(b * 0.04, 0.4, 0.86);
+    // eye holes
+    c.save();
+    c.globalCompositeOperation = 'destination-out';
+    c.shadowColor = '#000';
+    c.shadowBlur = b * 0.03;
+    for (const [ex, ey, rx, ry] of GHOST_EYES[id]) {
+      c.beginPath();
+      c.ellipse(pad + ex * k, pad + ey * k, rx * k, ry * k, 0, 0, TAU);
+      c.fill();
+    }
+    c.restore();
+    const out = { cv, pad, b };
+    ghostCache.set(key, out);
+    return out;
+  }
+  function drawGhost(ctx, gi, x, y, size, t, alpha = 1) {
+    if (!(size > 2) || alpha <= 0) return;
+    const sp = ghostSprite(gi, size);
+    const s = size / sp.b;
+    const breathe = 1 + 0.03 * Math.sin(t * 1.7);
+    const sway = Math.sin(t * 1.1) * 0.05;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.rotate(sway);
+    ctx.scale(s * (2 - breathe), s * breathe);
+    ctx.drawImage(sp.cv, -sp.cv.width / 2, -sp.cv.height / 2);
+    ctx.restore();
+  }
+
+  // =====================================================================
+  // Particles: only at events (claim, death, smash). Additive light, flame shards.
+  // =====================================================================
+  class Particles {
+    constructor(max = 1500) {
+      this.list = [];
+      this.max = max;
+    }
+    emit(x, y, o = {}) {
+      const n = o.count || 20;
+      for (let i = 0; i < n && this.list.length < this.max; i++) {
+        const a = o.angle != null ? o.angle + rand(-(o.spread || TAU) / 2, (o.spread || TAU) / 2) : rand(0, TAU);
+        const sp = rand((o.speed || 200) * 0.3, o.speed || 200);
+        const life = rand((o.life || 1) * 0.6, o.life || 1);
+        this.list.push({
+          x: x + rand(-(o.jitter || 0), o.jitter || 0),
+          y: y + rand(-(o.jitter || 0), o.jitter || 0),
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp,
+          life,
+          max: life,
+          size: rand((o.size || 3) * 0.5, o.size || 3),
+          color: Array.isArray(o.color) ? pick(o.color) : o.color || T.ember,
+          g: o.gravity || 0,
+          drag: o.drag != null ? o.drag : 0.985,
+          shape: o.shape || 'ember',
+          rot: rand(0, TAU),
+          vr: rand(-12, 12),
+        });
+      }
+    }
+    update(dt) {
+      for (let i = this.list.length - 1; i >= 0; i--) {
+        const p = this.list[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+          this.list.splice(i, 1);
+          continue;
+        }
+        const d = Math.pow(p.drag, dt * 60);
+        p.vx *= d;
+        p.vy *= d;
+        p.vy += p.g * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.rot += p.vr * dt;
+      }
+    }
+    draw(ctx) {
+      if (!this.list.length) return;
+      ctx.save();
+      for (const p of this.list) {
+        const a = clamp(p.life / p.max, 0, 1);
+        if (p.shape === 'shard') {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = Math.min(1, a * 1.6);
+          ctx.fillStyle = p.color;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          ctx.beginPath();
+          ctx.moveTo(-p.size, -p.size * 0.4);
+          ctx.lineTo(p.size * 1.2, 0);
+          ctx.lineTo(-p.size * 0.6, p.size * 0.6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else if (p.shape === 'dust') {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = a;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+        } else {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = a;
+          const r = p.size * (0.5 + a * 0.5);
+          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
+          g.addColorStop(0, p.color);
+          g.addColorStop(1, hexA(p.color.length === 7 ? p.color : T.ember, 0));
+          ctx.fillStyle = g;
+          ctx.fillRect(p.x - r * 3, p.y - r * 3, r * 6, r * 6);
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  class Shaker {
+    constructor() {
+      this.mag = 0;
+    }
+    add(m) {
+      if (reducedMotion) m *= 0.15;
+      this.mag = Math.min(40, this.mag + m);
+    }
+    offset(dt) {
+      this.mag *= Math.pow(0.004, dt);
+      if (this.mag < 0.3) {
+        this.mag = 0;
+        return [0, 0];
+      }
+      return [rand(-1, 1) * this.mag, rand(-1, 1) * this.mag];
+    }
+  }
+
+  // =====================================================================
+  // Sound: synthesised with Web Audio
   // =====================================================================
   const Sound = (() => {
     let ctx = null;
@@ -42,6 +618,7 @@
     let noiseBuf = null;
     let muted = store.get('ps_muted', false);
     let drone = null;
+    let breath = null;
     const api = { mild: false };
 
     function ensure() {
@@ -93,7 +670,6 @@
       osc.type = o.type || 'sine';
       osc.frequency.setValueAtTime(o.f, t);
       if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t + (o.glide || o.dur));
-      if (o.detune) osc.detune.value = o.detune;
       const g = ctx.createGain();
       env(g, t, o.a || 0.01, o.vol || 0.2, o.dur);
       let node = osc;
@@ -118,7 +694,6 @@
       g.connect(out(o.pan));
       osc.start(t);
       osc.stop(t + o.dur + 0.05);
-      return osc;
     }
     function noise(o) {
       if (!ensure() || muted) return;
@@ -150,27 +725,20 @@
       return w;
     }
 
-    api.chime = () => {
-      [880, 1318.5, 1760, 2637].forEach((f, i) => tone({ f, type: 'sine', vol: 0.18, dur: 1.1, at: i * 0.05 }));
-    };
+    api.chime = () => [880, 1318.5, 1760].forEach((f, i) => tone({ f, type: 'sine', vol: 0.14, dur: 1.4, at: i * 0.07 }));
     api.claim = () => {
-      [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) =>
-        tone({ f, type: 'triangle', vol: 0.22, dur: 0.6, at: i * 0.07 })
-      );
-      tone({ f: 2093, type: 'sine', vol: 0.08, dur: 1.4, at: 0.35 });
-      noise({ f: 6000, q: 0.7, vol: 0.06, dur: 0.6, at: 0.3, ft: 'highpass' });
+      [392, 523.25, 659.25, 783.99].forEach((f, i) => tone({ f, type: 'triangle', vol: 0.16, dur: 0.9, at: i * 0.08, lp: 2400 }));
+      noise({ f: 900, f2: 3500, q: 0.8, vol: 0.12, dur: 0.5 }); // the flame catching
     };
-    api.ping = () => {
-      const f = rand(1300, 1700);
-      tone({ f, f2: f * 1.5, type: 'sine', vol: 0.12, dur: 0.16 });
-      tone({ f: f * 2, type: 'sine', vol: 0.04, dur: 0.25, at: 0.04 });
+    api.ping = (pan) => {
+      const f = rand(1200, 1500);
+      tone({ f, f2: f * 1.25, type: 'sine', vol: 0.07, dur: 0.22, pan });
     };
     api.spawnBell = () => {
-      tone({ f: 196, type: 'sine', vol: 0.18, dur: 2.2 });
-      tone({ f: 293.7, type: 'sine', vol: 0.1, dur: 2.0, at: 0.02 });
-      tone({ f: 466, type: 'sine', vol: 0.05, dur: 1.6, at: 0.03 });
+      tone({ f: 196, type: 'sine', vol: 0.14, dur: 2.6 });
+      tone({ f: 293.7, type: 'sine', vol: 0.07, dur: 2.2, at: 0.02 });
     };
-    api.creak = () => {
+    api.creak = (pan, vol = 0.32) => {
       if (!ensure() || muted) return;
       const t = ctx.currentTime;
       const osc = ctx.createOscillator();
@@ -184,7 +752,7 @@
       bp.frequency.value = 900;
       bp.Q.value = 6;
       const g = ctx.createGain();
-      env(g, t, 0.05, 0.35, 0.95);
+      env(g, t, 0.05, vol, 0.95);
       const trem = ctx.createGain();
       const lfo = ctx.createOscillator();
       lfo.type = 'square';
@@ -197,20 +765,64 @@
       osc.connect(bp);
       bp.connect(trem);
       trem.connect(g);
-      g.connect(master);
+      g.connect(out(pan));
       osc.start(t);
       lfo.start(t);
       osc.stop(t + 1);
       lfo.stop(t + 1);
-      noise({ f: 160, q: 1, vol: 0.35, dur: 0.35, at: 0.9, ft: 'lowpass' });
     };
-    api.whoosh = () => noise({ f: 300, f2: 3000, q: 1.2, vol: 0.16, dur: 0.5 });
+    api.door = (pan) => {
+      api.creak(pan);
+      noise({ f: 160, q: 1, vol: 0.35, dur: 0.35, at: 0.9, ft: 'lowpass', pan });
+    };
+    api.footstep = (pan) => {
+      noise({ f: rand(140, 220), q: 0.8, vol: 0.09, dur: 0.12, ft: 'lowpass', pan });
+      tone({ f: rand(60, 75), f2: 40, type: 'sine', vol: 0.06, dur: 0.1, pan });
+    };
+    api.knock = (pan) => [0, 0.32, 0.6].forEach((at) => noise({ f: 220, q: 1.2, vol: 0.16, dur: 0.12, ft: 'lowpass', at, pan }));
+    api.flare = (pan) => noise({ f: 500, f2: 2200, q: 0.7, vol: 0.07, dur: 0.6, pan });
     api.whisper = (pan) => {
       if (!ensure() || muted) return;
-      for (let i = 0; i < 3; i++) {
-        noise({ f: rand(1800, 4200), q: rand(3, 8), vol: rand(0.04, 0.09), dur: rand(0.25, 0.6), at: i * rand(0.12, 0.3), pan });
+      for (let i = 0; i < 3; i++) noise({ f: rand(1800, 4200), q: rand(3, 8), vol: rand(0.03, 0.07), dur: rand(0.25, 0.6), at: i * rand(0.12, 0.3), pan });
+    };
+    // continuous breathing that swells as a ghost closes in
+    api.setBreath = (level, pan) => {
+      if (!ensure() || muted) {
+        if (breath) breath.g.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
+        return;
       }
-      tone({ f: rand(180, 260), f2: rand(120, 160), type: 'sine', vol: 0.05, dur: 1.2, pan, vib: [6, 8] });
+      if (!breath) {
+        const src = ctx.createBufferSource();
+        src.buffer = noiseBuf;
+        src.loop = true;
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 700;
+        bp.Q.value = 0.7;
+        const lfoG = ctx.createGain();
+        lfoG.gain.value = 0;
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 0.32;
+        const depth = ctx.createGain();
+        depth.gain.value = 0.5;
+        lfo.connect(depth);
+        depth.connect(lfoG.gain);
+        const g = ctx.createGain();
+        g.gain.value = 0;
+        const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+        src.connect(bp);
+        bp.connect(lfoG);
+        lfoG.connect(g);
+        if (p) {
+          g.connect(p);
+          p.connect(master);
+        } else g.connect(master);
+        src.start();
+        lfo.start();
+        breath = { g, p };
+      }
+      breath.g.gain.setTargetAtTime(clamp(level, 0, 1) * 0.22, ctx.currentTime, 0.3);
+      if (breath.p) breath.p.pan.setTargetAtTime(clamp(pan || 0, -1, 1), ctx.currentTime, 0.2);
     };
     api.scream = () => {
       if (!ensure() || muted) return;
@@ -218,7 +830,7 @@
       const t = ctx.currentTime;
       const sh = distortion(60);
       const g = ctx.createGain();
-      env(g, t, 0.03, 0.32, 1.5);
+      env(g, t, 0.03, 0.3, 1.4);
       sh.connect(g);
       g.connect(master);
       [0, 7, -9].forEach((det) => {
@@ -226,71 +838,52 @@
         o.type = 'sawtooth';
         o.detune.value = det * 10;
         o.frequency.setValueAtTime(520, t);
-        o.frequency.exponentialRampToValueAtTime(1350, t + 0.25);
-        o.frequency.exponentialRampToValueAtTime(900, t + 0.9);
-        o.frequency.exponentialRampToValueAtTime(380, t + 1.5);
-        const l = ctx.createOscillator();
-        const lg = ctx.createGain();
-        l.frequency.value = 11;
-        lg.gain.value = 60;
-        l.connect(lg);
-        lg.connect(o.frequency);
+        o.frequency.exponentialRampToValueAtTime(1300, t + 0.25);
+        o.frequency.exponentialRampToValueAtTime(380, t + 1.4);
         o.connect(sh);
         o.start(t);
-        l.start(t);
-        o.stop(t + 1.55);
-        l.stop(t + 1.55);
+        o.stop(t + 1.45);
       });
-      noise({ f: 3000, q: 0.6, vol: 0.2, dur: 1.2, ft: 'highpass' });
+      noise({ f: 3000, q: 0.6, vol: 0.18, dur: 1.1, ft: 'highpass' });
     };
     api.moan = () => {
-      tone({ f: 220, f2: 98, type: 'triangle', vol: 0.18, dur: 1.4, vib: [4, 6], lp: 900 });
-      tone({ f: 165, f2: 82, type: 'sine', vol: 0.12, dur: 1.5 });
+      tone({ f: 220, f2: 98, type: 'triangle', vol: 0.16, dur: 1.4, vib: [4, 6], lp: 900 });
+      tone({ f: 165, f2: 82, type: 'sine', vol: 0.1, dur: 1.5 });
     };
-    api.glitch = () => {
-      for (let i = 0; i < 6; i++) noise({ f: rand(400, 5000), q: 4, vol: 0.12, dur: 0.05, at: i * 0.06 });
-      tone({ f: 60, type: 'square', vol: 0.12, dur: 0.3, lp: 400 });
+    api.sting = () => {
+      [110, 116.5].forEach((f) => tone({ f, type: 'sawtooth', vol: 0.09, dur: 1.8, lp: 900, a: 0.03 }));
+      noise({ f: 120, q: 0.8, vol: 0.22, dur: 0.9, ft: 'lowpass' });
     };
-    api.stinger = () => {
-      [110, 116.5, 164.8].forEach((f) => tone({ f, type: 'sawtooth', vol: 0.12, dur: 1.6, lp: 1200, a: 0.02 }));
-      noise({ f: 120, q: 0.8, vol: 0.3, dur: 0.8, ft: 'lowpass' });
-    };
-    api.tick = () => tone({ f: 1800, type: 'square', vol: 0.04, dur: 0.04, lp: 4000 });
-    api.blip = () => tone({ f: 660, f2: 990, type: 'triangle', vol: 0.12, dur: 0.12 });
+    api.tick = () => tone({ f: 1500, type: 'sine', vol: 0.04, dur: 0.05 });
+    api.blip = () => tone({ f: 520, f2: 640, type: 'sine', vol: 0.08, dur: 0.15 });
     api.drumroll = (dur = 3) => {
       if (!ensure() || muted) return;
       const n = Math.floor(dur / 0.045);
       for (let i = 0; i < n; i++) {
         const k = i / n;
-        noise({ f: 1700 + k * 900, q: 0.9, vol: 0.05 + k * k * 0.3, dur: 0.05, at: i * 0.045 + rand(-0.004, 0.004) });
-        if (i % 2 === 0) tone({ f: 95 + k * 40, type: 'sine', vol: 0.05 + k * 0.18, dur: 0.07, at: i * 0.045 });
+        noise({ f: 1500 + k * 700, q: 0.9, vol: 0.04 + k * k * 0.26, dur: 0.05, at: i * 0.045 + rand(-0.004, 0.004) });
+        if (i % 2 === 0) tone({ f: 90 + k * 35, type: 'sine', vol: 0.04 + k * 0.16, dur: 0.07, at: i * 0.045 });
       }
     };
     api.boom = () => {
       tone({ f: 150, f2: 26, glide: 1.1, type: 'sine', vol: 0.95, dur: 1.6, a: 0.003 });
-      tone({ f: 75, f2: 30, type: 'square', vol: 0.25, dur: 0.6, lp: 300, a: 0.003 });
       noise({ f: 1200, f2: 90, q: 0.6, vol: 0.7, dur: 1.4, ft: 'lowpass' });
-      noise({ f: 5000, q: 0.7, vol: 0.3, dur: 0.25, ft: 'highpass' });
+      noise({ f: 5000, q: 0.7, vol: 0.3, dur: 0.2, ft: 'highpass' });
     };
     api.fanfare = () => {
-      const seq = [392, 523.25, 659.25, 783.99];
-      seq.forEach((f, i) => {
-        tone({ f, type: 'sawtooth', vol: 0.12, dur: 0.22, at: i * 0.14, lp: 2600 });
-        tone({ f: f / 2, type: 'square', vol: 0.05, dur: 0.22, at: i * 0.14, lp: 1200 });
+      // a warm swell of bells rather than brass: the house exhaling
+      [261.6, 329.6, 392, 523.25].forEach((f, i) => {
+        tone({ f, type: 'triangle', vol: 0.11, dur: 3.2, at: i * 0.16, lp: 2200, a: 0.08 });
+        tone({ f: f * 2, type: 'sine', vol: 0.04, dur: 2.6, at: i * 0.16 + 0.05 });
       });
-      [523.25, 659.25, 783.99, 1046.5].forEach((f) => {
-        tone({ f, type: 'sawtooth', vol: 0.11, dur: 2.2, at: 0.6, lp: 3000, vib: [5.5, 4], a: 0.04 });
-        tone({ f: f * 2, type: 'sine', vol: 0.03, dur: 2.2, at: 0.6 });
-      });
-      tone({ f: 130.8, type: 'triangle', vol: 0.2, dur: 2.4, at: 0.6 });
-      for (let i = 0; i < 10; i++) tone({ f: rand(2000, 4200), type: 'sine', vol: 0.04, dur: 0.3, at: 0.7 + i * 0.12 });
+      tone({ f: 130.8, type: 'sine', vol: 0.18, dur: 3.6, at: 0.1, a: 0.3 });
     };
     api.zombie = () => {
       if (!ensure() || muted) return;
       const t = ctx.currentTime;
-      const sh = distortion(api.mild ? 10 : 80);
+      const sh = distortion(api.mild ? 10 : 70);
       const g = ctx.createGain();
-      env(g, t, 0.05, api.mild ? 0.15 : 0.3, 1.8);
+      env(g, t, 0.05, api.mild ? 0.14 : 0.26, 1.8);
       sh.connect(g);
       g.connect(master);
       [0, 13].forEach((det) => {
@@ -302,10 +895,7 @@
         o.start(t);
         o.stop(t + 1.8);
       });
-      if (!api.mild) api.glitch();
     };
-
-    // Ambient per-room drone with crossfade.
     api.setDrone = (roomIdx) => {
       if (!ensure()) return;
       if (drone && drone.room === roomIdx) return;
@@ -315,33 +905,33 @@
       const base = S.ROOMS[roomIdx].drone;
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.11, t + 2.5);
+      g.gain.exponentialRampToValueAtTime(0.09, t + 2.5);
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.value = 320;
-      lp.Q.value = 4;
+      lp.frequency.value = 280;
+      lp.Q.value = 3;
       const lfo = ctx.createOscillator();
       const lfoG = ctx.createGain();
       lfo.frequency.value = 0.07 + roomIdx * 0.025;
-      lfoG.gain.value = 180;
+      lfoG.gain.value = 140;
       lfo.connect(lfoG);
       lfoG.connect(lp.frequency);
       lp.connect(g);
       g.connect(master);
       const nodes = [lfo];
       const ratios = [
-        [1, 1.006, 2], // hall
-        [1, 1.5, 4.01], // attic: hollow fifth + whistle
-        [0.5, 1, 1.003], // crypt: sub-heavy
-        [1, 1.01, 1.498], // swamp
-        [1, 1.5, 2, 3], // chapel: organ
+        [1, 1.006, 2],
+        [1, 1.5, 4.01],
+        [0.5, 1, 1.003],
+        [1, 1.01, 1.498],
+        [1, 1.5, 2, 3],
       ][roomIdx];
       ratios.forEach((r, i) => {
         const o = ctx.createOscillator();
-        o.type = i === 0 ? 'sawtooth' : roomIdx === 4 ? 'triangle' : 'sawtooth';
+        o.type = roomIdx === 4 && i ? 'triangle' : 'sawtooth';
         o.frequency.value = base * r;
         const og = ctx.createGain();
-        og.gain.value = i === 0 ? 0.6 : 0.35;
+        og.gain.value = i === 0 ? 0.6 : 0.3;
         o.connect(og);
         og.connect(lp);
         nodes.push(o);
@@ -377,693 +967,23 @@
   })();
 
   // =====================================================================
-  // Particles, shake, flashes
+  // The smash and the result, shared by the host and the players.
+  // Timeline (seconds into SMASH): 0 one line types in · 1–4 drumroll while the hammer
+  // rises · 3.6 wind-up · 4.0 slam · 4.08 impact: bone flash, 120 ms hit-stop, flame shards
+  // · then silence and one line of type.
   // =====================================================================
-  class Particles {
-    constructor(max = 2200) {
-      this.list = [];
-      this.max = max;
-    }
-    emit(x, y, o = {}) {
-      const n = o.count || 20;
-      for (let i = 0; i < n && this.list.length < this.max; i++) {
-        const a = o.angle != null ? o.angle + rand(-(o.spread || TAU) / 2, (o.spread || TAU) / 2) : rand(0, TAU);
-        const sp = rand(o.speedMin != null ? o.speedMin : (o.speed || 200) * 0.3, o.speed || 200);
-        const life = rand((o.life || 1) * 0.6, o.life || 1);
-        this.list.push({
-          x: x + rand(-(o.jitter || 0), o.jitter || 0),
-          y: y + rand(-(o.jitter || 0), o.jitter || 0),
-          vx: Math.cos(a) * sp,
-          vy: Math.sin(a) * sp,
-          life,
-          max: life,
-          size: rand((o.size || 3) * 0.5, o.size || 3),
-          color: Array.isArray(o.color) ? pick(o.color) : o.color || '#fff',
-          g: o.gravity || 0,
-          drag: o.drag != null ? o.drag : 0.985,
-          shape: o.shape || 'dot',
-          rot: rand(0, TAU),
-          vr: rand(-10, 10),
-        });
-      }
-    }
-    update(dt) {
-      for (let i = this.list.length - 1; i >= 0; i--) {
-        const p = this.list[i];
-        p.life -= dt;
-        if (p.life <= 0) {
-          this.list.splice(i, 1);
-          continue;
-        }
-        const d = Math.pow(p.drag, dt * 60);
-        p.vx *= d;
-        p.vy *= d;
-        p.vy += p.g * dt;
-        if (p.shape === 'confetti') p.vx += Math.sin(p.rot * 2) * 30 * dt;
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.rot += p.vr * dt;
-      }
-    }
-    draw(ctx) {
-      if (!this.list.length) return;
-      ctx.save();
-      for (const p of this.list) {
-        const a = clamp(p.life / p.max, 0, 1);
-        if (p.shape === 'confetti' || p.shape === 'chunk') {
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.globalAlpha = Math.min(1, a * 2);
-          ctx.fillStyle = p.color;
-          ctx.save();
-          ctx.translate(p.x, p.y);
-          ctx.rotate(p.rot);
-          if (p.shape === 'confetti') ctx.scale(1, Math.cos(p.rot * 1.7));
-          if (p.shape === 'chunk') {
-            ctx.beginPath();
-            ctx.moveTo(-p.size, -p.size * 0.6);
-            ctx.lineTo(p.size, -p.size * 0.3);
-            ctx.lineTo(p.size * 0.4, p.size * 0.8);
-            ctx.lineTo(-p.size * 0.7, p.size * 0.5);
-            ctx.fill();
-          } else ctx.fillRect(-p.size, -p.size * 0.5, p.size * 2, p.size);
-          ctx.restore();
-        } else {
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.globalAlpha = a;
-          ctx.fillStyle = p.color;
-          if (p.shape === 'spark') {
-            ctx.strokeStyle = p.color;
-            ctx.lineWidth = p.size * 0.6;
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p.x - p.vx * 0.05, p.y - p.vy * 0.05);
-            ctx.stroke();
-          } else if (p.shape === 'ring') {
-            ctx.strokeStyle = p.color;
-            ctx.lineWidth = 3 * a + 0.5;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * (1 - a) * 40 + 4, 0, TAU);
-            ctx.stroke();
-          } else {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * (0.4 + a * 0.6), 0, TAU);
-            ctx.fill();
-          }
-        }
-      }
-      ctx.restore();
-    }
-  }
-
-  class Shaker {
-    constructor() {
-      this.mag = 0;
-    }
-    add(m) {
-      this.mag = Math.min(60, this.mag + m);
-    }
-    offset(dt) {
-      this.mag *= Math.pow(0.02, dt);
-      if (this.mag < 0.3) {
-        this.mag = 0;
-        return [0, 0];
-      }
-      return [rand(-1, 1) * this.mag, rand(-1, 1) * this.mag];
-    }
-  }
-
-  // =====================================================================
-  // Costumes (emoji or code-drawn)
-  // =====================================================================
-  const costumeById = (id) => S.COSTUMES.find((c) => c.id === id) || S.COSTUMES[0];
-  const MUMMY_SVG =
-    '<svg viewBox="0 0 100 100" class="mummy-svg" aria-hidden="true"><defs><clipPath id="mh"><circle cx="50" cy="52" r="38"/></clipPath></defs>' +
-    '<circle cx="50" cy="52" r="38" fill="#e9dcc0"/><g clip-path="url(#mh)" stroke="#b8a682" stroke-width="5" fill="none">' +
-    '<path d="M5 22 L95 36"/><path d="M5 40 L95 30"/><path d="M5 70 L95 58"/><path d="M5 84 L95 80"/><path d="M5 56 L60 64"/></g>' +
-    '<rect x="18" y="40" width="64" height="16" rx="6" fill="#1a0f22"/><circle cx="36" cy="48" r="5" fill="#39ff14"/><circle cx="64" cy="48" r="5" fill="#39ff14"/></svg>';
-
-  function costumeHTML(id) {
-    const c = costumeById(id);
-    // the zero-width space gives the drawn glyph a text baseline, so it lines up inline like the emoji
-    return c.emoji ? `<span class="emoji">${c.emoji}</span>` : `\u200b${MUMMY_SVG}`;
-  }
-  function costumeEl(id) {
-    const s = document.createElement('span');
-    s.className = 'costume';
-    s.innerHTML = costumeHTML(id);
-    return s;
-  }
-  // Name + costume as safe DOM (names are user input, so never innerHTML).
-  function whoEl(who, cls) {
-    const s = document.createElement('span');
-    s.className = 'who ' + (cls || '');
-    if (!who) {
-      s.textContent = '👻 the House';
-      return s;
-    }
-    s.appendChild(costumeEl(who.costume));
-    const n = document.createElement('b');
-    n.textContent = who.name;
-    s.appendChild(n);
-    return s;
-  }
-
-  function drawMummy(ctx, x, y, s) {
-    const r = s * 0.42;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, TAU);
-    ctx.fillStyle = '#e9dcc0';
-    ctx.fill();
-    ctx.save();
-    ctx.clip();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = '#b8a682';
-    ctx.lineWidth = r * 0.13;
-    [
-      [-0.75, 0.35],
-      [-0.35, -0.55],
-      [0.4, 0.15],
-      [0.75, 0.6],
-    ].forEach(([yy, tilt]) => {
-      ctx.beginPath();
-      ctx.moveTo(-r, yy * r);
-      ctx.lineTo(r, (yy + tilt * 0.3) * r);
-      ctx.stroke();
-    });
-    ctx.restore();
-    ctx.fillStyle = '#1a0f22';
-    ctx.fillRect(-r * 0.8, -r * 0.3, r * 1.6, r * 0.42);
-    ctx.fillStyle = '#39ff14';
-    ctx.shadowColor = '#39ff14';
-    ctx.shadowBlur = r * 0.5;
-    ctx.beginPath();
-    ctx.arc(-r * 0.36, -r * 0.09, r * 0.12, 0, TAU);
-    ctx.arc(r * 0.36, -r * 0.09, r * 0.12, 0, TAU);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-  function drawCostume(ctx, id, x, y, size, glow = true) {
-    const c = costumeById(id);
-    ctx.save();
-    if (glow) {
-      ctx.shadowColor = c.glow;
-      ctx.shadowBlur = size * 0.6;
-    }
-    if (c.emoji) {
-      ctx.font = `${Math.round(size)}px ${EMOJI_FONT}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(c.emoji, x, y + size * 0.06);
-    } else drawMummy(ctx, x, y, size);
-    ctx.restore();
-  }
-
-  // =====================================================================
-  // Items: pumpkin, hammer, soul, door
-  // =====================================================================
-  function drawPumpkin(ctx, x, y, size, n, o = {}) {
-    if (!(size > 1)) return;
-    const r = size / 2;
-    ctx.save();
-    ctx.translate(x, y);
-    if (o.rot) ctx.rotate(o.rot);
-    const body = o.zombie ? ['#7bff4a', '#2c7a12', '#123d08'] : o.gold ? ['#fff3a0', '#ffb300', '#a35a00'] : ['#ffa040', '#ff5a00', '#8a2500'];
-    ctx.shadowColor = o.zombie ? S.COLORS.green : o.gold ? '#ffd84d' : S.COLORS.orange;
-    ctx.shadowBlur = o.glow != null ? o.glow : r * 0.8;
-    // ribs: overlapping ellipses
-    const ribs = [-0.62, -0.32, 0.32, 0.62, 0];
-    ribs.forEach((dx) => {
-      const g = ctx.createRadialGradient(dx * r - r * 0.2, -r * 0.3, r * 0.1, dx * r, 0, r * 0.9);
-      g.addColorStop(0, body[0]);
-      g.addColorStop(0.55, body[1]);
-      g.addColorStop(1, body[2]);
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.ellipse(dx * r, r * 0.05, r * (dx === 0 ? 0.5 : 0.46), r * 0.82, 0, 0, TAU);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    });
-    // stem
-    ctx.fillStyle = o.zombie ? '#3d2a12' : '#2f8a1a';
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.1, -r * 0.7);
-    ctx.quadraticCurveTo(-r * 0.05, -r * 1.05, r * 0.22, -r * 1.12);
-    ctx.lineTo(r * 0.16, -r * 0.95);
-    ctx.quadraticCurveTo(r * 0.08, -r * 0.85, r * 0.1, -r * 0.7);
-    ctx.fill();
-    // carved face, lit from inside
-    const lit = o.zombie ? '#c6ff5a' : o.gold ? '#ffffff' : '#ffe14d';
-    ctx.fillStyle = o.dark ? '#1a0700' : lit;
-    ctx.shadowColor = lit;
-    ctx.shadowBlur = o.dark ? 0 : r * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.48, -r * 0.08);
-    ctx.lineTo(-r * 0.3, -r * 0.42);
-    ctx.lineTo(-r * 0.12, -r * 0.08);
-    ctx.moveTo(r * 0.48, -r * 0.08);
-    ctx.lineTo(r * 0.3, -r * 0.42);
-    ctx.lineTo(r * 0.12, -r * 0.08);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.55, r * 0.18);
-    const teeth = 6;
-    for (let i = 0; i <= teeth; i++) {
-      const tx = -r * 0.55 + (i / teeth) * r * 1.1;
-      ctx.lineTo(tx, r * 0.18 + (i % 2 ? r * 0.12 : 0));
-    }
-    ctx.quadraticCurveTo(0, r * 0.75, -r * 0.55, r * 0.18);
-    ctx.fill();
-    if (o.zombie) {
-      ctx.strokeStyle = '#0c2205';
-      ctx.lineWidth = r * 0.05;
-      ctx.shadowBlur = 0;
-      ctx.beginPath();
-      ctx.moveTo(r * 0.1, -r * 0.8);
-      ctx.lineTo(r * 0.25, -r * 0.55);
-      ctx.lineTo(r * 0.12, -r * 0.45);
-      ctx.lineTo(r * 0.3, -r * 0.2);
-      ctx.stroke();
-    }
-    if (n) {
-      const bx = r * 0.62;
-      const by = -r * 0.62;
-      ctx.shadowBlur = r * 0.4;
-      ctx.shadowColor = S.COLORS.violet;
-      ctx.fillStyle = '#12021f';
-      ctx.beginPath();
-      ctx.arc(bx, by, r * 0.34, 0, TAU);
-      ctx.fill();
-      ctx.lineWidth = r * 0.07;
-      ctx.strokeStyle = o.zombie ? S.COLORS.green : '#ffe14d';
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#fff';
-      ctx.font = `900 ${Math.round(r * 0.46)}px Inter, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(n), bx, by + r * 0.02);
-    }
-    ctx.restore();
-  }
-
-  function drawHammer(ctx, x, y, size, angle = -0.5, glow = true) {
-    if (!(size > 1)) return;
-    const s = size;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    if (glow) {
-      ctx.shadowColor = S.COLORS.cyan;
-      ctx.shadowBlur = s * 0.4;
-    }
-    // handle (pivot at the grip end)
-    const hg = ctx.createLinearGradient(-s * 0.05, 0, s * 0.05, 0);
-    hg.addColorStop(0, '#5a2d0c');
-    hg.addColorStop(0.5, '#a0612a');
-    hg.addColorStop(1, '#4a240a');
-    ctx.fillStyle = hg;
-    ctx.fillRect(-s * 0.05, -s * 0.85, s * 0.1, s * 0.85);
-    ctx.fillStyle = S.COLORS.magenta;
-    ctx.fillRect(-s * 0.065, -s * 0.2, s * 0.13, s * 0.2);
-    // head
-    const g = ctx.createLinearGradient(0, -s, 0, -s * 0.72);
-    g.addColorStop(0, '#f2fbff');
-    g.addColorStop(0.5, '#8aa3b8');
-    g.addColorStop(1, '#3b4b5a');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.roundRect(-s * 0.36, -s * 1.02, s * 0.72, s * 0.3, s * 0.05);
-    ctx.fill();
-    ctx.lineWidth = s * 0.03;
-    ctx.strokeStyle = S.COLORS.cyan;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawSoul(ctx, x, y, size, t, v = 1) {
-    if (!(size > 0.5)) return;
-    const r = size * (0.5 + 0.08 * Math.sin(t * 5 + x));
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const col = v > 1 ? S.COLORS.magenta : S.COLORS.cyan;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2);
-    g.addColorStop(0, 'rgba(255,255,255,0.95)');
-    g.addColorStop(0.25, hexA(col, 0.8));
-    g.addColorStop(1, hexA(col, 0));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, r * 2.2, 0, TAU);
-    ctx.fill();
-    // wisp tail
-    ctx.strokeStyle = hexA(col, 0.6);
-    ctx.lineWidth = r * 0.35;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x, y + r * 0.4);
-    ctx.quadraticCurveTo(x + Math.sin(t * 4 + y) * r, y + r * 1.4, x - Math.sin(t * 3) * r * 0.6, y + r * 2.2);
-    ctx.stroke();
-    if (v > 1) {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#fff';
-      ctx.font = `800 ${Math.round(r * 0.9)}px Inter, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText('×' + v, x, y - r * 1.4);
-    }
-    ctx.restore();
-  }
-
-  function drawDoor(ctx, x, y, h, alpha, color, t) {
-    const w = h * 0.58;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(x, y);
-    ctx.shadowColor = color;
-    ctx.shadowBlur = h * 0.35 * (0.8 + 0.2 * Math.sin(t * 6));
-    const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
-    g.addColorStop(0, hexA(color, 0.55));
-    g.addColorStop(1, hexA(color, 0.15));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(-w / 2, h / 2);
-    ctx.lineTo(-w / 2, -h / 2 + w / 2);
-    ctx.arc(0, -h / 2 + w / 2, w / 2, Math.PI, 0);
-    ctx.lineTo(w / 2, h / 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.lineWidth = h * 0.04;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.lineWidth = h * 0.02;
-    ctx.strokeStyle = hexA('#ffffff', 0.35);
-    ctx.strokeRect(-w * 0.32, -h * 0.12, w * 0.64, h * 0.22);
-    ctx.strokeRect(-w * 0.32, h * 0.16, w * 0.64, h * 0.26);
-    ctx.fillStyle = '#ffe14d';
-    ctx.shadowColor = '#ffe14d';
-    ctx.shadowBlur = h * 0.1;
-    ctx.beginPath();
-    ctx.arc(w * 0.3, h * 0.12, h * 0.035, 0, TAU);
-    ctx.fill();
-    // light spilling under the door
-    ctx.globalCompositeOperation = 'lighter';
-    const sp = ctx.createRadialGradient(0, h / 2, 0, 0, h / 2, w);
-    sp.addColorStop(0, hexA(color, 0.5));
-    sp.addColorStop(1, hexA(color, 0));
-    ctx.fillStyle = sp;
-    ctx.fillRect(-w, h / 2 - w * 0.3, w * 2, w * 0.6);
-    ctx.restore();
-  }
-
-  // =====================================================================
-  // Ghosts: five originals, drawn in code. (x, y) is the ghost's centre.
-  // =====================================================================
-  function sheet(ctx, w, h, t, waves = 4, amp = 0.06) {
-    ctx.beginPath();
-    ctx.moveTo(-w / 2, 0);
-    ctx.arc(0, -h / 2 + w / 2, w / 2, Math.PI, 0);
-    ctx.lineTo(w / 2, h / 2);
-    for (let i = waves * 2; i >= 0; i--) {
-      const px = -w / 2 + (i / (waves * 2)) * w;
-      const py = h / 2 - (i % 2 ? h * 0.1 : 0) + Math.sin(t * 6 + i) * h * amp;
-      ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-  }
-  function eye(ctx, x, y, r, color, hollow) {
-    ctx.beginPath();
-    ctx.ellipse(x, y, r * 0.75, r, 0, 0, TAU);
-    ctx.fillStyle = '#05010a';
-    ctx.fill();
-    if (hollow) {
-      ctx.lineWidth = r * 0.25;
-      ctx.strokeStyle = color;
-      ctx.stroke();
-    }
-  }
-
-  function drawGhost(ctx, gi, x, y, size, t, alpha = 1) {
-    if (!(size > 1)) return;
-    const G = S.GHOSTS[gi];
-    const c = G.color;
-    const s = size;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.globalAlpha = alpha;
-    ctx.shadowColor = c;
-    ctx.shadowBlur = s * 0.35;
-    const body = ctx.createLinearGradient(0, -s / 2, 0, s / 2);
-    body.addColorStop(0, hexA(c, 0.75));
-    body.addColorStop(0.7, hexA(c, 0.35));
-    body.addColorStop(1, hexA(c, 0.02));
-    ctx.fillStyle = body;
-    ctx.strokeStyle = hexA(c, 0.9);
-    ctx.lineWidth = s * 0.02;
-
-    if (G.id === 'butler') {
-      sheet(ctx, s * 0.56, s, t, 4);
-      ctx.fill();
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      eye(ctx, -s * 0.1, -s * 0.24, s * 0.07, c, true);
-      eye(ctx, s * 0.1, -s * 0.24, s * 0.07, c, true);
-      // thin pursed mouth
-      ctx.strokeStyle = '#05010a';
-      ctx.lineWidth = s * 0.02;
-      ctx.beginPath();
-      ctx.moveTo(-s * 0.06, -s * 0.09);
-      ctx.lineTo(s * 0.06, -s * 0.09);
-      ctx.stroke();
-      // bow tie
-      ctx.fillStyle = S.COLORS.magenta;
-      ctx.shadowColor = S.COLORS.magenta;
-      ctx.shadowBlur = s * 0.1;
-      ctx.beginPath();
-      ctx.moveTo(0, s * 0.02);
-      ctx.lineTo(-s * 0.12, -s * 0.04);
-      ctx.lineTo(-s * 0.12, s * 0.08);
-      ctx.closePath();
-      ctx.moveTo(0, s * 0.02);
-      ctx.lineTo(s * 0.12, -s * 0.04);
-      ctx.lineTo(s * 0.12, s * 0.08);
-      ctx.closePath();
-      ctx.fill();
-      // white-gloved arm holding a tray
-      ctx.strokeStyle = hexA(c, 0.8);
-      ctx.lineWidth = s * 0.03;
-      ctx.beginPath();
-      ctx.moveTo(s * 0.26, s * 0.08);
-      ctx.quadraticCurveTo(s * 0.42, s * 0.05, s * 0.44, -s * 0.06);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.ellipse(s * 0.44, -s * 0.08, s * 0.16, s * 0.03, 0, 0, TAU);
-      ctx.stroke();
-    } else if (G.id === 'ragdoll') {
-      const jerk = Math.sin(t * 17) > 0.8 ? 0.15 : 0;
-      ctx.rotate(Math.sin(t * 2.3) * 0.12 + jerk);
-      sheet(ctx, s * 0.62, s * 0.78, t * 1.6, 3, 0.09);
-      ctx.fill();
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      // yarn hair
-      ctx.strokeStyle = '#ff7a3d';
-      ctx.lineWidth = s * 0.025;
-      for (let i = -3; i <= 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * s * 0.05, -s * 0.37);
-        ctx.quadraticCurveTo(i * s * 0.09, -s * 0.5, i * s * 0.12 + Math.sin(t * 4 + i) * s * 0.04, -s * 0.52);
-        ctx.stroke();
-      }
-      // X button eyes
-      ctx.strokeStyle = '#05010a';
-      ctx.lineWidth = s * 0.03;
-      [-1, 1].forEach((d) => {
-        const ex = d * s * 0.11;
-        const ey = -s * 0.17;
-        ctx.beginPath();
-        ctx.moveTo(ex - s * 0.05, ey - s * 0.05);
-        ctx.lineTo(ex + s * 0.05, ey + s * 0.05);
-        ctx.moveTo(ex + s * 0.05, ey - s * 0.05);
-        ctx.lineTo(ex - s * 0.05, ey + s * 0.05);
-        ctx.stroke();
-      });
-      // stitched grin
-      ctx.lineWidth = s * 0.018;
-      ctx.beginPath();
-      ctx.moveTo(-s * 0.13, -s * 0.03);
-      ctx.quadraticCurveTo(0, s * 0.05, s * 0.13, -s * 0.03);
-      ctx.stroke();
-      for (let i = -2; i <= 2; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * s * 0.05, -s * 0.03);
-        ctx.lineTo(i * s * 0.05, s * 0.03);
-        ctx.stroke();
-      }
-    } else if (G.id === 'warden') {
-      // skull
-      ctx.beginPath();
-      ctx.arc(0, -s * 0.18, s * 0.24, Math.PI * 0.85, Math.PI * 2.15);
-      ctx.lineTo(s * 0.13, s * 0.06);
-      ctx.lineTo(-s * 0.13, s * 0.06);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      // ribcage wisps
-      for (let i = 0; i < 4; i++) {
-        const yy = s * (0.13 + i * 0.08);
-        const ww = s * (0.2 - i * 0.03);
-        ctx.globalAlpha = alpha * (0.9 - i * 0.18);
-        ctx.beginPath();
-        ctx.ellipse(0, yy, ww, s * 0.025, 0, Math.PI, TAU);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.moveTo(0, s * 0.08);
-      ctx.lineTo(0, s * 0.42);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      eye(ctx, -s * 0.09, -s * 0.18, s * 0.07, c, false);
-      eye(ctx, s * 0.09, -s * 0.18, s * 0.07, c, false);
-      ctx.fillStyle = S.COLORS.cyan;
-      ctx.shadowColor = S.COLORS.cyan;
-      ctx.shadowBlur = s * 0.1;
-      ctx.beginPath();
-      ctx.arc(-s * 0.09, -s * 0.17, s * 0.022, 0, TAU);
-      ctx.arc(s * 0.09, -s * 0.17, s * 0.022, 0, TAU);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#05010a';
-      ctx.beginPath();
-      ctx.moveTo(0, -s * 0.09);
-      ctx.lineTo(-s * 0.03, -s * 0.04);
-      ctx.lineTo(s * 0.03, -s * 0.04);
-      ctx.fill();
-      ctx.strokeStyle = '#05010a';
-      ctx.lineWidth = s * 0.012;
-      for (let i = -3; i <= 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * s * 0.035, -s * 0.01);
-        ctx.lineTo(i * s * 0.035, s * 0.05);
-        ctx.stroke();
-      }
-      // swinging lantern on a chain
-      ctx.save();
-      ctx.translate(s * 0.32, s * 0.02);
-      ctx.rotate(Math.sin(t * 2.2) * 0.25);
-      ctx.strokeStyle = hexA(c, 0.8);
-      ctx.lineWidth = s * 0.01;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(0, s * 0.1);
-      ctx.stroke();
-      ctx.fillStyle = '#ffe14d';
-      ctx.shadowColor = '#ffb300';
-      ctx.shadowBlur = s * 0.18;
-      ctx.globalAlpha = alpha * (0.7 + 0.3 * Math.sin(t * 9));
-      ctx.beginPath();
-      ctx.ellipse(0, s * 0.15, s * 0.035, s * 0.05, 0, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-    } else if (G.id === 'bride') {
-      // trailing veil
-      ctx.save();
-      ctx.globalAlpha = alpha * 0.55;
-      ctx.beginPath();
-      ctx.moveTo(-s * 0.18, -s * 0.38);
-      ctx.quadraticCurveTo(-s * 0.55, s * 0.1 + Math.sin(t * 2) * s * 0.05, -s * 0.42 + Math.sin(t * 3) * s * 0.06, s * 0.55);
-      ctx.lineTo(s * 0.42 + Math.sin(t * 3 + 1) * s * 0.06, s * 0.55);
-      ctx.quadraticCurveTo(s * 0.55, s * 0.1, s * 0.18, -s * 0.38);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      sheet(ctx, s * 0.42, s * 0.95, t * 0.7, 5, 0.04);
-      ctx.fill();
-      ctx.stroke();
-      // long dripping hair
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = hexA('#0c3a2c', 0.9);
-      ctx.lineWidth = s * 0.03;
-      for (let i = 0; i < 6; i++) {
-        const side = i < 3 ? -1 : 1;
-        const k = i % 3;
-        ctx.beginPath();
-        ctx.moveTo(side * s * (0.06 + k * 0.045), -s * 0.42);
-        ctx.quadraticCurveTo(side * s * (0.2 + k * 0.03), -s * 0.1, side * s * (0.16 + k * 0.04), s * (0.15 + k * 0.08) + Math.sin(t * 2 + i) * s * 0.02);
-        ctx.stroke();
-      }
-      eye(ctx, -s * 0.07, -s * 0.2, s * 0.05, c, false);
-      eye(ctx, s * 0.07, -s * 0.2, s * 0.05, c, false);
-      // tears
-      ctx.strokeStyle = hexA(S.COLORS.cyan, 0.9);
-      ctx.lineWidth = s * 0.012;
-      ctx.beginPath();
-      ctx.moveTo(-s * 0.07, -s * 0.15);
-      ctx.lineTo(-s * 0.075, -s * 0.03 + (t % 1) * s * 0.05);
-      ctx.moveTo(s * 0.07, -s * 0.15);
-      ctx.lineTo(s * 0.075, -s * 0.05 + ((t + 0.5) % 1) * s * 0.05);
-      ctx.stroke();
-      ctx.fillStyle = '#05010a';
-      ctx.beginPath();
-      ctx.ellipse(0, -s * 0.06, s * 0.025, s * 0.04, 0, 0, TAU);
-      ctx.fill();
-    } else {
-      // choir shade: hooded robe, singing mouth, music notes
-      ctx.beginPath();
-      ctx.moveTo(0, -s * 0.52);
-      ctx.quadraticCurveTo(s * 0.3, -s * 0.4, s * 0.3, -s * 0.05);
-      ctx.lineTo(s * 0.36, s * 0.5);
-      for (let i = 6; i >= 0; i--) ctx.lineTo(-s * 0.36 + (i / 6) * s * 0.72, s * 0.5 - (i % 2 ? s * 0.06 : 0) + Math.sin(t * 5 + i) * s * 0.02);
-      ctx.lineTo(-s * 0.3, -s * 0.05);
-      ctx.quadraticCurveTo(-s * 0.3, -s * 0.4, 0, -s * 0.52);
-      ctx.fill();
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#05010a';
-      ctx.beginPath();
-      ctx.ellipse(0, -s * 0.18, s * 0.17, s * 0.21, 0, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = '#ffe14d';
-      ctx.shadowColor = '#ffe14d';
-      ctx.shadowBlur = s * 0.08;
-      ctx.beginPath();
-      ctx.ellipse(-s * 0.06, -s * 0.24, s * 0.03, s * 0.015, 0.2, 0, TAU);
-      ctx.ellipse(s * 0.06, -s * 0.24, s * 0.03, s * 0.015, -0.2, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = hexA(c, 0.95);
-      ctx.lineWidth = s * 0.02;
-      ctx.beginPath();
-      ctx.ellipse(0, -s * 0.09, s * 0.045, s * (0.05 + 0.02 * Math.sin(t * 7)), 0, 0, TAU);
-      ctx.stroke();
-      // notes
-      ctx.fillStyle = hexA(c, 0.9);
-      ctx.font = `${Math.round(s * 0.16)}px serif`;
-      for (let i = 0; i < 3; i++) {
-        const k = (t * 0.5 + i / 3) % 1;
-        ctx.globalAlpha = alpha * (1 - k);
-        ctx.fillText(i % 2 ? '♪' : '♫', s * (0.25 + k * 0.25), -s * (0.2 + k * 0.4));
-      }
-    }
-    ctx.restore();
-  }
-
-  // =====================================================================
-  // Stage: the smash + result showpiece, shared by host and players
-  // =====================================================================
+  const HIT = 4.08;
   class Stage {
     constructor(particles, shaker) {
       this.p = particles;
       this.sh = shaker;
       this.mode = null;
-      this.t0 = 0;
       this.flags = {};
       this.mild = false;
       this.scale = 1;
       this.cy = 0.56;
-      this.resultPumpkins = true;
+      this.hold = 0; // hit-stop accumulator (ms)
+      this.objects = true; // false: the result draws light only (the page carries the words)
     }
     clear() {
       this.mode = null;
@@ -1073,14 +993,14 @@
       if (this.mode === 'smash') return;
       this.mode = 'smash';
       this.info = info;
-      this.t0 = performance.now() - (elapsedMs || 0);
+      this.clock = (elapsedMs || 0) / 1000;
       this.flags = {};
     }
     result(res) {
       if (this.mode === 'result') return;
       this.mode = 'result';
       this.res = res;
-      this.t0 = performance.now();
+      this.clock = 0;
       this.flags = {};
     }
     once(key, fn) {
@@ -1089,151 +1009,93 @@
         fn();
       }
     }
+    // returns {flash} so pages can react (e.g. hide text during the flash)
     render(ctx, W, H, dt) {
-      if (!this.mode) return;
-      const t = (performance.now() - this.t0) / 1000;
+      if (!this.mode) return {};
+      // hit-stop freezes the clock for 120 ms after impact
+      if (this.hold > 0) this.hold -= dt * 1000;
+      else this.clock += dt;
+      const t = this.clock;
       const cx = W / 2;
       const cy = H * this.cy;
-      const size = Math.min(W, H) * 0.34 * this.scale;
+      const size = Math.min(W, H) * 0.36 * this.scale;
+      const now = performance.now() / 1000;
+      const gentle = this.mild || reducedMotion;
+      let flash = 0;
       if (this.mode === 'smash') {
-        const HIT = 4.8;
-        if (t < 1.8) this.once('in', () => Sound.stinger());
-        if (t >= 1.8 && t < 4.6) this.once('roll', () => Sound.drumroll(Math.max(0.5, HIT - t)));
+        if (t >= 1.0 && t < 3.6) this.once('roll', () => Sound.drumroll(Math.max(0.4, HIT - t)));
+        const px = cx + size * 0.95;
+        const py = cy + size * 0.58;
         if (t < HIT) {
-          const k = clamp((t - 1.8) / 3, 0, 1);
-          const shake = k * k * size * 0.05;
-          const pulse = 1 + Math.sin(t * (6 + k * 20)) * 0.02 * (1 + k * 3);
-          drawPumpkin(ctx, cx + rand(-shake, shake), cy + rand(-shake, shake), size * pulse * Math.min(1, t * 2), this.info.target, {
-            glow: size * (0.3 + k * 0.8),
-          });
-          // pivot sits low-right of the pumpkin; positive angles lift the head away from it
-          const ang = t < 1.8 ? lerp(-0.2, 0.45, clamp(t / 1.2, 0, 1)) : lerp(0.45, 0.95, k);
-          drawHammer(ctx, cx + size * 1.1, cy + size * 0.5, size * 1.25, ang);
-          if (this.mild) return;
-          if (k > 0.5) this.sh.add(k * 1.2);
+          // anticipation: rise slowly, pull back, then slam
+          let ang;
+          if (t < 1) ang = lerp(0.15, 0.25, ease.out(t));
+          else if (t < 3.6) ang = lerp(0.25, 0.75, ease.inOut((t - 1) / 2.6));
+          else if (t < 4.0) ang = lerp(0.75, 1.05, ease.out((t - 3.6) / 0.4));
+          else ang = lerp(1.05, -1.0, ease.inBack(Math.min(1, (t - 4.0) / 0.08), 0.6));
+          const k = clamp((t - 1) / 3, 0, 1);
+          const tremble = gentle ? 0 : k * k * size * 0.012;
+          drawPumpkin(ctx, cx + rand(-tremble, tremble), cy, size, this.info.target, { lit: 0.55 + 0.45 * k, t: now });
+          drawHammer(ctx, px, py, size * 1.25, ang);
         } else {
           this.once('hit', () => {
             Sound.boom();
-            this.sh.add(this.mild ? 14 : 55);
-            const cols = [S.COLORS.orange, '#ffa040', '#ffe14d', '#8a2500'];
-            this.p.emit(cx, cy, { count: 140, color: cols, speed: size * 4, life: 2.2, size: size * 0.06, gravity: size * 2.2, shape: 'chunk', drag: 0.97 });
-            this.p.emit(cx, cy, { count: 220, color: NEON, speed: size * 6, life: 1.6, size: 4, shape: 'spark', drag: 0.95 });
-            this.p.emit(cx, cy, { count: 120, color: ['#ffe14d', '#fff3a0'], speed: size * 3, life: 2.4, size: 3, gravity: size * 1.5 });
-            this.p.emit(cx, cy, { count: 6, color: [S.COLORS.magenta, S.COLORS.cyan, S.COLORS.violet], speed: 1, life: 1.2, size: size * 0.1, shape: 'ring' });
-            this.flashT = performance.now();
+            this.hold = 120;
+            this.flashAt = t;
+            this.sh.add(gentle ? 6 : 34);
+            if (!gentle || true) {
+              const n = gentle ? 40 : 160;
+              this.p.emit(cx, cy, { count: n, color: [T.flame, T.ember, '#ffa65a'], speed: size * 5, life: 1.8, size: size * 0.05, gravity: size * 2.6, shape: 'shard', drag: 0.965 });
+              this.p.emit(cx, cy, { count: gentle ? 20 : 80, color: [T.ember, T.flame], speed: size * 2.2, life: 2.6, size: 4, gravity: -size * 0.15, shape: 'ember', drag: 0.97 });
+            }
           });
-          const ft = (performance.now() - (this.flashT || 0)) / 1000;
-          if (ft < 0.5) {
-            ctx.save();
-            ctx.globalAlpha = (1 - ft / 0.5) * (this.mild ? 0.3 : 0.9);
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(0, 0, W, H);
-            ctx.restore();
+          // the 1-frame bone flash (skipped in Mild / reduced motion)
+          if (!gentle && t - this.flashAt < 0.02 && this.hold > 80) flash = 1;
+          drawHammer(ctx, px, py, size * 1.25, -1.0);
+          // what is left of the pumpkin: a dying glow on the floor
+          const fade = clamp(1 - (t - HIT) / 2.5, 0, 1);
+          if (fade > 0) {
+            const g = ctx.createRadialGradient(cx, cy + size * 0.4, 0, cx, cy + size * 0.4, size * 1.2);
+            g.addColorStop(0, hexA(T.flame, 0.35 * fade));
+            g.addColorStop(1, hexA(T.flame, 0));
+            ctx.fillStyle = g;
+            ctx.fillRect(cx - size * 1.2, cy - size * 0.8, size * 2.4, size * 2.4);
           }
-          drawHammer(ctx, cx + size * 1.1, cy + size * 0.5, size * 1.25, Math.max(-1.12, 0.95 - (t - HIT) * 25));
         }
       } else if (this.mode === 'result') {
         const r = this.res;
         if (r.win) {
           this.once('fan', () => Sound.fanfare());
-          // colour storm
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          const hue = (t * (this.mild ? 30 : 160)) % 360;
-          for (let i = 0; i < 3; i++) {
-            const gx = cx + Math.cos(t * (1 + i * 0.7) + i * 2) * W * 0.35;
-            const gy = H / 2 + Math.sin(t * (1.3 + i * 0.4) + i) * H * 0.3;
-            const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, Math.max(W, H) * 0.5);
-            g.addColorStop(0, `hsla(${(hue + i * 120) % 360},100%,55%,${this.mild ? 0.18 : 0.35})`);
-            g.addColorStop(1, 'hsla(0,0%,0%,0)');
-            ctx.fillStyle = g;
-            ctx.fillRect(0, 0, W, H);
+          const k = ease.outBack(clamp(t / 1.2, 0, 1), 1.2);
+          // the house lights up: the prize pumpkin burns, embers rise
+          if (this.objects) drawPumpkin(ctx, cx, cy, size * (0.6 + 0.4 * k), r.smashed, { lit: 1, t: now });
+          if (t < 8 && Math.random() < (gentle ? 0.15 : 0.6)) {
+            this.p.emit(cx + rand(-size, size), cy + size * 0.3, { count: 1, color: [T.ember, T.flame], speed: 70, angle: -Math.PI / 2, spread: 0.7, life: 3.5, size: rand(2, 5), drag: 0.995 });
           }
-          ctx.restore();
-          if (t < 9) {
-            const rate = this.mild ? 4 : 14;
-            for (let i = 0; i < rate; i++) {
-              this.p.emit(rand(0, W), -20, { count: 1, color: NEON.concat(['#ffffff']), speed: 120, angle: Math.PI / 2, spread: 0.6, life: 4, size: rand(5, 10), gravity: 180, shape: 'confetti', drag: 0.99 });
-            }
-            if (Math.random() < (this.mild ? 0.02 : 0.08)) {
-              const bx = rand(W * 0.1, W * 0.9);
-              const by = rand(H * 0.1, H * 0.6);
-              this.p.emit(bx, by, { count: 80, color: NEON, speed: 500, life: 1.6, size: 7, gravity: 260, shape: 'confetti', drag: 0.96 });
-              this.p.emit(bx, by, { count: 40, color: NEON, speed: 400, life: 1, size: 3, shape: 'spark' });
-            }
-          }
-          const bob = Math.sin(t * 3) * size * 0.04;
-          if (this.resultPumpkins) drawPumpkin(ctx, cx, cy + bob, size * Math.min(1, t * 1.5) * 0.9, r.smashed, { gold: true, glow: size });
         } else {
           this.once('z', () => {
             Sound.zombie();
-            this.sh.add(this.mild ? 4 : 18);
+            this.sh.add(gentle ? 2 : 12);
           });
-          const glitching = t < 1.6;
-          if (glitching && !this.mild && Math.random() < 0.5) {
-            ctx.save();
-            ctx.globalAlpha = rand(0.15, 0.45);
-            ctx.fillStyle = S.COLORS.red;
-            ctx.fillRect(0, 0, W, H);
-            ctx.restore();
-          }
-          ctx.save();
-          ctx.fillStyle = hexA(S.COLORS.red, this.mild ? 0.08 : 0.12 + 0.05 * Math.sin(t * 8));
-          ctx.fillRect(0, 0, W, H);
-          ctx.restore();
           const reveal = t > 3;
-          const zx = reveal ? lerp(cx, W * 0.3, clamp((t - 3) * 2, 0, 1)) : cx;
-          const jitter = glitching && !this.mild ? rand(-12, 12) : 0;
-          if (this.resultPumpkins) drawPumpkin(ctx, zx + jitter, cy, size * 0.85, r.smashed, { zombie: true });
-          if (glitching && !this.mild) {
-            // RGB split slices
-            const k = ctx.canvas.height / H;
-            for (let i = 0; i < 6; i++) {
-              const sy = rand(0, H - 40);
-              const sh = rand(4, 40);
-              ctx.drawImage(ctx.canvas, 0, sy * k, ctx.canvas.width, sh * k, rand(-40, 40), sy, W, sh);
-            }
-          }
-          if (reveal && this.resultPumpkins) {
-            const k = clamp((t - 3) * 1.5, 0, 1);
-            this.once('rev', () => {
-              Sound.chime();
-              this.p.emit(W * 0.7, cy, { count: 90, color: ['#ffe14d', '#fff3a0', S.COLORS.orange], speed: size * 3, life: 1.6, size: 4, shape: 'spark' });
-            });
-            ctx.save();
-            ctx.globalAlpha = k;
-            drawPumpkin(ctx, W * 0.7, cy + Math.sin(t * 2.5) * size * 0.03, size * 0.85 * k, r.winning, { gold: true, glow: size * 0.9 });
-            ctx.restore();
+          const zx = reveal ? lerp(cx, W * 0.32, ease.inOut(clamp((t - 3) / 0.8, 0, 1))) : cx;
+          if (this.objects) drawPumpkin(ctx, zx, cy, size * 0.85, r.smashed, { lit: 0.8, zombie: true, t: now });
+          if (reveal && this.objects) {
+            const k = ease.outBack(clamp((t - 3.3) / 0.9, 0, 1), 1.4);
+            this.once('rev', () => Sound.chime());
+            if (k > 0) drawPumpkin(ctx, W * 0.68, cy, size * 0.85 * k, r.winning, { lit: 1, t: now });
           }
         }
       }
-    }
-  }
-
-  // Ambient floating embers for menu screens.
-  function ambientEmbers(particles, W, H, density = 1) {
-    if (Math.random() < 0.35 * density) {
-      particles.emit(rand(0, W), H + 10, {
-        count: 1,
-        color: [S.COLORS.orange, S.COLORS.violet, S.COLORS.magenta, S.COLORS.cyan],
-        speed: 60,
-        speedMin: 25,
-        angle: -Math.PI / 2,
-        spread: 0.5,
-        life: 7,
-        size: rand(1.5, 3.5),
-        drag: 1,
-      });
+      return { flash };
     }
   }
 
   function fmtTime(ms) {
-    if (ms == null) return '∞';
+    if (ms == null) return '—';
     const s = Math.max(0, Math.ceil(ms / 1000));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
-
-  // Fit a canvas to its CSS size with a capped device pixel ratio.
   function fitCanvas(canvas, maxDpr = 1.75) {
     const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
     const W = canvas.clientWidth;
@@ -1244,44 +1106,45 @@
     }
     return { W, H, dpr };
   }
-
   function toggleFullscreen() {
     const d = document;
     if (!d.fullscreenElement && !d.webkitFullscreenElement) {
       const el = d.documentElement;
       (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
-    } else {
-      (d.exitFullscreen || d.webkitExitFullscreen || (() => {})).call(d);
-    }
+    } else (d.exitFullscreen || d.webkitExitFullscreen || (() => {})).call(d);
   }
 
-  window.PS = {
+  window.PS = Object.assign(window.PS || {}, {
     S,
+    T,
     TAU,
-    NEON,
     rand,
     pick,
     clamp,
     lerp,
+    ease,
     hexA,
+    flicker,
+    reducedMotion,
     store,
-    Sound,
-    Particles,
-    Shaker,
-    Stage,
-    costumeById,
-    costumeHTML,
-    costumeEl,
+    SIL,
+    silSVG,
+    silEl,
+    drawSil,
     whoEl,
-    drawCostume,
+    nameOf,
+    NameOf,
+    costumeById,
     drawPumpkin,
     drawHammer,
     drawSoul,
-    drawDoor,
     drawGhost,
-    ambientEmbers,
+    Particles,
+    Shaker,
+    Sound,
+    Stage,
     fmtTime,
     fitCanvas,
     toggleFullscreen,
-  };
+  });
 })();

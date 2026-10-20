@@ -4,24 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <meta name="theme-color" content="#05010a" />
+    <meta name="theme-color" content="#0A0908" />
     <title>Pumpkin Smash · Host</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎃</text></svg>" />
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,500..900,0..100,0..1;1,9..144,500..900,0..100,0..1&display=swap" rel="stylesheet" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><ellipse cx=%2250%22 cy=%2256%22 rx=%2242%22 ry=%2234%22 fill=%22%23FF7A1A%22/><path d=%22M28 50h14l-7-13zM58 50h14l-7-13z%22 fill=%22%230A0908%22/></svg>" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body class="host">
-    <canvas id="stage"></canvas>
     <div class="host-root" id="root">
-      <div class="host-top">
-        <div class="host-logo">Pumpkin Smash</div>
-        <div class="host-phase"><span id="h-phase"></span><span class="ht" id="h-timer"></span></div>
-        <div class="host-ctrl" id="h-ctrl"></div>
-      </div>
-      <div class="host-main" id="main"></div>
+      <canvas id="stage" class="layer"></canvas>
+      <div id="main"></div>
     </div>
+    <div class="hctrl" id="h-ctrl"></div>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/shared.js"></script>
     <script src="/common.js"></script>

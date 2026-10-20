@@ -6,21 +6,23 @@ one finds the hammer, and everyone collects souls (vote weight). The room votes 
 to smash. One of the six secretly holds **Friday afternoon off**, an exact 1-in-6 chance.
 
 * Node.js + Express + Socket.io, all state in memory, single process, single room.
-* Plain HTML/CSS/JS + Canvas 2D. Every graphic is drawn in code; every sound is synthesised with Web Audio.
-* Full spec: [SPEC.md](SPEC.md).
+* Plain HTML/CSS/JS. The hunt is a WebGL torch lighting five painted rooms (with a Canvas 2D fallback);
+  everything else is drawn in code. Every sound is synthesised with Web Audio.
+* Full spec: [SPEC.md](SPEC.md). Visual direction: [ART_DIRECTION.md](ART_DIRECTION.md) ("light is the only colour").
+* Every asset, its source and licence: [ASSETS.md](ASSETS.md).
 
 ## Screens
 
 | Route | Who | Notes |
 | --- | --- | --- |
-| `/host?key=HOST_KEY` | the shared screen you present on the call | QR code, costume wall, live feed, mini-map, pumpkin slots, leaderboard, vote bars, smash, result. Controls: Start, Pause, Skip act, Next, Reset. Keys: `Space` pause, `→` next, `F` full screen, `M` mute. Add `&mild=1` for gentler host effects. |
+| `/host?key=HOST_KEY` | the shared screen you present on the call | QR code, costume wall, live feed, mini-map, pumpkin slots, leaderboard, vote bars, smash, result. Controls (quiet, bottom right): Open the house, Pause, Skip act, Next, Reset. Keys: `Space` pause, `→` next, `F` full screen, `M` mute. Add `&mild=1` for gentler host effects. |
 | `/` | every player (laptop or phone) | name + costume, Spooky/Mild toggle, full-screen button, the hunt, voting. |
 
 ## Running a session (host checklist)
 
 1. Open `/host?key=…` and share that tab (with audio, if your call tool supports it).
 2. People scan the QR code or type the URL, pick a name and a costume, and appear on the costume wall.
-3. Click **Start**. The game runs itself: Rules (20s) → Act 1 Pumpkin Rush (3:00) → Act 2 The Hammer (1:30) → Act 3 Soul Harvest (2:30) → Pitches (10s each) → Vote (45s) → Smash → Result.
+3. Click **Open the house**. The game runs itself: Rules (20s) → Act 1 Pumpkin Rush (3:00) → Act 2 The Hammer (1:30) → Act 3 Soul Harvest (2:30) → Pitches (10s each) → Vote (45s) → Smash → Result.
 4. During pitches, ask each pumpkin holder to unmute. **Next** moves on early.
 5. **Reset** sends everyone back to the lobby for another round (players stay joined).
 
@@ -104,10 +106,20 @@ The command prints the service URL. Players use `https://…run.app/`, and you o
   Act 3 Blood Moon.
 * The winning pumpkin is drawn with `crypto.randomInt` when the game starts. It is only ever sent in the RESULT
   payload.
-* `public/player.js`: the dark house. Torch-lit canvas, five code-drawn rooms, client-side ghosts (Hollow Butler,
-  Rag Doll Wraith, Bone Warden, Drowned Bride, Choir Shade), doors, hints, death and respawn.
-* `public/host.js`: the shared screen.
-* `public/common.js`: Web Audio synth (drones, creak, chimes, whispers, scream, drumroll, boom, fanfare),
-  particles, screen shake, and all the drawing code (pumpkins, hammer, souls, doors, ghosts, costumes).
+* `public/room.js`: the room renderer. A fixed-camera painting lit by the player's lantern in WebGL: each pixel's
+  3D position is rebuilt from the depth map and lit through its normal, with depth parallax, a foreground
+  silhouette layer, door-crack and candle lights, film grain and a heavy vignette. Falls back to a Canvas 2D
+  radial mask without WebGL (force it with `?nogl=1`).
+* `public/player.js`: the hunt in room space (items rest on the painted surfaces; the camera pans toward the
+  torch so phones in portrait can look around), client-side ghosts (Hollow Butler, Rag Doll Wraith, Bone
+  Warden, Drowned Bride, Choir Shade), doors that open a crack of light, dust in the beam, hints, death and
+  respawn; plus join, pitches, vote, smash and result.
+* `public/host.js`: the broadcast: house-facade lobby, the mantel of six pumpkins, a candle timer, the séance
+  log, a floor plan, vote-by-brightness, the smash and end credits.
+* `public/common.js`: design tokens, the 12 cut-paper costume silhouettes, pumpkins (unlit / lit), hammer,
+  souls, smoke ghosts, event-only particles, the smash/result stage (with a 120 ms hit-stop), and the Web Audio
+  synth (drones, creaks, footsteps, breathing, whispers, scream, drumroll, boom, bells).
+* `tools/paint_rooms.py`: paints the five rooms and their normal/depth maps, and writes `public/rooms/rooms.json`.
+  See [ASSETS.md](ASSETS.md) for swapping in painted rooms.
 * `public/shared.js`: rooms, costumes, ghosts and events, shared by the server, clients and bots.
 * `bots.js`: the bot simulator.

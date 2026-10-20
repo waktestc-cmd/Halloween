@@ -33,8 +33,45 @@ const EVENTS_PER_SEC = 40;
 
 const rint = (n) => crypto.randomInt(n); // 0..n-1
 const pick = (arr) => arr[rint(arr.length)];
-const rpos = () => ({ x: 0.07 + Math.random() * 0.86, y: 0.16 + Math.random() * 0.74 });
-const clamp01 = (v) => Math.min(0.95, Math.max(0.05, Number(v) || 0.5));
+const clamp01 = (v) => Math.min(0.97, Math.max(0.03, Number(v) || 0.5));
+
+// Items sit on the surfaces painted into each room (tables, lids, pews, shelves, floor).
+const ROOM_META = require('../public/rooms/rooms.json').rooms;
+const SURFACES = S.ROOMS.map((r) => {
+  const m = ROOM_META.find((x) => x.id === r.id);
+  return m && m.surfaces.length ? m.surfaces : [{ x1: 0.2, x2: 0.8, y: 0.85, s: 1 }];
+});
+function rpos(room) {
+  const list = SURFACES[room];
+  let total = 0;
+  for (const sf of list) total += sf.x2 - sf.x1;
+  let k = Math.random() * total;
+  let sf = list[0];
+  for (const c of list) {
+    k -= c.x2 - c.x1;
+    if (k <= 0) {
+      sf = c;
+      break;
+    }
+  }
+  return { x: sf.x1 + Math.random() * (sf.x2 - sf.x1), y: sf.y, s: sf.s };
+}
+// where something dropped at (x, y) comes to rest: the nearest surface at or below it
+function settle(room, x, y) {
+  let best = null;
+  let bestD = Infinity;
+  for (const sf of SURFACES[room]) {
+    const dx = x < sf.x1 ? sf.x1 - x : x > sf.x2 ? x - sf.x2 : 0;
+    const dy = sf.y >= y - 0.02 ? sf.y - y : 1 + (y - sf.y);
+    const d = dx * 2 + dy;
+    if (d < bestD) {
+      bestD = d;
+      best = sf;
+    }
+  }
+  return { x: Math.min(best.x2, Math.max(best.x1, x)), y: best.y, s: best.s, sf: best };
+}
+const say = (lines) => lines[rint(lines.length)];
 
 function cleanName(raw) {
   return String(raw || '')
@@ -123,11 +160,12 @@ class Game {
     this.io.to('players').emit('item+', it);
     return it;
   }
-  moveItem(it, r, x, y) {
+  moveItem(it, r, pos) {
     it.r = r;
-    it.x = x;
-    it.y = y;
-    this.io.to('players').emit('item~', { id: it.id, r, x, y });
+    it.x = pos.x;
+    it.y = pos.y;
+    it.s = pos.s;
+    this.io.to('players').emit('item~', { id: it.id, r, x: it.x, y: it.y, s: it.s });
   }
   removeItem(id, by) {
     const it = this.items.get(id);
@@ -139,14 +177,14 @@ class Game {
   sendItems(target) {
     target.emit('items', [...this.items.values()]);
   }
-  spawnSoul(room, natural = true, x, y, v = 1) {
+  spawnSoul(room, natural = true, x, y, v = 1, scale = 1) {
     if (natural) {
       let count = 0;
       for (const it of this.items.values()) if (it.t === 's' && it.r === room) count++;
       if (count >= SOUL_CAP[this.act]) return;
     }
-    const p = x == null ? rpos() : { x, y };
-    this.addItem('s', room, p.x, p.y, { v });
+    const p = x == null ? rpos(room) : { x, y, s: scale };
+    this.addItem('s', room, p.x, p.y, { v, s: p.s });
   }
 
   // ---------- state machine ----------
@@ -196,7 +234,7 @@ class Game {
     this.soulT = 0;
     this.setPhase('HUNT', DUR.acts[n]);
     if (n === 2) this.spawnHammer();
-    this.addFeed('act', null, `Act ${n}: ${S.ACTS[n].name}`);
+    this.addFeed('act', null, `Act ${S.ACTS[n].ordinal}. ${S.ACTS[n].name}.`);
     this.announce({ kind: 'act', act: n });
   }
 
@@ -211,7 +249,7 @@ class Game {
         this.overtimeElapsed = 0;
         this.relocateT = 0;
         this.dur = null;
-        this.addFeed('event', null, 'OVERTIME: the house keeps you until every pumpkin is claimed');
+        this.addFeed('event', null, 'Nobody leaves until every pumpkin has a keeper.');
         this.announce({ kind: 'overtime' });
         this.log('[hunt] act 1 overtime');
         this.markDirty();
@@ -328,11 +366,12 @@ class Game {
   spawnPumpkin() {
     const pk = this.pumpkins.find((p) => !p.spawned);
     if (!pk) return;
-    const pos = rpos();
-    const it = this.addItem('p', rint(NROOMS), pos.x, pos.y, { n: pk.n });
+    const room = rint(NROOMS);
+    const pos = rpos(room);
+    const it = this.addItem('p', room, pos.x, pos.y, { n: pk.n, s: pos.s });
     pk.spawned = true;
     pk.itemId = it.id;
-    this.addFeed('spawn', null, `Pumpkin ${pk.n} appeared in the ${S.ROOMS[it.r].name}`, { n: pk.n });
+    this.addFeed('spawn', null, `Pumpkin ${pk.n} is somewhere in the ${S.ROOMS[it.r].name}.`, { n: pk.n });
     this.announce({ kind: 'pumpkinSpawn', n: pk.n, room: it.r });
   }
   relocateUnclaimed() {
@@ -340,8 +379,8 @@ class Game {
     for (const pk of this.unclaimed()) {
       const it = this.items.get(pk.itemId);
       if (!it) continue;
-      const pos = rpos();
-      this.moveItem(it, rooms.length ? pick(rooms) : rint(NROOMS), pos.x, pos.y);
+      const room = rooms.length ? pick(rooms) : rint(NROOMS);
+      this.moveItem(it, room, rpos(room));
     }
     this.markDirty();
   }
@@ -355,20 +394,21 @@ class Game {
       if (!cands.length) cands = [...this.players.values()].filter((p) => !p.pumpkin && !p.hammer);
       if (!cands.length) {
         pk.house = true;
-        this.addFeed('pumpkin', null, `Pumpkin ${pk.n} stays with the House`, { n: pk.n });
+        this.addFeed('pumpkin', null, `Pumpkin ${pk.n} stays with the House.`, { n: pk.n });
         continue;
       }
       const p = pick(cands);
       pk.holder = p.key;
       p.pumpkin = pk.n;
-      this.addFeed('pumpkin', p.key, `was handed Pumpkin ${pk.n} by the House`, { n: pk.n });
+      this.addFeed('pumpkin', p.key, `The House gave Pumpkin ${pk.n} to ${p.name}.`, { n: pk.n });
       this.sendMe(p);
     }
   }
   spawnHammer() {
     const rooms = this.roomsWithEligible((p) => !p.pumpkin);
-    const pos = rpos();
-    const it = this.addItem('h', rooms.length ? pick(rooms) : rint(NROOMS), pos.x, pos.y);
+    const room = rooms.length ? pick(rooms) : rint(NROOMS);
+    const pos = rpos(room);
+    const it = this.addItem('h', room, pos.x, pos.y, { s: pos.s });
     this.hammer.itemId = it.id;
     this.hammerJumpT = 0;
     this.hammerRoomT = 0;
@@ -383,7 +423,7 @@ class Game {
     p.hammer = true;
     this.hammer.holder = p.key;
     this.hammer.found = false;
-    this.addFeed('hammer', p.key, 'was handed the hammer by the House');
+    this.addFeed('hammer', p.key, `The House gave the hammer to ${p.name}. Nobody asked.`);
     this.sendMe(p);
   }
 
@@ -398,10 +438,10 @@ class Game {
       for (let i = 0; i < 24; i++) this.spawnSoul(room, false);
     }
     const ev = S.EVENTS[type];
-    const where = type === 'ghostFlood' || type === 'soulShower' ? ` ${S.ROOMS[room].name}` : '';
-    this.addFeed('event', null, `${ev.name}! ${ev.sub}${where}`, { event: type });
-    this.announce({ kind: 'event', type, room: where ? room : null });
-    this.log(`[event] ${type}${where}`);
+    const local = type === 'ghostFlood' || type === 'soulShower';
+    this.addFeed('event', null, ev.line(S.ROOMS[room].name), { event: type });
+    this.announce({ kind: 'event', type, room: local ? room : null });
+    this.log(`[event] ${type}${local ? ' ' + S.ROOMS[room].name : ''}`);
   }
 
   huntTick(dt) {
@@ -444,13 +484,12 @@ class Game {
         this.hammerJumpT = 0;
         const rooms = this.roomsWithEligible((p) => !p.pumpkin).filter((r) => r !== it.r);
         const others = [0, 1, 2, 3, 4].filter((r) => r !== it.r);
-        const pos = rpos();
-        this.moveItem(it, rooms.length ? pick(rooms) : pick(others), pos.x, pos.y);
+        const room = rooms.length ? pick(rooms) : pick(others);
+        this.moveItem(it, room, rpos(room));
         this.markDirty();
       } else if (it && this.hammerJumpT >= DUR.hammerJump) {
         this.hammerJumpT = 0;
-        const pos = rpos();
-        this.moveItem(it, it.r, pos.x, pos.y);
+        this.moveItem(it, it.r, rpos(it.r));
       }
     }
 
@@ -662,16 +701,17 @@ class Game {
       const x = clamp01(data.x);
       const y = clamp01(data.y);
       if (drop > 0 && p.room != null) {
+        // the souls fall and settle on the surface below
         const pieces = Math.min(drop, 12);
+        const rest = settle(p.room, x, y);
         for (let i = 0; i < pieces; i++) {
           const v = Math.floor(drop / pieces) + (i < drop % pieces ? 1 : 0);
-          const a = (i / pieces) * Math.PI * 2;
-          const d = 0.03 + Math.random() * 0.04;
-          this.spawnSoul(p.room, false, clamp01(x + Math.cos(a) * d), clamp01(y + Math.sin(a) * d * 1.6), v);
+          const sx = Math.min(rest.sf.x2, Math.max(rest.sf.x1, rest.x + (i - (pieces - 1) / 2) * 0.018));
+          this.spawnSoul(p.room, false, sx, rest.y, v, rest.s);
         }
       }
       const gi = Number.isInteger(data.ghost) && S.GHOSTS[data.ghost] ? data.ghost : p.room || 0;
-      this.addFeed('death', p.key, `was taken by the ${S.GHOSTS[gi].name}`, { ghost: gi });
+      this.addFeed('death', p.key, `${p.name} was taken by the ${S.GHOSTS[gi].name}.`, { ghost: gi });
       ack({ ok: true, dropped: drop });
       this.sendMe(p);
     });
@@ -720,7 +760,7 @@ class Game {
       pk.holder = p.key;
       pk.itemId = null;
       p.pumpkin = it.n;
-      this.addFeed('pumpkin', p.key, `grabbed Pumpkin ${it.n}!`, { n: it.n });
+      this.addFeed('pumpkin', p.key, say([`Pumpkin ${it.n} has a keeper. It is ${p.name}.`, `${p.name} took Pumpkin ${it.n}.`, `${p.name} has Pumpkin ${it.n}. Nobody trusts ${p.name}.`]), { n: it.n });
       this.log(`[claim] ${p.name} -> pumpkin ${it.n}`);
       if (this.act === 1 && this.overtime && this.unclaimed().length === 0 && this.spawnedCount() === NP) {
         this.startAct(2);
@@ -733,7 +773,7 @@ class Game {
       this.hammer.holder = p.key;
       this.hammer.found = true;
       p.hammer = true;
-      this.addFeed('hammer', p.key, 'found the hammer!');
+      this.addFeed('hammer', p.key, say([`${p.name} found the hammer.`, `${p.name} has the hammer. Be nice to ${p.name}.`]));
       this.log(`[claim] ${p.name} -> hammer`);
       if (this.dur != null) this.dur = Math.min(this.dur, this.elapsed + DUR.hammerFoundTail);
       // the act is ending sooner, so make sure its random event still happens
