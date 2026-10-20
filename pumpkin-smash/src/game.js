@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const S = require('../public/shared.js');
 
 const FAST = process.env.DEV_FAST === '1';
-const SCALE = FAST ? 0.15 : 1;
+const SCALE = Number(process.env.DEV_SCALE) || (FAST ? 0.15 : 1); // DEV_SCALE: test-only override
 const T = (sec) => Math.round(sec * 1000 * SCALE);
 
 const DUR = {
@@ -13,8 +13,7 @@ const DUR = {
   pumpkinEvery: T(30),
   overtimeRelocate: T(20),
   overtimeMax: T(60),
-  hammerJump: Math.max(T(1.5), 700), // keep it clickable by humans even in fast mode
-  hammerRoom: T(15),
+  hammerRoom: T(25),
   hammerFoundTail: T(20), // once the hammer is found, act 2 wraps up within this
   soulEvery: [0, T(1.8), T(1.8), T(0.32)],
   pitch: T(10),
@@ -27,20 +26,28 @@ const DUR = {
 };
 const SOUL_CAP = [0, 10, 10, 32]; // natural souls per room, per act
 const NROOMS = S.ROOMS.length;
+const MIN_OPEN = 4;
+const OPEN_MORE = [0, 0, 3, 5]; // extra rooms that open in each act
 const NP = S.NUM_PUMPKINS;
 const CLAIMS_PER_SEC = 10;
 const EVENTS_PER_SEC = 40;
+const SOUL_IN_DRAWER = 0.4; // chance an empty hiding place has a soul in it
+const OPEN_AGAIN = T(25); // before the same hiding place can give you another soul
+const PHONE_SOULS = 2;
 
 const rint = (n) => crypto.randomInt(n); // 0..n-1
 const pick = (arr) => arr[rint(arr.length)];
 const clamp01 = (v) => Math.min(0.97, Math.max(0.03, Number(v) || 0.5));
 
-// Items sit on the surfaces painted into each room (tables, lids, pews, shelves, floor).
+// Souls rest on the floor painted into each room; pumpkins and the hammer hide inside things
+// (wardrobes, chests, the oven): see tools/build_rooms.py.
 const ROOM_META = require('../public/rooms/rooms.json').rooms;
-const SURFACES = S.ROOMS.map((r) => {
-  const m = ROOM_META.find((x) => x.id === r.id);
-  return m && m.surfaces.length ? m.surfaces : [{ x1: 0.2, x2: 0.8, y: 0.85, s: 1 }];
+const metaOf = (r) => ROOM_META.find((x) => x.id === S.ROOMS[r].id) || { surfaces: [], containers: [] };
+const SURFACES = S.ROOMS.map((r, i) => {
+  const m = metaOf(i);
+  return m.surfaces.length ? m.surfaces : [{ x1: 0.2, x2: 0.8, y: 0.85, s: 1 }];
 });
+const CONTAINERS = S.ROOMS.map((r, i) => metaOf(i).containers || []);
 function rpos(room) {
   const list = SURFACES[room];
   let total = 0;
@@ -127,7 +134,8 @@ class Game {
     this.relocateT = 0;
     this.huntClock = 0;
     this.soulT = 0;
-    this.hammerJumpT = 0;
+    this.baseOpen = 0;
+    this.open = MIN_OPEN;
     this.hammerRoomT = 0;
     this.items.clear();
     this.pumpkins = [];
@@ -169,6 +177,48 @@ class Game {
     return [...set];
   }
 
+  // ---------- the house ----------
+  setOpen(act, tell) {
+    const before = this.open;
+    this.open = Math.min(NROOMS, Math.max(MIN_OPEN, this.baseOpen + OPEN_MORE[act]));
+    if (tell && this.open > before) {
+      const names = S.ROOMS.slice(before, this.open).map((r) => r.name.toLowerCase());
+      const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+      this.addFeed('event', null, `More of the house is open: the ${list}.`);
+      this.log(`[house] ${this.open} rooms open`);
+    }
+    this.markDirty();
+  }
+  openRooms() {
+    return S.ROOMS.slice(0, this.open).map((r, i) => i);
+  }
+  randRoom() {
+    return rint(this.open);
+  }
+  // the open room with the fewest people in it (ties broken at random)
+  quietRoom(except) {
+    const count = new Array(NROOMS).fill(0);
+    for (const p of this.connectedPlayers()) if (p.room != null) count[p.room]++;
+    const rooms = this.openRooms().filter((r) => r !== except);
+    const least = Math.min(...rooms.map((r) => count[r]));
+    return pick(rooms.filter((r) => count[r] === least));
+  }
+  // a hiding place in this room with nothing in it yet
+  freeContainer(room) {
+    const n = CONTAINERS[room].length;
+    if (!n) return null;
+    const used = new Set();
+    for (const it of this.items.values()) if (it.r === room && it.c != null) used.add(it.c);
+    const free = [];
+    for (let c = 0; c < n; c++) if (!used.has(c)) free.push(c);
+    return free.length ? pick(free) : rint(n);
+  }
+  hidePos(room, c) {
+    if (c == null) return rpos(room);
+    const k = CONTAINERS[room][c];
+    return { x: k.x + k.w / 2, y: k.y + k.h * 0.8, s: 1, c };
+  }
+
   // ---------- items ----------
   addItem(t, r, x, y, extra) {
     const it = Object.assign({ id: this.nextItemId++, t, r, x, y }, extra || {});
@@ -181,7 +231,12 @@ class Game {
     it.x = pos.x;
     it.y = pos.y;
     it.s = pos.s;
-    this.io.to('players').emit('item~', { id: it.id, r, x: it.x, y: it.y, s: it.s });
+    it.c = pos.c;
+    this.io.to('players').emit('item~', { id: it.id, r, x: it.x, y: it.y, s: it.s, c: it.c });
+  }
+  // somewhere new to hide a pumpkin or the hammer
+  hideItem(it, room) {
+    this.moveItem(it, room, this.hidePos(room, this.freeContainer(room)));
   }
   removeItem(id, by) {
     const it = this.items.get(id);
@@ -218,6 +273,9 @@ class Game {
     this.resetGameState();
     this.gameId++;
     this.secret = crypto.randomInt(1, NP + 1);
+    // the house is as big as the party: about one room for every two or three people
+    this.baseOpen = Math.round(this.players.size / 2.5);
+    this.setOpen(1, false);
     for (const p of this.players.values()) this.resetPlayer(p, true);
     const pool = ['lockedDoors', 'ghostFlood', 'soulShower'];
     const first = pool.splice(rint(pool.length), 1)[0];
@@ -239,9 +297,11 @@ class Game {
     p.pumpkin = null;
     p.hammer = false;
     p.vote = null;
+    p.scares = 0;
     p.deadUntil = 0;
     p.pos = null;
-    p.room = newRoom ? rint(NROOMS) : null;
+    p.opened = {};
+    p.room = newRoom ? this.quietRoom(null) : null;
   }
 
   startAct(n) {
@@ -250,6 +310,7 @@ class Game {
     this.overtime = false;
     this.soulT = 0;
     this.setPhase('HUNT', DUR.acts[n]);
+    this.setOpen(n, n > 1);
     if (n === 2) this.spawnHammer();
     this.addFeed('act', null, `Act ${S.ACTS[n].ordinal}. ${S.ACTS[n].name}.`);
     this.announce({ kind: 'act', act: n });
@@ -339,6 +400,7 @@ class Game {
 
   showResult() {
     const all = [...this.players.values()];
+    for (const p of all) p.haunted = p.deaths + p.scares;
     const top = (field) => {
       const best = Math.max(0, ...all.map((p) => p[field]));
       if (best <= 0) return null;
@@ -353,7 +415,7 @@ class Game {
       winningHolder: this.pub(this.pumpkins[this.secret - 1].holder),
       awards: {
         souls: top('souls'),
-        haunted: top('deaths'),
+        haunted: top('haunted'),
         hammer: this.hammer.holder ? { who: [this.pub(this.hammer.holder)] } : null,
       },
     };
@@ -383,12 +445,12 @@ class Game {
   spawnPumpkin() {
     const pk = this.pumpkins.find((p) => !p.spawned);
     if (!pk) return;
-    const room = rint(NROOMS);
-    const pos = rpos(room);
-    const it = this.addItem('p', room, pos.x, pos.y, { n: pk.n, s: pos.s });
+    const room = this.randRoom();
+    const pos = this.hidePos(room, this.freeContainer(room));
+    const it = this.addItem('p', room, pos.x, pos.y, { n: pk.n, s: pos.s, c: pos.c });
     pk.spawned = true;
     pk.itemId = it.id;
-    this.addFeed('spawn', null, `Pumpkin ${pk.n} is somewhere in the ${S.ROOMS[it.r].name}.`, { n: pk.n });
+    this.addFeed('spawn', null, `Pumpkin ${pk.n} is hidden somewhere ${S.ROOMS[it.r].at}.`, { n: pk.n });
     this.announce({ kind: 'pumpkinSpawn', n: pk.n, room: it.r });
   }
   relocateUnclaimed() {
@@ -396,8 +458,8 @@ class Game {
     for (const pk of this.unclaimed()) {
       const it = this.items.get(pk.itemId);
       if (!it) continue;
-      const room = rooms.length ? pick(rooms) : rint(NROOMS);
-      this.moveItem(it, room, rpos(room));
+      const room = rooms.length ? pick(rooms) : this.randRoom();
+      this.hideItem(it, room);
     }
     this.markDirty();
   }
@@ -423,11 +485,10 @@ class Game {
   }
   spawnHammer() {
     const rooms = this.roomsWithEligible((p) => !p.pumpkin);
-    const room = rooms.length ? pick(rooms) : rint(NROOMS);
-    const pos = rpos(room);
-    const it = this.addItem('h', room, pos.x, pos.y, { s: pos.s });
+    const room = rooms.length ? pick(rooms) : this.randRoom();
+    const pos = this.hidePos(room, this.freeContainer(room));
+    const it = this.addItem('h', room, pos.x, pos.y, { s: pos.s, c: pos.c });
     this.hammer.itemId = it.id;
-    this.hammerJumpT = 0;
     this.hammerRoomT = 0;
     this.markDirty();
   }
@@ -445,7 +506,7 @@ class Game {
   }
 
   triggerEvent(type) {
-    const room = rint(NROOMS);
+    const room = this.randRoom();
     const add = (dur, r) => this.events.push({ type, room: r, until: this.huntClock + dur });
     if (type === 'bloodMoon') add(DUR.bloodMoon, null);
     else if (type === 'lockedDoors') add(DUR.lockedDoors, null);
@@ -456,7 +517,7 @@ class Game {
     }
     const ev = S.EVENTS[type];
     const local = type === 'ghostFlood' || type === 'soulShower';
-    this.addFeed('event', null, ev.line(S.ROOMS[room].name), { event: type });
+    this.addFeed('event', null, ev.line(S.ROOMS[room].at), { event: type });
     this.announce({ kind: 'event', type, room: local ? room : null });
     this.log(`[event] ${type}${local ? ' ' + S.ROOMS[room].name : ''}`);
   }
@@ -492,21 +553,16 @@ class Game {
       }
     }
 
+    // the hammer will not sit still: every so often it is somewhere else
     if (this.act === 2 && this.hammer.itemId) {
       const it = this.items.get(this.hammer.itemId);
-      this.hammerJumpT += dt;
       this.hammerRoomT += dt;
       if (it && this.hammerRoomT >= DUR.hammerRoom) {
         this.hammerRoomT = 0;
-        this.hammerJumpT = 0;
         const rooms = this.roomsWithEligible((p) => !p.pumpkin).filter((r) => r !== it.r);
-        const others = [0, 1, 2, 3, 4].filter((r) => r !== it.r);
-        const room = rooms.length ? pick(rooms) : pick(others);
-        this.moveItem(it, room, rpos(room));
+        const others = this.openRooms().filter((r) => r !== it.r);
+        this.hideItem(it, rooms.length ? pick(rooms) : pick(others));
         this.markDirty();
-      } else if (it && this.hammerJumpT >= DUR.hammerJump) {
-        this.hammerJumpT = 0;
-        this.moveItem(it, it.r, rpos(it.r));
       }
     }
 
@@ -515,7 +571,7 @@ class Game {
       this.soulT += dt;
       while (this.soulT >= every) {
         this.soulT -= every;
-        this.spawnSoul(rint(NROOMS), true);
+        this.spawnSoul(this.randRoom(), true);
       }
     }
   }
@@ -557,6 +613,7 @@ class Game {
       dur: this.dur,
       elapsed: this.elapsed,
       fast: FAST,
+      open: this.open,
       events: this.events.map((e) => ({ type: e.type, room: e.room, remaining: e.until - this.huntClock })),
       pumpkins: this.pumpkins.map((pk) => {
         const it = pk.itemId && !pk.holder ? this.items.get(pk.itemId) : null;
@@ -580,7 +637,7 @@ class Game {
         costume: p.costume,
         room: p.room,
         souls: p.souls,
-        deaths: p.deaths,
+        deaths: p.deaths + p.scares,
         pumpkin: p.pumpkin,
         hammer: p.hammer,
         connected: p.connected,
@@ -675,7 +732,7 @@ class Game {
       }
       p.socketId = socket.id;
       p.connected = true;
-      if (this.phase === 'HUNT' && p.room == null) p.room = rint(NROOMS);
+      if (this.phase === 'HUNT' && p.room == null) p.room = this.quietRoom(null);
       socket.data.key = key;
       socket.join('players');
       ack({ ok: true, token: p.token, rejoined, me: this.meState(p) });
@@ -698,8 +755,9 @@ class Game {
       const now = Date.now();
       if (now - (p.lastDoor || 0) < 700) return ack({ ok: false, reason: 'slow-down' });
       p.lastDoor = now;
-      const others = [0, 1, 2, 3, 4].filter((r) => r !== p.room);
-      p.room = pick(others);
+      // a door always leads somewhere quieter (tests on DEV_FAST may pick the room)
+      const to = Number(data.to);
+      p.room = FAST && Number.isInteger(to) && to >= 0 && to < this.open && to !== p.room ? to : this.quietRoom(p.room);
       p.pos = null;
       ack({ ok: true, room: p.room });
       this.sendMe(p);
@@ -737,12 +795,57 @@ class Game {
       this.sendMe(p);
     });
 
+    // one click opens a hiding place; whatever is inside is yours if you can carry it
+    on('open', (data, ack) => {
+      const p = me();
+      if (!p || this.phase !== 'HUNT' || this.paused || p.room == null) return ack({ ok: false });
+      const c = Number(data.c);
+      if (!Number.isInteger(c) || !CONTAINERS[p.room][c]) return ack({ ok: false });
+      if (!this.rateOk(socket, 'claims', CLAIMS_PER_SEC)) return ack({ ok: false, reason: 'slow-down' });
+      ack(this.openContainer(p, c));
+    });
+
+    // a fright from one of the residents: you drop a soul
+    on('scared', (data, ack) => {
+      const p = me();
+      const r = p && p.room != null && S.RESIDENTS[S.ROOMS[p.room].id];
+      if (!p || !r || this.phase !== 'HUNT') return ack({ ok: false });
+      const now = Date.now();
+      if (now - (p.lastScare || 0) < 5000) return ack({ ok: false, reason: 'slow-down' });
+      p.lastScare = now;
+      p.scares++;
+      let dropped = 0;
+      if (p.souls > 0) {
+        dropped = 1;
+        p.souls--;
+        const rest = settle(p.room, clamp01(data.x), clamp01(data.y));
+        this.spawnSoul(p.room, false, rest.x, rest.y, 1, rest.s);
+      }
+      this.addFeed('scare', p.key, say([`${r.name} found ${p.name} ${S.ROOMS[p.room].at}.`, `${p.name} met ${r.name}.`, `${r.name} said hello to ${p.name}.`]));
+      ack({ ok: true, dropped });
+      this.sendMe(p);
+    });
+
+    // Ghostface rings; whoever answers gets a reward for their nerve
+    on('phone', (data, ack) => {
+      const p = me();
+      if (!p || this.phase !== 'HUNT' || p.room == null || S.ROOMS[p.room].id !== 'hall') return ack({ ok: false });
+      const now = Date.now();
+      if (now - (p.lastPhone || 0) < T(20)) return ack({ ok: false, reason: 'slow-down' });
+      p.lastPhone = now;
+      p.souls += PHONE_SOULS;
+      p.scares++;
+      this.addFeed('scare', p.key, `${p.name} answered the telephone. Brave.`);
+      ack({ ok: true, souls: PHONE_SOULS });
+      this.sendMe(p);
+    });
+
     on('respawn', (data, ack) => {
       const p = me();
       if (!p) return ack({ ok: false });
       p.deadUntil = 0;
       p.pos = null;
-      if (this.phase === 'HUNT') p.room = rint(NROOMS);
+      if (this.phase === 'HUNT') p.room = this.quietRoom(null);
       ack({ ok: true, room: p.room });
       this.sendMe(p);
       this.markDirty();
@@ -772,6 +875,28 @@ class Game {
         this.markDirty();
       }
     });
+  }
+
+  openContainer(p, c) {
+    if (p.deadUntil > Date.now()) return { ok: false, reason: 'dead' };
+    const it = [...this.items.values()].find((x) => x.r === p.room && x.c === c && (x.t === 'p' || x.t === 'h'));
+    if (it) {
+      const res = this.claim(p, it.id);
+      if (res.ok) return { ok: true, found: it.t, n: it.n };
+      return { ok: true, found: it.t, n: it.n, kept: false, reason: res.reason };
+    }
+    // nothing hidden here; sometimes a soul
+    const key = p.room + ':' + c;
+    const now = Date.now();
+    if (now - (p.opened[key] || -1e12) > OPEN_AGAIN && Math.random() < SOUL_IN_DRAWER) {
+      p.opened[key] = now;
+      p.souls += 1;
+      this.sendMe(p);
+      this.markDirty();
+      return { ok: true, found: 's', v: 1 };
+    }
+    p.opened[key] = p.opened[key] || now;
+    return { ok: true, found: null };
   }
 
   claim(p, id) {

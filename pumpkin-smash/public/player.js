@@ -250,11 +250,11 @@
       Hunt.respawnGhosts();
     } else if (a.kind === 'event') {
       const ev = S.EVENTS[a.type];
-      banner(ev.line(a.room != null ? S.ROOMS[a.room].name : ''), '', false, 3800);
+      banner(ev.line(a.room != null ? S.ROOMS[a.room].at : ''), '', false, 3800);
       Sound.sting();
     } else if (a.kind === 'pumpkinSpawn') {
       Sound.spawnBell();
-      toast(a.room === Hunt.room ? 'Something just turned up in here.' : `Pumpkin ${a.n} is somewhere in the ${S.ROOMS[a.room].name}.`, 3200);
+      toast(a.room === Hunt.room ? 'Something just turned up in here.' : `Pumpkin ${a.n} is hidden somewhere ${S.ROOMS[a.room].at}.`, 3200);
     } else if (a.kind === 'overtime') {
       banner('Nobody leaves until every pumpkin has a keeper.', '', false, 4200);
       Sound.sting();
@@ -273,6 +273,7 @@
   }
   function resetLocal() {
     Hunt.reset();
+    residents.reset();
     stage.clear();
     screenKey = '';
   }
@@ -485,6 +486,7 @@
     splash: null,
     deathInfo: null,
     ignite: [],
+    opening: [],
 
     reset() {
       this.room = null;
@@ -496,6 +498,8 @@
       this.trans = null;
       this.deathInfo = null;
       this.ignite = [];
+      this.opening = [];
+      residents.leave();
       $('death').hidden = true;
     },
     leave() {
@@ -529,13 +533,15 @@
       }
     },
     meta() {
-      return (META && META.rooms.find((r) => r.id === S.ROOMS[this.room].id)) || { doors: [], candles: [], surfaces: [] };
+      const id = this.room != null && S.ROOMS[this.room] ? S.ROOMS[this.room].id : null;
+      return (META && id && META.rooms.find((r) => r.id === id)) || { doors: [], candles: [], surfaces: [], containers: [], spots: {} };
     },
     hasEvent(type, room) {
       return !!state && state.events.some((e) => e.type === type && (room == null || e.room === room));
     },
     baseRadius() {
-      let r = Math.max(W * 0.08, Math.min(W, H) * 0.11, 56);
+      // a generous beam: this is for people who do not play games
+      let r = Math.max(W * 0.105, Math.min(W, H) * 0.15, 72);
       if (this.hasEvent('bloodMoon')) r *= 0.5;
       // a hurt lantern burns lower, and gutters for a moment when struck
       r *= [0.7, 0.78, 0.89, 1][this.hp];
@@ -558,28 +564,48 @@
       this.nextDoor = now + rand(1500, 3500) * fastMul();
       this.nextFlare = now + rand(8000, 16000);
       this.nextDistant = now + rand(6000, 12000);
+      residents.leave();
       view.use(S.ROOMS[r].id).then(() => {
         if (this.room !== r) return;
         this.ready = true;
         this.respawnGhosts();
+        residents.enter(S.ROOMS[r].id, this.meta());
         this.splash = { t: performance.now(), room: r };
-        // warm the cache for the other rooms
-        S.ROOMS.forEach((x) => x.id !== S.ROOMS[r].id && setTimeout(() => view.load(x.id), 1500));
+        // warm the cache for the other open rooms, one at a time
+        const open = S.ROOMS.slice(0, (state && state.open) || S.ROOMS.length).filter((x) => x.id !== S.ROOMS[r].id);
+        open.forEach((x, i) => setTimeout(() => view.load(x.id), 1500 + i * 1200));
       });
       this.graceUntil = Math.max(this.graceUntil, now + 1500);
       $('hud-room').textContent = `The ${S.ROOMS[r].name.toLowerCase()}`;
+      this.opening = [];
       Sound.setDrone(r);
     },
     respawnGhosts() {
       if (this.room == null) return;
+      // a room with a resident has enough going on: one ghost and no zombies
+      const busy = !!S.RESIDENTS[S.ROOMS[this.room].id];
       this.ghosts = [];
-      const n = state && state.act === 3 ? 2 : 1;
+      const n = state && state.act === 3 && !busy ? 2 : 1;
       for (let i = 0; i < n; i++) this.ghosts.push(makeGhost(this.room, false));
       this.zombies = [];
-      const nz = state && state.act === 3 ? 2 : 1;
+      const nz = busy ? 0 : state && state.act === 3 ? 2 : 1;
       for (let i = 0; i < nz; i++) this.zombies.push(makeZombie(this.room));
     },
   };
+
+  const residents = PS.Residents({
+    view,
+    torch: () => Hunt.torch,
+    lightAt: (x, y, R) => (Hunt.dead ? 0 : lightAt(x, y, R)),
+    mild: () => isMild(),
+    fast: () => fastMul(),
+    toast: (text, ms) => toast(text, ms),
+    scare: (id, loss) => scare(id, loss),
+    phone: () =>
+      socket.emit('phone', {}, (res) => {
+        if (res && res.ok) setTimeout(() => toast(`He hung up. He left you ${res.souls} souls.`, 3200), 1500);
+      }),
+  });
 
   const speedMul = () => [1, 1, 1.35, 1.75][(state && state.act) || 1];
   function torchRoom() {
@@ -623,17 +649,19 @@
   function zLocal(z) {
     return { x: (Hunt.torch.x - z.sx) * z.f / z.h, y: (Hunt.torch.y - z.sy) / z.h };
   }
-  const inReach = (q, extra = 0) => q.x > -0.08 && q.x < 0.62 + extra && q.y > -1.05 && q.y < -0.3;
-  function zombieHit(z, pan) {
+  const inReach = (q, extra = 0) => q.x > -0.08 && q.x < 0.5 + extra && q.y > -1.05 && q.y < -0.3;
+  // a zombie's swipe or a ghost's touch: the lantern takes it, three times
+  function lanternHit(src, kind, pan) {
     const now = performance.now();
     Sound.hurt(pan);
-    if (Hunt.hp <= 1) return die(z, 'zombie');
+    if (Hunt.hp <= 1) return die(src, kind);
     Hunt.setHp(Hunt.hp - 1);
     Hunt.hurtAt = now;
     Hunt.lastHurt = now;
     Hunt.hurtUntil = now + 1600;
     shaker.add(isMild() ? 4 : 14);
-    toast(Hunt.hp === 2 ? 'It got a hand on you. The lantern burns lower.' : 'Once more and the lantern goes out.', 2600);
+    const first = kind === 'ghost' ? 'Cold hands. The lantern burns lower.' : 'It got a hand on you. The lantern burns lower.';
+    toast(Hunt.hp === 2 ? first : 'Once more and the lantern goes out.', 2600);
   }
   function updateZombies(dt, now, R) {
     const tr = torchRoom();
@@ -714,7 +742,7 @@
         }
       } else if (z.st === 'swipe') {
         if (sk >= Z_SWIPE) {
-          if (!safe && inReach(zLocal(z), 0.12)) zombieHit(z, pan);
+          if (!safe && inReach(zLocal(z), 0.1)) lanternHit(z, 'zombie', pan);
           else Sound.shuffle(pan, 0.12);
           z.st = 'back';
           z.stT = now;
@@ -851,8 +879,15 @@
         Hunt.lastWhisper = now;
         Sound.whisper(nearPan);
       }
-      const safe = now < Hunt.graceUntil || now < Hunt.invisUntil || Hunt.trans || Hunt.dead || state.paused;
-      if (!safe && d < ghostPx() * 0.2) die(g);
+      const safe = now < Hunt.graceUntil || now < Hunt.invisUntil || now < Hunt.hurtUntil || Hunt.trans || Hunt.dead || state.paused;
+      if (!safe && d < ghostPx() * 0.2) {
+        lanternHit(g, 'ghost', nearPan);
+        // it drifts off to the far side of the room before it tries again
+        g.mode = 'drift';
+        g.modeUntil = now + rand(5000, 8000);
+        g.u = g.cu = tr.u < 0.5 ? rand(0.75, 0.92) : rand(0.08, 0.25);
+        g.v = g.cv = rand(0.25, 0.6);
+      }
     }
     Sound.setBreath(Hunt.dead ? 0 : clamp(1 - nearest / (R * 4.5), 0, 1), nearPan);
   }
@@ -907,7 +942,8 @@
     Sound.door(d ? clamp(((d.x + d.w / 2) - 0.5) * 2, -1, 1) : 0);
     Hunt.door = null;
     Hunt.trans = { t: performance.now(), room: null };
-    socket.emit('door', {}, (res) => {
+    socket.emit('door', Hunt.debugTo != null ? { to: Hunt.debugTo } : {}, (res) => {
+      Hunt.debugTo = null;
       if (!res || !res.ok) {
         Hunt.trans = null;
         if (res && res.reason === 'locked') toast('Locked.');
@@ -965,6 +1001,147 @@
     });
   }
 
+  // ---- hiding places: wardrobes, chests, the oven. One click opens one.
+  function containerRect(k) {
+    const a = view.toScreen(k.x, k.y);
+    const b = view.toScreen(k.x + k.w, k.y + k.h);
+    return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+  }
+  // the hiding place at this point (the smallest one, if they overlap)
+  function containerAt(x, y) {
+    const list = Hunt.meta().containers || [];
+    let best = null;
+    let area = Infinity;
+    list.forEach((k, c) => {
+      const r = containerRect(k);
+      const pad = 10;
+      if (x > r.x - pad && x < r.x + r.w + pad && y > r.y - pad && y < r.y + r.h + pad && r.w * r.h < area) {
+        best = { c, k, r };
+        area = r.w * r.h;
+      }
+    });
+    return best;
+  }
+  const hiddenIn = (c) => [...items.values()].find((it) => it.r === Hunt.room && it.c === c && visibleTo(it));
+  function drawContainers(now, t, R) {
+    if (Hunt.dead) return;
+    const list = Hunt.meta().containers || [];
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    list.forEach((k, c) => {
+      const r = containerRect(k);
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      const L = lightAt(cx, cy, R);
+      // a pumpkin inside leaks light through the cracks: faint in the dark, bright in the beam
+      const it = hiddenIn(c);
+      if (it) {
+        const k2 = (0.18 + 0.6 * L) * flicker(t, c * 3.1, 0.12);
+        const rad = Math.max(r.w, r.h) * 0.55;
+        const g = ctx.createRadialGradient(cx, r.y + r.h * 0.7, 0, cx, r.y + r.h * 0.7, rad);
+        g.addColorStop(0, hexA(it.t === 'h' ? T.bone : T.ember, 0.55 * k2));
+        g.addColorStop(0.5, hexA(T.flame, 0.22 * k2));
+        g.addColorStop(1, hexA(T.flame, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - rad, r.y + r.h * 0.7 - rad, rad * 2, rad * 2);
+      }
+    });
+    ctx.restore();
+    // things just opened: dust, or what was inside rising out
+    Hunt.opening = (Hunt.opening || []).filter((o) => now - o.t < 1400);
+    for (const o of Hunt.opening) {
+      if (o.dust) continue;
+      o.dust = true;
+      particles.emit(o.x, o.y, { count: isMild() ? 8 : 18, color: [T.ash, T.bone], speed: 70, life: 1.1, size: 2.2, gravity: 30 });
+    }
+  }
+  // words by the lantern for what a click would do: plain instructions for everyone
+  function drawLabel(t) {
+    if (Hunt.dead || Hunt.trans || !me) return;
+    const x = Hunt.torch.x;
+    const y = Hunt.torch.y;
+    let text = residents.label(x, y, t);
+    if (!text && Hunt.door && Hunt.door.k > 0.3) {
+      const r = doorRect(Hunt.door);
+      if (x > r.x - 12 && x < r.x + r.w + 12 && y > r.y - 12 && y < r.y + r.h + 12) text = 'Go through the door';
+    }
+    if (!text) {
+      const hit = containerAt(x, y);
+      if (hit) text = `Open ${hit.k.name}`;
+    }
+    fx.style.cursor = text ? 'pointer' : '';
+    if (!text) return;
+    const size = Math.round(clamp(Math.min(W, H) * 0.028, 15, 22));
+    ctx.save();
+    ctx.font = `italic 600 ${size}px Fraunces, Georgia, serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const ly = y + presenceSize(Hunt.baseRadius()) * 0.75 + 10;
+    ctx.fillStyle = hexA(T.ink, 0.7);
+    ctx.fillText(text, x + 1, ly + 1);
+    ctx.fillStyle = T.bone;
+    ctx.globalAlpha = 0.92;
+    ctx.fillText(text, x, ly);
+    ctx.restore();
+  }
+  const EMPTY = ['Empty. Just dust.', 'Nothing in here but cobwebs.', 'Empty.', 'Nothing. Something was here once.'];
+  function openContainer(hit) {
+    const k = hit.k;
+    if (Hunt.openPending) return;
+    Hunt.openPending = true;
+    Sound.unlock();
+    Sound.open(clamp((k.x + k.w / 2 - 0.5) * 2, -1, 1));
+    const cx = hit.r.x + hit.r.w / 2;
+    const cy = hit.r.y + hit.r.h * 0.6;
+    Hunt.opening.push({ t: performance.now(), x: cx, y: cy });
+    socket.emit('open', { c: hit.c }, (res) => {
+      Hunt.openPending = false;
+      if (!res || !res.ok) return;
+      Hunt.lastCollect = performance.now();
+      if (res.found === 'p' || res.found === 'h') {
+        if (res.kept === false) {
+          if (res.found === 'p') toast(`Pumpkin ${res.n} is in ${k.name}. You already carry ${me.hammer ? 'the hammer' : 'Pumpkin ' + me.pumpkin}. Leave it for someone else.`, 3600);
+          return;
+        }
+        Sound.claim();
+        shaker.add(isMild() ? 2 : 8);
+        const size = 135 * view.view.scale;
+        Hunt.ignite.push({ t: performance.now(), x: cx, y: cy, size, n: res.n, kind: res.found });
+        particles.emit(cx, cy, { count: isMild() ? 20 : 60, color: [T.ember, T.flame], speed: 260, life: 1.4, size: 4, gravity: -60, shape: 'ember' });
+        if (res.found === 'p') banner(`Pumpkin ${res.n} is yours.`, `It was in ${k.name}. It is safe now. You will pitch it later.`, true);
+        else banner('The hammer is yours.', 'You will be the one who swings it.', true);
+      } else if (res.found === 's') {
+        Sound.ping(clamp((cx - W / 2) / (W / 2), -1, 1));
+        particles.emit(cx, cy, { count: 10, color: [T.bone], speed: 80, life: 0.9, size: 2.5, shape: 'ember' });
+        toast(`A soul was hiding in ${k.name}.`, 2200);
+      } else toast(pick(EMPTY), 1600);
+    });
+  }
+
+  // ---- a fright from a resident: their face, close, then back to the house
+  function scare(id, loss) {
+    const el = $('scare');
+    const img = $('scare-img');
+    const mild = isMild();
+    img.src = `/sprites/${id}-scare.webp`;
+    el.classList.remove('go', 'mild');
+    void el.offsetWidth;
+    el.classList.toggle('mild', mild);
+    el.classList.add('go');
+    el.hidden = false;
+    if (mild) Sound.moan();
+    else Sound.scream();
+    shaker.add(mild ? 3 : 20);
+    clearTimeout(scare.timer);
+    scare.timer = setTimeout(() => (el.hidden = true), mild ? 2000 : 1500);
+    Hunt.graceUntil = Math.max(Hunt.graceUntil, performance.now() + 2500);
+    if (!loss) return;
+    const tr = torchRoom();
+    socket.emit('scared', { x: tr.u, y: tr.v }, (res) => {
+      if (res && res.ok && res.dropped) setTimeout(() => toast('You dropped a soul. It is on the floor somewhere.', 2600), mild ? 2000 : 1500);
+    });
+  }
+
   function doorRect(d) {
     const a = view.toScreen(d.x, d.y);
     const b = view.toScreen(d.x + d.w, d.y + d.h);
@@ -975,6 +1152,7 @@
     if (!state || state.phase !== 'HUNT' || state.paused || Hunt.dead || Hunt.trans || !Hunt.ready) return;
     Sound.unlock();
     const R = Hunt.baseRadius();
+    if (residents.press(x, y, performance.now() / 1000)) return;
     if (Hunt.door && Hunt.door.k > 0.3) {
       const r = doorRect(Hunt.door);
       const pad = 12;
@@ -985,7 +1163,7 @@
     let best = null;
     let bestD = Infinity;
     for (const it of items.values()) {
-      if (it.r !== Hunt.room || !visibleTo(it)) continue;
+      if (it.r !== Hunt.room || !visibleTo(it) || it.c != null) continue;
       const g = itemGeom(it);
       const d = Math.hypot(g.x - x, g.y - y);
       if (d < g.hit + 6 && Math.hypot(g.x - lx, g.y - ly) < R * 1.1 && d < bestD) {
@@ -993,7 +1171,9 @@
         bestD = d;
       }
     }
-    if (best) claim(best);
+    if (best) return claim(best);
+    const hit = containerAt(x, y);
+    if (hit && Math.hypot(hit.r.x + hit.r.w / 2 - lx, hit.r.y + hit.r.h / 2 - ly) < R * 1.6 + Math.max(hit.r.w, hit.r.h) / 2) openContainer(hit);
   }
 
   fx.addEventListener('pointermove', (e) => {
@@ -1057,6 +1237,7 @@
     if (!paused && Hunt.ready) {
       updateGhosts(dt, now, R);
       updateZombies(dt, now, R);
+      if (!Hunt.dead && !Hunt.trans && now > Hunt.graceUntil) residents.update(dt, R);
     }
     if (!paused && !Hunt.dead) sendPos(now);
     for (const q of peers.values()) {
@@ -1092,6 +1273,7 @@
       .sort((a, b) => Math.hypot(a.sp.x - Hunt.torch.x, a.sp.y - Hunt.torch.y) - Math.hypot(b.sp.x - Hunt.torch.x, b.sp.y - Hunt.torch.y))
       .slice(0, 2)
       .forEach(({ q }) => lights.push({ u: q.u, v: q.v, intensity: 0.7 * flicker(t, q.u * 9, 0.04), color: [1, 0.55, 0.2] }));
+    lights.push(...residents.lights(t));
     const torchOn = Hunt.ready && !Hunt.dead;
     view.render(
       {
@@ -1100,8 +1282,8 @@
         time: t,
         flicker: fl,
         lights,
-        ambient: torchOn ? 0.0035 : 0,
-        gain: torchOn ? 3.2 : 0,
+        ambient: torchOn ? 0.014 : 0,
+        gain: torchOn ? 4.4 : 0,
       },
       roomCv.width / W
     );
@@ -1109,8 +1291,9 @@
     // ---- 2D overlay: things in the room, lit only by the light that reaches them
     ctx.clearRect(-50, -50, W + 100, H + 100);
     if (!Hunt.ready) return;
+    drawContainers(now, t, R);
     for (const it of items.values()) {
-      if (it.r !== Hunt.room || !visibleTo(it)) continue;
+      if (it.r !== Hunt.room || !visibleTo(it) || it.c != null) continue;
       const g = itemGeom(it);
       const L = Hunt.dead ? 0 : lightAt(g.x, g.y, R);
       if (L < 0.02) continue;
@@ -1178,6 +1361,8 @@
       drawFlame(ctx, sp.x, sp.y, s, t);
     }
 
+    residents.draw(ctx, R, t);
+
     // other players: their light, their silhouette, their name
     const ps = presenceSize(R) * 0.85;
     for (const [name, q] of peers) {
@@ -1202,6 +1387,33 @@
       const facing = (Hunt.torch.x - z.sx) * z.f > 0;
       const dz = Math.hypot(Hunt.torch.x - z.sx, Hunt.torch.y - (z.sy - z.h * 0.85));
       const shine = facing && !Hunt.dead ? clamp(1 - dz / (R * 6), 0, 1) * 0.55 * (0.8 + 0.2 * Math.sin(t * 3 + z.seed)) : 0;
+      const img = PS.sprite(z.seed > Math.PI ? 'zombie-2' : 'zombie-1');
+      if (img) {
+        // painted zombies: rear back to swipe, lurch forward, stagger away
+        const rot = z.f * (-0.13 * (z.wind || 0) + 0.16 * (z.lunge || 0) - 0.1 * (z.stagger || 0) + 0.035 * Math.sin(t * 2.2 + z.seed));
+        const shake = z.st === 'wind' ? Math.sin(t * 60) * 2 : 0;
+        PS.drawLitSprite(ctx, img, z.sx + shake + z.f * z.h * 0.08 * (z.lunge || 0), z.sy, z.h * (1 + 0.05 * (z.wind || 0)), {
+          torch: Hunt.torch,
+          R,
+          facing: z.f,
+          rot,
+          alpha: 0.12 + 0.88 * Math.max(L, z.st === 'wind' ? 0.35 : 0),
+        });
+        // its eyes catch your lantern: so the dark is never blind
+        if (shine > 0.05 || z.st === 'wind') {
+          ctx.save();
+          ctx.globalAlpha = z.st === 'wind' ? 0.9 : shine;
+          ctx.fillStyle = T.ember;
+          const ex = z.sx + z.f * z.h * 0.1;
+          const ey = z.sy - z.h * 0.9;
+          ctx.beginPath();
+          ctx.arc(ex, ey, Math.max(1.2, z.h * 0.006), 0, TAU);
+          ctx.arc(ex + z.f * z.h * 0.035, ey, Math.max(1.2, z.h * 0.006), 0, TAU);
+          ctx.fill();
+          ctx.restore();
+        }
+        continue;
+      }
       PS.drawZombie(ctx, z.sx, z.sy, z.h, {
         facing: z.f,
         light: Math.max(L * 0.9, z.st === 'wind' ? 0.25 : 0),
@@ -1259,6 +1471,8 @@
     drawHint(R, now);
     particles.update(dt);
     particles.draw(ctx);
+
+    drawLabel(t);
 
     // the player, at the centre of their own light
     if (!Hunt.dead) {
@@ -1390,7 +1604,9 @@
       bg.addColorStop(1, PS.hexA(T.blood, 0));
       c.fillStyle = bg;
       c.fillRect(0, 0, r.W, r.H);
-      PS.drawZombie(c, r.W / 2 - size * 0.2, r.H * 0.62, size * 0.6, { facing: 1, light: 0.65, t: k, alpha: 1, rim: 1, lunge: clamp(k * 3, 0, 1) });
+      const zimg = PS.sprite('zombie-1');
+      if (zimg) PS.drawLitSprite(c, zimg, r.W / 2, r.H * 0.66, size * 0.85, { facing: 1, rot: 0.12 * clamp(k * 3, 0, 1) });
+      else PS.drawZombie(c, r.W / 2 - size * 0.2, r.H * 0.62, size * 0.6, { facing: 1, light: 0.65, t: k, alpha: 1, rim: 1, lunge: clamp(k * 3, 0, 1) });
       c.restore();
     } else PS.drawGhost(c, info.gi, r.W / 2, r.H * 0.4, size, k, mild ? clamp(k * 1.2, 0, 0.9) : 0.95);
   }
@@ -1489,6 +1705,19 @@
       },
       get zombieStates() {
         return Hunt.zombies.map((z) => z.st);
+      },
+      door: (to) => {
+        Hunt.debugTo = to;
+        useDoor();
+      },
+      get resident() {
+        return residents.debug;
+      },
+      get containers() {
+        return (Hunt.meta().containers || []).map((k, c) => {
+          const r = containerRect(k);
+          return { c, name: k.name, x: r.x + r.w / 2, y: r.y + r.h / 2, has: hiddenIn(c) ? hiddenIn(c).t : null };
+        });
       },
       get zombies() {
         return Hunt.zombies.filter((z) => z.sx != null).map((z) => ({ x: z.sx + z.f * z.h * 0.22, y: z.sy - z.h * 0.65 }));
