@@ -549,8 +549,8 @@
       return !!state && state.events.some((e) => e.type === type && (room == null || e.room === room));
     },
     baseRadius() {
-      // a generous beam: this is for people who do not play games
-      let r = Math.max(W * 0.105, Math.min(W, H) * 0.15, 72);
+      // a tight circle of light: the house stays dark around it
+      let r = Math.max(W * 0.085, Math.min(W, H) * 0.12, 60);
       if (this.hasEvent('bloodMoon')) r *= 0.5;
       // a hurt lantern burns lower, and gutters for a moment when struck
       r *= [0.7, 0.78, 0.89, 1][this.hp];
@@ -1553,7 +1553,7 @@
         flicker: fl,
         lights,
         // a near-black room and a strong lantern: the light is what you see
-        ambient: torchOn ? 0.002 : 0,
+        ambient: torchOn ? 0.001 : 0,
         gain: torchOn ? 7 : 0,
       },
       roomCv.width / W

@@ -52,7 +52,7 @@ void main() {
 
   // the lantern: a soft beam on screen, lit in 3D by the surface normal
   float sd = distance(frag, uTorch) / uRadius;
-  float beam = smoothstep(1.3, 0.1, sd) + 0.07 * smoothstep(3.2, 1.0, sd);
+  float beam = smoothstep(1.3, 0.1, sd) + 0.025 * smoothstep(2.6, 1.0, sd);
   vec3 Lv = uLamp - P;
   float dist = length(Lv);
   vec3 L = Lv / dist;
