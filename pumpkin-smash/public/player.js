@@ -1552,8 +1552,9 @@
         time: t,
         flicker: fl,
         lights,
-        ambient: torchOn ? 0.014 : 0,
-        gain: torchOn ? 4.4 : 0,
+        // a near-black room and a strong lantern: the light is what you see
+        ambient: torchOn ? 0.002 : 0,
+        gain: torchOn ? 7 : 0,
       },
       roomCv.width / W
     );
