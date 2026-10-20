@@ -21,6 +21,9 @@
     { id: 'choir', name: 'Choir Shade' },
   ];
 
+  // One zombie per room (same index as ROOMS): slow, floor-bound, drawn to light.
+  const ZOMBIES = [{ name: 'Groundskeeper' }, { name: 'Lodger' }, { name: 'Sexton' }, { name: 'Ferryman' }, { name: 'Deacon' }];
+
   // Costumes are code-drawn cut-paper silhouettes (see SIL in common.js).
   const COSTUMES = [
     { id: 'witch', name: 'Witch' },
@@ -55,5 +58,5 @@
   const NUM_PUMPKINS = 6;
   const MAX_NAME = 16;
 
-  return { ROOMS, GHOSTS, COSTUMES, EVENTS, ACTS, NUM_PUMPKINS, MAX_NAME };
+  return { ROOMS, GHOSTS, ZOMBIES, COSTUMES, EVENTS, ACTS, NUM_PUMPKINS, MAX_NAME };
 });

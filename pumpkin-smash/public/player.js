@@ -453,6 +453,13 @@
     invisUntil: 0,
     lastCollect: 0,
     lastWhisper: 0,
+    zombies: [],
+    lastPos: 0,
+    sentPos: null,
+    facing: 1,
+    stride: 0,
+    speed: 0,
+    prev: { x: 0, y: 0 },
     walk: 0,
     lastStep: 0,
     splash: null,
@@ -462,6 +469,7 @@
     reset() {
       this.room = null;
       this.ghosts = [];
+      this.zombies = [];
       this.door = null;
       this.flare = null;
       this.dead = false;
@@ -516,6 +524,7 @@
       this.door = null;
       this.flare = null;
       this.dust = [];
+      peers.clear();
       const now = performance.now();
       this.nextDoor = now + rand(1500, 3500) * fastMul();
       this.nextFlare = now + rand(8000, 16000);
@@ -537,6 +546,9 @@
       this.ghosts = [];
       const n = state && state.act === 3 ? 2 : 1;
       for (let i = 0; i < n; i++) this.ghosts.push(makeGhost(this.room, false));
+      this.zombies = [];
+      const nz = state && state.act === 3 ? 2 : 1;
+      for (let i = 0; i < nz; i++) this.zombies.push(makeZombie(this.room));
     },
   };
 
@@ -557,6 +569,102 @@
     return { gi: room, u, v, tu: rand(0.1, 0.9), tv: rand(0.25, 0.8), cu: u, cv: v, vu: 0, vv: 0, phase: rand(0, TAU), mode: 'drift', modeUntil: performance.now() + rand(3000, 7000), hop: 0, extra };
   }
   const ghostPx = () => 290 * view.view.scale;
+
+  // ---- zombies: slow, floor-bound, drawn to light
+  const AS = 1080 / 1920;
+  function makeZombie(room) {
+    const tr = torchRoom();
+    let u;
+    let tries = 0;
+    do {
+      u = rand(0.06, 0.94);
+      tries++;
+    } while (Math.abs(u - tr.u) < 0.3 && tries < 30);
+    return { gi: room, u, v: rand(0.74, 0.9), tu: rand(0.1, 0.9), tv: rand(0.74, 0.9), f: 1, seed: rand(0, TAU), nextGroan: performance.now() + rand(2000, 6000), nextStep: 0 };
+  }
+  const zombieH = (z) => lerp(250, 480, clamp((z.v - 0.7) / 0.24, 0, 1)) * view.view.scale;
+  function updateZombies(dt, now, R) {
+    const tr = torchRoom();
+    const t = now / 1000;
+    const base = 0.02 * speedMul();
+    for (const z of Hunt.zombies) {
+      const du = (tr.u - z.u) / AS;
+      const dv = tr.v - z.v;
+      const near = Math.hypot(du, dv) < 0.5 && !Hunt.dead && now > Hunt.invisUntil;
+      // a lurching gait: fast, slow, fast
+      const lurch = 0.45 + 0.55 * Math.abs(Math.sin(t * 2.2 + z.seed));
+      if (near) {
+        const sp = base * 1.8 * lurch;
+        const tv = clamp(tr.v + 0.12, 0.72, 0.93);
+        const d = Math.hypot(du, (tv - z.v)) || 1;
+        z.u += (du / d) * sp * dt * AS;
+        z.v += ((tv - z.v) / d) * sp * dt;
+        if (Math.abs(du) > 0.01) z.f = du < 0 ? -1 : 1;
+      } else {
+        const wu = (z.tu - z.u) / AS;
+        const wv = z.tv - z.v;
+        const d = Math.hypot(wu, wv);
+        if (d < 0.02) {
+          z.tu = rand(0.08, 0.92);
+          z.tv = rand(0.74, 0.92);
+        } else {
+          z.u += (wu / d) * base * lurch * dt * AS;
+          z.v += (wv / d) * base * lurch * dt;
+          z.f = wu < 0 ? -1 : 1;
+        }
+      }
+      z.u = clamp(z.u, 0.04, 0.96);
+      z.v = clamp(z.v, 0.72, 0.94);
+      const sp = view.toScreen(z.u, z.v);
+      z.sx = sp.x;
+      z.sy = sp.y;
+      z.h = zombieH(z);
+      const cx = sp.x + z.f * z.h * 0.12;
+      const cy = sp.y - z.h * 0.6;
+      const d = Math.hypot(cx - Hunt.torch.x, cy - Hunt.torch.y);
+      const pan = clamp((cx - Hunt.torch.x) / (W / 2), -1, 1);
+      if (d < R * 3.2 && now > z.nextGroan && !Hunt.dead) {
+        z.nextGroan = now + rand(3500, 7500);
+        Sound.groan(pan, 0.08 + 0.12 * clamp(1 - d / (R * 3.2), 0, 1));
+      }
+      if (near && d < R * 2.5 && now > z.nextStep) {
+        z.nextStep = now + 700 / lurch;
+        Sound.shuffle(pan);
+      }
+      const safe = now < Hunt.graceUntil || now < Hunt.invisUntil || Hunt.trans || Hunt.dead || state.paused;
+      // it has to get its hands on the lantern: the upper body, near the reaching arms
+      const hx = Hunt.torch.x - (sp.x + z.f * z.h * 0.22);
+      const hy = Hunt.torch.y - sp.y;
+      if (!safe && Math.abs(hx) < z.h * 0.2 && hy > -z.h * 0.95 && hy < -z.h * 0.4) die(z, 'zombie');
+    }
+  }
+
+  // ---- other players in this room: where their lanterns are
+  const peers = new Map(); // name -> {c, u, v, tu, tv, f, w, d, stride}
+  socket.on('peers', (list) => {
+    if (!state || state.phase !== 'HUNT') return;
+    const seen = new Set();
+    for (const p of list) {
+      seen.add(p.n);
+      let q = peers.get(p.n);
+      if (!q) {
+        q = { u: p.u, v: p.v, stride: rand(0, TAU) };
+        peers.set(p.n, q);
+      }
+      Object.assign(q, { c: p.c, tu: p.u, tv: p.v, f: p.f, w: p.w, d: p.d });
+    }
+    for (const k of [...peers.keys()]) if (!seen.has(k)) peers.delete(k);
+  });
+  const bodyH = (R) => Math.max(64, R * 0.95);
+  function sendPos(now) {
+    if (now - Hunt.lastPos < 120 || !Hunt.ready) return;
+    const r = torchRoom();
+    const s = Hunt.sentPos;
+    if (s && Math.abs(s.u - r.u) < 0.002 && Math.abs(s.v - r.v) < 0.002 && now - Hunt.lastPos < 1000) return;
+    Hunt.lastPos = now;
+    Hunt.sentPos = r;
+    socket.volatile.emit('pos', { u: r.u, v: r.v, f: Hunt.facing, w: Hunt.speed > 40 });
+  }
 
   function updateGhosts(dt, now, R) {
     const want = Hunt.hasEvent('ghostFlood', Hunt.room) ? 3 : 0;
@@ -650,12 +758,12 @@
     Sound.setBreath(Hunt.dead ? 0 : clamp(1 - nearest / (R * 4.5), 0, 1), nearPan);
   }
 
-  function die(g) {
+  function die(g, kind = 'ghost') {
     Hunt.dead = true;
     const gi = g.gi;
-    Hunt.deathInfo = { gi, t: performance.now() };
+    Hunt.deathInfo = { gi, kind, t: performance.now() };
     const tr = torchRoom();
-    socket.emit('died', { ghost: gi, x: tr.u, y: tr.v }, (res) => {
+    socket.emit('died', { ghost: gi, zombie: kind === 'zombie', x: tr.u, y: tr.v }, (res) => {
       if (res && res.ok && Hunt.deathInfo) {
         $('death-sub').textContent = res.dropped ? `You dropped ${res.dropped} soul${res.dropped === 1 ? '' : 's'}. They are on the floor somewhere.` : 'Your pumpkin is safe. Your souls, less so.';
       }
@@ -668,7 +776,7 @@
       shaker.add(22);
     }
     const el = $('death');
-    $('death-title').textContent = `You were taken by the ${S.GHOSTS[gi].name}.`;
+    $('death-title').textContent = kind === 'zombie' ? `The ${S.ZOMBIES[gi].name} dragged you into the dark.` : `You were taken by the ${S.GHOSTS[gi].name}.`;
     $('death-sub').textContent = '';
     setTimeout(() => Hunt.dead && (el.hidden = false), isMild() ? 250 : 120);
     const start = performance.now();
@@ -846,7 +954,25 @@
     const R = Hunt.baseRadius() * (1 + (fl - 1) * 0.6);
     view.layout(W, H, Hunt.torch, dt);
     huntEvents(now, paused);
-    if (!paused && Hunt.ready) updateGhosts(dt, now, R);
+    if (!paused && Hunt.ready) {
+      updateGhosts(dt, now, R);
+      updateZombies(dt, now, R);
+    }
+    // the body follows the light: facing, speed, stride
+    const mvx = Hunt.torch.x - Hunt.prev.x;
+    const mv = Math.hypot(mvx, Hunt.torch.y - Hunt.prev.y);
+    Hunt.prev = { x: Hunt.torch.x, y: Hunt.torch.y };
+    Hunt.speed = lerp(Hunt.speed, mv / Math.max(dt, 0.001), 0.15);
+    if (Math.abs(mvx) > 1.5) Hunt.facing = mvx < 0 ? -1 : 1;
+    Hunt.stride += Math.min(mv, 40) * 0.06;
+    if (!paused && !Hunt.dead) sendPos(now);
+    for (const q of peers.values()) {
+      const k = Math.min(1, dt * 8);
+      const step = Math.hypot(q.tu - q.u, q.tv - q.v);
+      q.u += (q.tu - q.u) * k;
+      q.v += (q.tv - q.v) * k;
+      q.stride += Math.min(step * 900, 6) * k;
+    }
 
     // footsteps as the light moves
     if (Hunt.walk > 160 && now - Hunt.lastStep > 340 && !paused) {
@@ -868,6 +994,13 @@
         lights.push({ u: r.u, v: r.v, intensity: 2.2 * k, color: [1, 0.5, 0.12] });
       }
     }
+    // other players' lanterns light the room around them (nearest two)
+    [...peers.values()]
+      .filter((q) => !q.d)
+      .map((q) => ({ q, sp: view.toScreen(q.u, q.v) }))
+      .sort((a, b) => Math.hypot(a.sp.x - Hunt.torch.x, a.sp.y - Hunt.torch.y) - Math.hypot(b.sp.x - Hunt.torch.x, b.sp.y - Hunt.torch.y))
+      .slice(0, 2)
+      .forEach(({ q }) => lights.push({ u: q.u, v: q.v, intensity: 0.7 * flicker(t, q.u * 9, 0.04), color: [1, 0.55, 0.2] }));
     const torchOn = Hunt.ready && !Hunt.dead;
     view.render(
       {
@@ -954,6 +1087,29 @@
       drawFlame(ctx, sp.x, sp.y, s, t);
     }
 
+    // other players: faint figures carrying their own lanterns
+    const bh = bodyH(R);
+    for (const [name, q] of peers) {
+      if (q.d) continue;
+      const sp = view.toScreen(q.u, q.v);
+      const L = lightAt(sp.x, sp.y + bh * 0.4, R);
+      PS.drawBody(ctx, q.c, sp.x, sp.y, bh * 0.92, { facing: q.f, phase: q.stride, walk: q.w ? 1 : 0, alpha: 0.28 + 0.5 * L, t, color: T.bone });
+      ctx.save();
+      ctx.globalAlpha = 0.4 + 0.4 * L;
+      ctx.fillStyle = T.ash;
+      ctx.font = 'italic 500 15px Fraunces, Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(name, sp.x - (q.f < 0 ? -1 : 1) * bh * 0.28, sp.y + bh * 0.95);
+      ctx.restore();
+    }
+    // zombies: only light shows them
+    for (const z of Hunt.zombies) {
+      if (z.sx == null) continue;
+      const L = lightAt(z.sx + z.f * z.h * 0.1, z.sy - z.h * 0.55, R);
+      PS.drawZombie(ctx, z.sx, z.sy, z.h, { facing: z.f, light: L * 0.9, t: t + z.seed, seed: z.seed, alpha: 0.05 + 0.9 * L });
+    }
+
     // ghosts: a faint shape in the dark, real in the light
     const gs = ghostPx();
     for (const g of Hunt.ghosts) {
@@ -1003,7 +1159,7 @@
       const invis = now < Hunt.invisUntil;
       ctx.save();
       ctx.globalAlpha = invis ? 0.3 + 0.2 * Math.sin(t * 8) : 0.92;
-      PS.drawSil(ctx, me.costume, Hunt.torch.x, Hunt.torch.y, Math.max(28, R * 0.34), T.bone);
+      PS.drawBody(ctx, me.costume, Hunt.torch.x, Hunt.torch.y, bodyH(R), { facing: Hunt.facing, phase: Hunt.stride, walk: clamp(Hunt.speed / 300, 0, 1), alpha: invis ? 0.3 + 0.2 * Math.sin(t * 8) : 1, t, color: T.bone });
       ctx.restore();
     }
 
@@ -1114,7 +1270,17 @@
     const mild = isMild();
     const zoom = mild ? 1 : 1 + Math.max(0, 0.35 - k) * 1.6;
     const size = Math.min(r.W, r.H) * 0.62 * zoom;
-    PS.drawGhost(c, info.gi, r.W / 2, r.H * 0.4, size, k, mild ? clamp(k * 1.2, 0, 0.9) : 0.95);
+    if (info.kind === 'zombie') {
+      c.save();
+      c.globalAlpha = mild ? clamp(k * 1.2, 0, 1) : 1;
+      const bg = c.createRadialGradient(r.W / 2, r.H * 0.36, 0, r.W / 2, r.H * 0.36, size * 0.8);
+      bg.addColorStop(0, PS.hexA(T.blood, 0.22));
+      bg.addColorStop(1, PS.hexA(T.blood, 0));
+      c.fillStyle = bg;
+      c.fillRect(0, 0, r.W, r.H);
+      PS.drawZombie(c, r.W / 2 - size * 0.15, r.H * 0.57, size * 0.62, { facing: 1, light: 0.6, t: k, alpha: 1 });
+      c.restore();
+    } else PS.drawGhost(c, info.gi, r.W / 2, r.H * 0.4, size, k, mild ? clamp(k * 1.2, 0, 0.9) : 0.95);
   }
 
   // ===================================================================
@@ -1205,6 +1371,12 @@
       },
       get ghosts() {
         return Hunt.ghosts.map((g) => ({ x: g.sx, y: g.sy }));
+      },
+      get zombies() {
+        return Hunt.zombies.filter((z) => z.sx != null).map((z) => ({ x: z.sx + z.f * z.h * 0.22, y: z.sy - z.h * 0.65 }));
+      },
+      get peers() {
+        return [...peers.keys()];
       },
       get room() {
         return Hunt.room;

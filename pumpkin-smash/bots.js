@@ -24,7 +24,7 @@ function makeBot(i) {
   const name = `${rand(FIRST)}${i + 1}`.slice(0, S.MAX_NAME);
   const costume = rand(S.COSTUMES).id;
   const sock = io(URL, { transports: ['websocket'], reconnection: true });
-  const bot = { name, sock, items: new Map(), me: null, state: null, dead: false, busy: false };
+  const bot = { name, sock, items: new Map(), me: null, state: null, dead: false, busy: false, u: Math.random(), v: 0.5, tu: Math.random(), tv: 0.6 };
 
   sock.on('connect', () => {
     sock.emit('join', { name, costume, token: bot.token }, (res) => {
@@ -109,6 +109,22 @@ async function main() {
     await sleep(40);
   }
   setInterval(() => bots.forEach((b) => Math.random() < 0.6 && act(b)), 450);
+  // bots sweep their lanterns around the room so real players can see them
+  setInterval(() => {
+    for (const b of bots) {
+      if (!b.state || b.state.phase !== 'HUNT' || b.dead) continue;
+      if (Math.hypot(b.tu - b.u, b.tv - b.v) < 0.02) {
+        b.tu = 0.1 + Math.random() * 0.8;
+        b.tv = 0.35 + Math.random() * 0.55;
+      }
+      const du = b.tu - b.u;
+      const dv = b.tv - b.v;
+      const d = Math.hypot(du, dv) || 1;
+      b.u += (du / d) * 0.02;
+      b.v += (dv / d) * 0.02;
+      b.sock.volatile.emit('pos', { u: b.u, v: b.v, f: du < 0 ? -1 : 1, w: true });
+    }
+  }, 150);
 
   let lastPhase = '';
   const watcher = bots[0];

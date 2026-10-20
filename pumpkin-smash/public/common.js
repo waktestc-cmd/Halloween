@@ -504,6 +504,182 @@
     ctx.restore();
   }
 
+  // A player: their costume bust on a cut-paper body, holding the lantern up at (x, y).
+  // o: facing (-1/1), phase (walk cycle), walk (0..1), alpha, color, lantern (draw it), t
+  function drawBody(ctx, id, x, y, h, o = {}) {
+    if (!(h > 6)) return;
+    const f = o.facing < 0 ? -1 : 1;
+    const ph = o.phase || 0;
+    const walk = clamp(o.walk || 0, 0, 1);
+    const swing = Math.sin(ph) * 0.42 * walk;
+    const bob = Math.abs(Math.sin(ph)) * h * 0.03 * walk;
+    const col = o.color || T.bone;
+    const alpha = o.alpha != null ? o.alpha : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // feet sit below and behind the lantern hand
+    ctx.translate(x - f * h * 0.3, y + h * 0.9 - bob);
+    ctx.scale(f, 1);
+    ctx.fillStyle = col;
+    const leg = (a, dx) => {
+      ctx.save();
+      ctx.translate(dx, -h * 0.36);
+      ctx.rotate(a);
+      ctx.beginPath();
+      ctx.moveTo(-h * 0.055, 0);
+      ctx.lineTo(h * 0.055, 0);
+      ctx.lineTo(h * 0.035, h * 0.33);
+      ctx.lineTo(h * 0.1, h * 0.345);
+      ctx.lineTo(h * 0.1, h * 0.37);
+      ctx.lineTo(-h * 0.04, h * 0.37);
+      ctx.lineTo(-h * 0.035, h * 0.33);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+    leg(-swing, -h * 0.04);
+    leg(swing, h * 0.04);
+    // coat
+    ctx.beginPath();
+    ctx.moveTo(-h * 0.15, -h * 0.64);
+    ctx.lineTo(h * 0.15, -h * 0.64);
+    ctx.lineTo(h * 0.14, -h * 0.3);
+    ctx.lineTo(h * 0.05, -h * 0.27);
+    ctx.lineTo(-h * 0.03, -h * 0.31);
+    ctx.lineTo(-h * 0.15, -h * 0.28);
+    ctx.closePath();
+    ctx.fill();
+    // the free arm swings with the stride
+    ctx.save();
+    ctx.translate(-h * 0.12, -h * 0.6);
+    ctx.rotate(swing * 0.8 + 0.08);
+    ctx.beginPath();
+    ctx.moveTo(-h * 0.035, 0);
+    ctx.lineTo(h * 0.035, 0);
+    ctx.lineTo(h * 0.025, h * 0.27);
+    ctx.lineTo(-h * 0.03, h * 0.27);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // the lantern arm reaches up to the hand
+    ctx.beginPath();
+    ctx.moveTo(h * 0.07, -h * 0.64);
+    ctx.lineTo(h * 0.15, -h * 0.6);
+    ctx.lineTo(h * 0.33, -h * 0.88);
+    ctx.lineTo(h * 0.27, -h * 0.92);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // head and shoulders: the costume
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x - f * h * 0.3, y + h * 0.9 - bob);
+    ctx.scale(f, 1);
+    drawSil(ctx, id, 0, -h * 0.79, h * 0.46, col);
+    ctx.restore();
+    if (o.lantern !== false) drawLantern(ctx, x, y + h * 0.05, h * 0.16, o.t || 0, alpha);
+  }
+
+  // a small hand lantern: the one light every player carries
+  function drawLantern(ctx, x, y, s, t, alpha = 1) {
+    const fl = flicker(t, x * 0.01, 0.04);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, s * 2.6 * fl);
+    g.addColorStop(0, hexA(T.ember, 0.55));
+    g.addColorStop(1, hexA(T.flame, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(x - s * 3, y - s * 3, s * 6, s * 6);
+    ctx.fillStyle = T.bone;
+    ctx.fillRect(x - s * 0.08, y - s * 0.75, s * 0.16, s * 0.2);
+    ctx.fillRect(x - s * 0.42, y - s * 0.55, s * 0.84, s * 0.12);
+    ctx.fillRect(x - s * 0.42, y + s * 0.45, s * 0.84, s * 0.12);
+    ctx.fillStyle = T.ember;
+    ctx.fillRect(x - s * 0.3, y - s * 0.43, s * 0.6, s * 0.88);
+    ctx.fillStyle = '#fff3d6';
+    ctx.beginPath();
+    ctx.ellipse(x, y + s * 0.05, s * 0.1, s * 0.22 * fl, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // A zombie: a hunched cut-paper figure, arms out, feet at (x, y). Only light reveals it.
+  // o: facing, light (0..1, how much torchlight falls on it), t
+  function drawZombie(ctx, x, y, h, o = {}) {
+    if (!(h > 6)) return;
+    const f = o.facing < 0 ? -1 : 1;
+    const t = o.t || 0;
+    const L = clamp(o.light || 0, 0, 1);
+    const step = Math.sin(t * 2.2 + (o.seed || 0));
+    const r = Math.round(lerp(13, 122, L));
+    const gcol = Math.round(lerp(11, 112, L));
+    const b = Math.round(lerp(9, 96, L));
+    ctx.save();
+    ctx.globalAlpha = o.alpha != null ? o.alpha : 0.1 + 0.9 * L;
+    ctx.translate(x, y);
+    ctx.scale(f, 1);
+    ctx.rotate(0.05 * step);
+    ctx.fillStyle = `rgb(${r},${gcol},${b})`;
+    // the dragging back leg and the stepping front leg
+    ctx.beginPath();
+    ctx.moveTo(-h * 0.08, -h * 0.42);
+    ctx.lineTo(-h * 0.01, -h * 0.42);
+    ctx.lineTo(-h * 0.1, -h * 0.03);
+    ctx.lineTo(-h * 0.2, 0);
+    ctx.lineTo(-h * 0.21, -h * 0.03);
+    ctx.lineTo(-h * 0.15, -h * 0.06);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-h * 0.01, -h * 0.42);
+    ctx.lineTo(h * 0.08, -h * 0.42);
+    ctx.lineTo(h * (0.12 + 0.04 * step), -h * 0.04);
+    ctx.lineTo(h * (0.18 + 0.04 * step), -h * 0.01);
+    ctx.lineTo(h * (0.04 + 0.04 * step), 0);
+    ctx.closePath();
+    ctx.fill();
+    // hunched torso with a torn hem
+    ctx.beginPath();
+    ctx.moveTo(-h * 0.13, -h * 0.36);
+    for (let i = 0; i <= 6; i++) ctx.lineTo(-h * 0.13 + (i / 6) * h * 0.25, -h * (i % 2 ? 0.31 : 0.37));
+    ctx.lineTo(h * 0.14, -h * 0.44);
+    ctx.lineTo(h * 0.22, -h * 0.74);
+    ctx.lineTo(h * 0.08, -h * 0.82);
+    ctx.lineTo(-h * 0.06, -h * 0.76);
+    ctx.closePath();
+    ctx.fill();
+    // arms reaching out, a little out of step with each other
+    for (const [dy, k] of [
+      [-0.74, 1],
+      [-0.69, -1],
+    ]) {
+      const sway = Math.sin(t * 1.7 + k) * h * 0.02;
+      ctx.beginPath();
+      ctx.moveTo(h * 0.12, h * dy);
+      ctx.lineTo(h * 0.5, h * (dy + 0.03) + sway);
+      ctx.lineTo(h * 0.56, h * (dy + 0.015) + sway);
+      ctx.lineTo(h * 0.55, h * (dy + 0.045) + sway);
+      ctx.lineTo(h * 0.5, h * (dy + 0.07) + sway);
+      ctx.lineTo(h * 0.13, h * (dy + 0.07));
+      ctx.closePath();
+      ctx.fill();
+    }
+    // head, hanging forward
+    ctx.beginPath();
+    ctx.ellipse(h * 0.21, -h * 0.86, h * 0.085, h * 0.1, 0.5, 0, TAU);
+    ctx.fill();
+    // eyes catch the light
+    if (L > 0.12) {
+      ctx.globalAlpha *= L;
+      ctx.fillStyle = T.bone;
+      ctx.beginPath();
+      ctx.arc(h * 0.25, -h * 0.87, h * 0.011, 0, TAU);
+      ctx.arc(h * 0.2, -h * 0.875, h * 0.009, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // =====================================================================
   // Particles: only at events (claim, death, smash). Additive light, flame shards.
   // =====================================================================
@@ -846,6 +1022,38 @@
       });
       noise({ f: 3000, q: 0.6, vol: 0.18, dur: 1.1, ft: 'highpass' });
     };
+    api.groan = (pan, vol = 0.16) => {
+      if (!ensure() || muted) return;
+      const t = ctx.currentTime;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(420, t);
+      bp.frequency.linearRampToValueAtTime(300, t + 1.4);
+      bp.Q.value = 3;
+      const g = ctx.createGain();
+      env(g, t, 0.15, vol, 1.6);
+      bp.connect(g);
+      g.connect(out(pan));
+      [0, 9].forEach((det) => {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(82 + det, t);
+        o.frequency.linearRampToValueAtTime(64 + det, t + 1.5);
+        const l = ctx.createOscillator();
+        const lg = ctx.createGain();
+        l.frequency.value = 6;
+        lg.gain.value = 5;
+        l.connect(lg);
+        lg.connect(o.frequency);
+        o.connect(bp);
+        o.start(t);
+        l.start(t);
+        o.stop(t + 1.65);
+        l.stop(t + 1.65);
+      });
+      noise({ f: 600, q: 2, vol: vol * 0.4, dur: 1.2, pan });
+    };
+    api.shuffle = (pan, vol = 0.07) => noise({ f: 320, f2: 180, q: 0.8, vol, dur: 0.35, ft: 'lowpass', pan });
     api.moan = () => {
       tone({ f: 220, f2: 98, type: 'triangle', vol: 0.16, dur: 1.4, vib: [4, 6], lp: 900 });
       tone({ f: 165, f2: 82, type: 'sine', vol: 0.1, dur: 1.5 });
@@ -1139,6 +1347,9 @@
     drawHammer,
     drawSoul,
     drawGhost,
+    drawBody,
+    drawLantern,
+    drawZombie,
     Particles,
     Shaker,
     Sound,

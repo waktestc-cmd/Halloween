@@ -98,6 +98,22 @@ class Game {
     setInterval(() => this.tick(), 100);
     setInterval(() => this.flush(true), 1000);
     setInterval(() => this.flush(false), 200);
+    setInterval(() => this.sendPeers(), 150);
+  }
+
+  // Everyone in a room sees the others in it: lantern position, facing, walking.
+  sendPeers() {
+    if (this.phase !== 'HUNT') return;
+    const now = Date.now();
+    const byRoom = S.ROOMS.map(() => []);
+    for (const p of this.players.values()) {
+      if (!p.connected || p.room == null || !p.pos || now - p.pos.t > 4000) continue;
+      byRoom[p.room].push({ n: p.name, c: p.costume, u: p.pos.u, v: p.pos.v, f: p.pos.f, w: p.pos.w, d: p.deadUntil > now ? 1 : 0 });
+    }
+    for (const p of this.players.values()) {
+      if (!p.connected || !p.socketId || p.room == null) continue;
+      this.io.to(p.socketId).volatile.emit('peers', byRoom[p.room].filter((q) => q.n !== p.name));
+    }
   }
 
   resetGameState() {
@@ -224,6 +240,7 @@ class Game {
     p.hammer = false;
     p.vote = null;
     p.deadUntil = 0;
+    p.pos = null;
     p.room = newRoom ? rint(NROOMS) : null;
   }
 
@@ -683,6 +700,7 @@ class Game {
       p.lastDoor = now;
       const others = [0, 1, 2, 3, 4].filter((r) => r !== p.room);
       p.room = pick(others);
+      p.pos = null;
       ack({ ok: true, room: p.room });
       this.sendMe(p);
       this.markDirty();
@@ -711,7 +729,10 @@ class Game {
         }
       }
       const gi = Number.isInteger(data.ghost) && S.GHOSTS[data.ghost] ? data.ghost : p.room || 0;
-      this.addFeed('death', p.key, `${p.name} was taken by the ${S.GHOSTS[gi].name}.`, { ghost: gi });
+      if (data.zombie) {
+        const z = S.ZOMBIES[gi].name;
+        this.addFeed('death', p.key, say([`${p.name} was dragged off by the ${z}.`, `The ${z} got ${p.name}.`]), { ghost: gi, zombie: true });
+      } else this.addFeed('death', p.key, `${p.name} was taken by the ${S.GHOSTS[gi].name}.`, { ghost: gi });
       ack({ ok: true, dropped: drop });
       this.sendMe(p);
     });
@@ -720,6 +741,7 @@ class Game {
       const p = me();
       if (!p) return ack({ ok: false });
       p.deadUntil = 0;
+      p.pos = null;
       if (this.phase === 'HUNT') p.room = rint(NROOMS);
       ack({ ok: true, room: p.room });
       this.sendMe(p);
@@ -734,6 +756,13 @@ class Game {
       ack({ ok: true });
       this.sendMe(p);
       this.markDirty();
+    });
+
+    // where this player's lantern is (no ack; sent ~8 times a second while hunting)
+    socket.on('pos', (data) => {
+      const p = me();
+      if (!p || this.phase !== 'HUNT' || !data || !this.rateOk(socket, 'pos', 20)) return;
+      p.pos = { u: clamp01(data.u), v: clamp01(data.v), f: data.f < 0 ? -1 : 1, w: !!data.w, t: Date.now() };
     });
 
     socket.on('disconnect', () => {
