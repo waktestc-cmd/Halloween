@@ -26,6 +26,7 @@ Each author listed here also appears under "Sounds" in the end credits (`SOUND_C
 | Sound | File | Source | Author | Licence |
 | --- | --- | --- | --- | --- |
 | The house laughing as the game starts (host and phones) | `public/sounds/evil-laugh.wav` | `evillaugh.ogg`, supplied by the team; converted to WAV so older iPhones can play it. Originally from Plants vs. Zombies (PopCap/EA). | PopCap/EA | **Not cleared yet**: the team is obtaining the rights. Replace it if they can't be obtained. |
+| Zombie groan, near you in the dark (pitch varied 0.88–1.04×) | `public/sounds/zombie-groan.wav` | `Firefly-zombie_attack_and_bite.wav`, supplied by the team (the file name suggests Adobe Firefly); mixed to mono | Supplied by the team | **To confirm**: the team is handling the rights |
 | Zombie wind-up snarl (played at 0.74–0.84× speed) | `public/sounds/zombie-snarl.wav` | [Orc Grunt 3](https://freesound.org/people/qubodup/sounds/738439/) on Freesound | qubodup | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 Regenerate the rooms with `python3 tools/paint_rooms.py` (needs numpy and Pillow; add

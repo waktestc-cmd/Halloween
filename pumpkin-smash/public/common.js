@@ -1110,6 +1110,12 @@
     };
     api.groan = (pan, vol = 0.16) => {
       if (!ensure() || muted) return;
+      const buf = decoded('groan');
+      if (buf) {
+        // a recorded snarl and bite; pitch varies a little so it never repeats exactly
+        play(buf, { pan, rate: rand(0.88, 1.04), vol: vol * (api.mild ? 1.6 : 3.5) });
+        return;
+      }
       const t = ctx.currentTime;
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass';
@@ -1176,6 +1182,7 @@
     }
     sample('snarl', '/sounds/zombie-snarl.wav');
     sample('laugh', '/sounds/evil-laugh.wav');
+    sample('groan', '/sounds/zombie-groan.wav');
     api.preload = () => Object.keys(samples).forEach(decoded);
 
     api.snarl = (pan) => {
