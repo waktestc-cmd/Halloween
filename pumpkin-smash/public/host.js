@@ -66,6 +66,7 @@
       slotFx.forEach((f) => (f.holder = null));
     }
     handleFeed(s.feed, !prev);
+    if (prev && prev.phase === 'LOBBY' && s.phase === 'RULES') Sound.laugh();
     renderControls();
     render();
   });

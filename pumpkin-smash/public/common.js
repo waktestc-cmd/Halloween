@@ -1175,6 +1175,7 @@
       src.start(t);
     }
     sample('snarl', '/sounds/zombie-snarl.wav');
+    sample('laugh', '/sounds/evil-laugh.wav');
     api.preload = () => Object.keys(samples).forEach(decoded);
 
     api.snarl = (pan) => {
@@ -1188,6 +1189,12 @@
       }
       [0, 7].forEach((det) => tone({ f: 70 + det, f2: 150 + det, glide: 0.5, type: 'sawtooth', vol: v, dur: 0.6, lp: 700, vib: [11, 9], pan }));
       noise({ f: 900, f2: 1600, q: 1.5, vol: v * 0.6, dur: 0.55, pan });
+    };
+    // the house laughs as the doors open
+    api.laugh = () => {
+      const buf = decoded('laugh');
+      if (buf) play(buf, { vol: api.mild ? 0.4 : 0.95 });
+      else api.sting();
     };
     // a swipe that connects: air, then a dull thud
     api.hurt = (pan) => {

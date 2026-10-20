@@ -211,6 +211,7 @@
     state = s;
     timerBase = { remaining: s.remaining, at: performance.now(), paused: s.paused };
     if (prev && prev.gameId !== s.gameId) resetLocal();
+    if (joined && prev && prev.phase === 'LOBBY' && s.phase === 'RULES') Sound.laugh();
     $('paused').hidden = !(s.paused && joined);
     if (joined) render();
   });
