@@ -68,7 +68,7 @@ Target feel: Amnesia-style dread. A real room you can't see, revealed only by yo
 
 Approach: 2.5D fixed-camera rooms with dynamic torch lighting (not free-roam 3D, so it stays point-and-click for non-gamers and avoids motion sickness).
 
-* Each of the 5 rooms is a single high-resolution painted background (1920×1080+): Hall, Attic, Crypt, Swamp, Chapel. One consistent style across all five: desaturated, painterly, Victorian gothic, rendered as if lit only by a lantern.
+* *(Now twelve rooms, painted by the team with AI image generation; see ASSETS.md.)* Each of the 5 rooms is a single high-resolution painted background (1920×1080+): Hall, Attic, Crypt, Swamp, Chapel. One consistent style across all five: desaturated, painterly, Victorian gothic, rendered as if lit only by a lantern.
 * Each background has a normal map and a depth map. The torch is a real 2D light (WebGL shader): surfaces catch light by their normals, so walls, beams and furniture look 3D as the torch moves. The base ambient is ~2%, so the room is almost invisible.
 * Parallax: 2–3 layers (far wall, mid furniture, foreground silhouettes such as chair backs and cobwebs) shift slightly with the mouse.
 * Atmosphere: film grain, a heavy vignette, slow dust motes visible only inside the torch beam, an occasional distant sound with a matching visual (a door at the edge of the room swings, a candle somewhere flares and dies).

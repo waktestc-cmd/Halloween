@@ -5,8 +5,31 @@ Players hunt through a pitch-dark haunted house with a torch. Six of them find n
 one finds the hammer, and everyone collects souls (vote weight). The room votes on which pumpkin
 to smash. One of the six secretly holds **Friday afternoon off**, an exact 1-in-6 chance.
 
+Built to be easy for people who don't play games: everything is one click, the lantern says what a click
+will do ("Open the wardrobe"), and nothing kills you without warning.
+
+**The house** has twelve rooms over four floors. It opens about one room for every two or three players
+and more each act, so it is never empty. Doors lead to the quietest open room.
+
+**Hidden pumpkins**: pumpkins and the hammer hide inside the furniture. A hidden pumpkin glows through
+the cracks; one click opens a wardrobe, chest or oven. Empty ones sometimes hold a soul.
+
+**Residents**, one per room, each with one rule. Light on them and they stop; if one reaches you, you
+get a fright and drop a soul, never a death:
+
+| Room | Resident | Rule |
+| --- | --- | --- |
+| Kitchen | Michael Myers | Comes closer while your light is elsewhere. Your light stops him; three seconds of it sends him away. |
+| Lake | Jason | Rises out of the water, then the same as Michael. |
+| Chapel | Valak | Steps out of the painting if you stop watching it, then the same. |
+| Parlour | Samara | The television turns itself on; what crawls out stops in your light. |
+| Nursery | Annabelle | Moves closer every time you look away. |
+| Boiler room | Freddy | Comes if you stand still. Keep moving. |
+| Hall | Ghostface | The telephone rings. Answer it for a fright and two souls. |
+| Cellar | Pennywise | Do not take the balloon. |
+
 * Node.js + Express + Socket.io, all state in memory, single process, single room.
-* Plain HTML/CSS/JS. The hunt is a WebGL torch lighting five painted rooms (with a Canvas 2D fallback);
+* Plain HTML/CSS/JS. The hunt is a WebGL torch lighting twelve painted rooms (with a Canvas 2D fallback);
   everything else is drawn in code. Sound is synthesised with Web Audio, plus a few CC BY recordings
   credited in `ASSETS.md` and the end credits.
 * Full spec: [SPEC.md](SPEC.md). Visual direction: [ART_DIRECTION.md](ART_DIRECTION.md) ("light is the only colour").
@@ -111,11 +134,11 @@ The command prints the service URL. Players use `https://…run.app/`, and you o
   3D position is rebuilt from the depth map and lit through its normal, with depth parallax, a foreground
   silhouette layer, door-crack and candle lights, film grain and a heavy vignette. Falls back to a Canvas 2D
   radial mask without WebGL (force it with `?nogl=1`).
-* `public/player.js`: the hunt in room space (items rest on the painted surfaces; the camera pans toward the
-  torch so phones in portrait can look around), client-side ghosts (Hollow Butler, Rag Doll Wraith, Bone
-  Warden, Drowned Bride, Choir Shade) and floor-bound zombies (one per room, two in act 3) that shamble toward
-  your light. A zombie never kills on touch: it rears up and snarls (the warning), then swipes; move the light
-  away in time and it misses. Your lantern takes three hits (the three flames in the HUD) and relights one
+* `public/player.js`: the hunt in room space (souls rest on the painted floor, pumpkins hide in the furniture;
+  the camera pans toward the torch so phones in portrait can look around), client-side ghosts (one per room)
+  and floor-bound zombies (in rooms without a resident; two in act 3) that shamble toward your light. A zombie
+  never kills on touch: it rears up and snarls (the warning), then swipes; move the light away in time and it
+  misses. Your lantern takes three hits from a zombie or a ghost (the three flames in the HUD) and relights one
   notch after 20 s without a hit. The other players in your room as their lanterns and silhouettes (their light reveals the room
   around them), doors that open a crack of light, dust in the beam, hints, death and respawn; plus join,
   pitches, vote, smash and result.
@@ -124,7 +147,10 @@ The command prints the service URL. Players use `https://…run.app/`, and you o
 * `public/common.js`: design tokens, the 12 cut-paper costume silhouettes, pumpkins (unlit / lit), hammer,
   souls, smoke ghosts, event-only particles, the smash/result stage (with a 120 ms hit-stop), and the Web Audio
   synth (drones, creaks, footsteps, breathing, whispers, scream, drumroll, boom, bells).
-* `tools/paint_rooms.py`: paints the five rooms and their normal/depth maps, and writes `public/rooms/rooms.json`.
+* `tools/build_rooms.py`: turns the team's room paintings and character images into the game's files:
+  each painting plus normal and depth maps from its one-point perspective, `public/rooms/rooms.json`
+  (doors, hiding places, floors, where residents stand) and the WebP sprites in `public/sprites/`.
+* `public/residents.js`: the eight residents, one per room, each with one easy rule.
   See [ASSETS.md](ASSETS.md) for swapping in painted rooms.
 * `public/shared.js`: rooms, costumes, ghosts and events, shared by the server, clients and bots.
 * `bots.js`: the bot simulator.

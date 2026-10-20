@@ -763,6 +763,78 @@
   }
 
   // =====================================================================
+  // Painted sprites (public/sprites/*.webp): the residents, their close-ups and the zombies.
+  // Drawn lit by the lantern: full colour in the beam, falling off to ink outside it.
+  // =====================================================================
+  const sprites = {};
+  function sprite(name) {
+    let s = sprites[name];
+    if (!s) {
+      s = sprites[name] = new Image();
+      s.decoding = 'async';
+      s.src = '/sprites/' + name + '.webp';
+    }
+    return s.complete && s.naturalWidth ? s : null;
+  }
+  let sbuf = null;
+  // feet at (x, y), h tall. o: torch {x, y}, R (beam radius), facing, alpha (how much shows in
+  // the dark), rot (radians, about the feet), sx/sy (squash), clip (y above which to hide: water)
+  function drawLitSprite(dest, img, x, y, h, o = {}) {
+    if (!img || !(h > 4)) return;
+    const w = (h * img.naturalWidth) / img.naturalHeight;
+    const m = dest.getTransform ? dest.getTransform() : { a: 1, b: 0 };
+    const px = Math.max(0.5, Math.min(2, Math.hypot(m.a, m.b)));
+    const bw = Math.ceil(w * px) + 2;
+    const bh = Math.ceil(h * px) + 2;
+    if (!sbuf) sbuf = document.createElement('canvas');
+    if (sbuf.width < bw || sbuf.height < bh) {
+      sbuf.width = Math.max(sbuf.width, bw);
+      sbuf.height = Math.max(sbuf.height, bh);
+    }
+    const c = sbuf.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalCompositeOperation = 'source-over';
+    c.clearRect(0, 0, bw + 2, bh + 2);
+    const f = o.facing < 0 ? -1 : 1;
+    if (f < 0) {
+      c.translate(bw, 0);
+      c.scale(-1, 1);
+    }
+    c.drawImage(img, 0, 0, bw - 2, bh - 2);
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    if (o.torch) {
+      // darkness everywhere the beam does not reach, warmth where it does
+      c.globalCompositeOperation = 'source-atop';
+      const tx = (o.torch.x - (x - w / 2)) * px;
+      const ty = (o.torch.y - (y - h)) * px;
+      const R = (o.R || 150) * px;
+      const g = c.createRadialGradient(tx, ty, R * 0.15, tx, ty, R * 1.35);
+      g.addColorStop(0, 'rgba(10,9,8,0)');
+      g.addColorStop(0.55, 'rgba(10,9,8,0.45)');
+      g.addColorStop(1, 'rgba(10,9,8,0.97)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, bw, bh);
+      const warm = c.createRadialGradient(tx, ty, 0, tx, ty, R);
+      warm.addColorStop(0, 'rgba(255,150,60,0.22)');
+      warm.addColorStop(1, 'rgba(255,122,26,0)');
+      c.fillStyle = warm;
+      c.fillRect(0, 0, bw, bh);
+    }
+    dest.save();
+    dest.globalAlpha *= o.alpha != null ? o.alpha : 1;
+    dest.translate(x, y);
+    if (o.rot) dest.rotate(o.rot);
+    dest.scale(o.sx || 1, o.sy || 1);
+    if (o.clip != null) {
+      dest.beginPath();
+      dest.rect(-w, o.clip - y - h * 2, w * 2, h * 2);
+      dest.clip();
+    }
+    dest.drawImage(sbuf, 0, 0, bw - 2, bh - 2, -w / 2, -h, w, h);
+    dest.restore();
+  }
+
+  // =====================================================================
   // Particles: only at events (claim, death, smash). Additive light, flame shards.
   // =====================================================================
   class Particles {
@@ -1209,6 +1281,36 @@
       tone({ f: 120, f2: 40, type: 'sine', vol: api.mild ? 0.3 : 0.6, dur: 0.45, a: 0.004, at: 0.06 });
       noise({ f: 300, q: 0.7, vol: 0.3, dur: 0.3, ft: 'lowpass', at: 0.06 });
     };
+    // an old telephone bell: two short rings
+    api.ring = (pan) => {
+      for (const at of [0, 0.42]) {
+        for (let i = 0; i < 9; i++) {
+          tone({ f: 1320, type: 'triangle', vol: 0.05, dur: 0.035, at: at + i * 0.04, pan });
+          tone({ f: 1760, type: 'sine', vol: 0.03, dur: 0.035, at: at + i * 0.04 + 0.02, pan });
+        }
+      }
+    };
+    // a child's giggle, high and wrong
+    api.giggle = (pan) => {
+      [0, 0.13, 0.25, 0.36].forEach((at, i) => tone({ f: 620 - i * 30, f2: 820 - i * 40, glide: 0.08, type: 'sine', vol: 0.06, dur: 0.11, at, vib: [22, 30], pan }));
+    };
+    // one, two: a music box
+    api.lullaby = () => {
+      [659, 784, 659, 523, 587, 494].forEach((f, i) => tone({ f, type: 'sine', vol: 0.05, dur: 0.5, at: i * 0.34, a: 0.005 }));
+      [659, 784, 659, 523, 587, 494].forEach((f, i) => tone({ f: f * 2, type: 'sine', vol: 0.015, dur: 0.3, at: i * 0.34 + 0.01 }));
+    };
+    // a television full of snow
+    api.static = (pan, dur = 1.2) => noise({ f: 3500, q: 0.4, vol: 0.06, dur, ft: 'highpass', pan });
+    // something heavy comes up out of the water
+    api.splash = (pan) => {
+      noise({ f: 900, f2: 200, q: 0.6, vol: 0.18, dur: 0.9, ft: 'lowpass', pan });
+      noise({ f: 2600, q: 0.8, vol: 0.05, dur: 0.5, at: 0.1, pan });
+    };
+    // a door hinge giving, a drawer coming out
+    api.open = (pan) => {
+      noise({ f: 700, f2: 1100, q: 6, vol: 0.06, dur: 0.35, pan });
+      noise({ f: 180, q: 1, vol: 0.1, dur: 0.15, at: 0.3, ft: 'lowpass', pan });
+    };
     // the lantern catching again
     api.relight = () => {
       noise({ f: 1800, q: 0.8, vol: 0.06, dur: 0.4, ft: 'highpass' });
@@ -1293,10 +1395,10 @@
         [0.5, 1, 1.003],
         [1, 1.01, 1.498],
         [1, 1.5, 2, 3],
-      ][roomIdx];
+      ][roomIdx % 5]; // twelve rooms share five voicings; each has its own pitch
       ratios.forEach((r, i) => {
         const o = ctx.createOscillator();
-        o.type = roomIdx === 4 && i ? 'triangle' : 'sawtooth';
+        o.type = roomIdx % 5 === 4 && i ? 'triangle' : 'sawtooth';
         o.frequency.value = base * r;
         const og = ctx.createGain();
         og.gain.value = i === 0 ? 0.6 : 0.3;
@@ -1509,6 +1611,8 @@
     drawGhost,
     drawLantern,
     drawZombie,
+    sprite,
+    drawLitSprite,
     Particles,
     Shaker,
     Sound,

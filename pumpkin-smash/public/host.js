@@ -253,7 +253,7 @@
         cr.appendChild(d);
       };
       add('Most souls', r.awards.souls, 'souls', 0);
-      add('Most haunted', r.awards.haunted, 'deaths', 1);
+      add('Most haunted', r.awards.haunted, 'times', 1);
       add('Hammer hero', r.awards.hammer, '', 2);
       const snd = el('div', 'credit fine');
       snd.style.animationDelay = 4.6 + 3 * 0.6 + 's';
@@ -500,7 +500,7 @@
         c.font = `italic 500 ${Math.round(clamp(h * 0.06, 13, 22))}px Fraunces, Georgia, serif`;
         c.textAlign = 'center';
         c.textBaseline = 'top';
-        c.fillText(pk.room != null ? `loose in the ${S.ROOMS[pk.room].name.toLowerCase()}` : 'loose', x, shelfY + h * 0.12, slot * 0.95);
+        c.fillText(pk.room != null ? `hidden ${S.ROOMS[pk.room].at}` : 'hidden', x, shelfY + h * 0.12, slot * 0.95);
       } else {
         c.globalAlpha = 0.22;
         PS.drawPumpkin(c, x, y, size, pk.n, { line: 1.5 });
@@ -538,13 +538,9 @@
     c.restore();
   }
 
-  const PLAN = {
-    attic: [0.3, 0.0, 0.4, 0.22],
-    chapel: [0.0, 0.26, 0.28, 0.42],
-    hall: [0.3, 0.26, 0.4, 0.42],
-    crypt: [0.3, 0.74, 0.4, 0.26],
-    swamp: [0.74, 0.14, 0.26, 0.66],
-  };
+  // the floor plan: one row per floor (upstairs, ground floor, below, the grounds)
+  const PLAN = {};
+  S.FLOORS.forEach((fl, fi) => fl.rooms.forEach((ri, j) => (PLAN[S.ROOMS[ri].id] = [j / fl.rooms.length, fi / S.FLOORS.length, 1 / fl.rooms.length, 1 / S.FLOORS.length])));
   function drawPlan(c, w, h, t) {
     c.clearRect(0, 0, w, h);
     const byRoom = S.ROOMS.map(() => []);
@@ -569,12 +565,14 @@
         c.fillStyle = hexA(T.wraith, 0.08);
         c.fillRect(x, y, rw, rh);
       }
-      c.strokeStyle = hexA(T.bone, 0.5);
+      // rooms not yet open are a faint dotted outline
+      const shut = ri >= (state.open || S.ROOMS.length);
+      c.strokeStyle = hexA(T.bone, shut ? 0.14 : 0.5);
       c.lineWidth = 1;
-      c.setLineDash(room.id === 'swamp' ? [4, 5] : []);
+      c.setLineDash(shut ? [3, 5] : []);
       c.strokeRect(x + 0.5, y + 0.5, rw, rh);
       c.setLineDash([]);
-      c.fillStyle = T.ash;
+      c.fillStyle = shut ? hexA(T.ash, 0.4) : T.ash;
       c.font = 'italic 500 14px Fraunces, Georgia, serif';
       c.textAlign = 'left';
       c.textBaseline = 'top';

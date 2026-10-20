@@ -660,6 +660,52 @@ body.hunting #fx {
   margin-right: 7px;
   vertical-align: 2px;
 }
+/* a fright: the resident's face, close, for a moment */
+#scare {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, rgba(10, 9, 8, 0.2), rgba(10, 9, 8, 0.92) 70%);
+}
+#scare img {
+  height: min(96vh, 1100px);
+  max-width: 96vw;
+  object-fit: contain;
+  filter: drop-shadow(0 0 60px rgba(0, 0, 0, 0.9));
+}
+#scare.go {
+  animation: scareBg 1.5s both;
+}
+#scare.go img {
+  animation: scareIn 1.5s var(--settle) both;
+}
+#scare.go.mild,
+#scare.go.mild img {
+  animation-duration: 2s;
+  animation-name: scareSoft;
+}
+@keyframes scareIn {
+  0% { transform: scale(0.55); opacity: 0; }
+  6% { transform: scale(1.12); opacity: 1; }
+  12% { transform: scale(1.04) translateX(-1%); }
+  18% { transform: scale(1.06) translateX(1%); }
+  75% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+@keyframes scareBg {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes scareSoft {
+  0% { opacity: 0; transform: scale(0.96); }
+  25%, 70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; }
+}
+
 /* the lantern's health: three small flames, lit or spent */
 .hp {
   display: inline-flex;

@@ -18,6 +18,8 @@ const FIRST = ['Ghoul', 'Boo', 'Mortimer', 'Wanda', 'Vlad', 'Elvira', 'Igor', 'M
 const rand = (a) => a[Math.floor(Math.random() * a.length)];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const META = require('./public/rooms/rooms.json').rooms;
+const ROOM_META = S.ROOMS.map((r) => META.find((m) => m.id === r.id));
 const stats = { claims: 0, souls: 0, deaths: 0, doors: 0, votes: 0, rejected: 0 };
 
 function makeBot(i) {
@@ -84,8 +86,20 @@ async function act(bot) {
       const want = here.filter(
         (it) => it.t === 's' || (it.t === 'p' && !me.pumpkin && !me.hammer) || (it.t === 'h' && !me.pumpkin && !me.hammer)
       );
+      // pumpkins and the hammer hide in the furniture: bots open things, sometimes the right one
       const special = want.find((it) => it.t !== 's');
-      const target = special && Math.random() < 0.45 ? special : want.length && Math.random() < 0.55 ? rand(want) : null;
+      const nc = (ROOM_META[me.room] && ROOM_META[me.room].containers.length) || 0;
+      if (nc && Math.random() < 0.5) {
+        await sleep(150 + Math.random() * 600);
+        const c = special && special.c != null && Math.random() < 0.35 ? special.c : Math.floor(Math.random() * nc);
+        bot.sock.emit('open', { c }, (r) => {
+          if (r && r.ok && (r.found === 'p' || r.found === 'h') && r.kept !== false) stats.claims++;
+          else if (r && r.ok && r.found === 's') stats.souls++;
+        });
+        return;
+      }
+      const loose = want.filter((it) => it.c == null);
+      const target = loose.length && Math.random() < 0.55 ? rand(loose) : null;
       if (target) {
         await sleep(150 + Math.random() * 600); // "searching"
         bot.sock.emit('claim', { id: target.id }, (r) => {
