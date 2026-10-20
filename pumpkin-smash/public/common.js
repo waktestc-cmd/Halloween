@@ -504,82 +504,6 @@
     ctx.restore();
   }
 
-  // A player: their costume bust on a cut-paper body, holding the lantern up at (x, y).
-  // o: facing (-1/1), phase (walk cycle), walk (0..1), alpha, color, lantern (draw it), t
-  function drawBody(ctx, id, x, y, h, o = {}) {
-    if (!(h > 6)) return;
-    const f = o.facing < 0 ? -1 : 1;
-    const ph = o.phase || 0;
-    const walk = clamp(o.walk || 0, 0, 1);
-    const swing = Math.sin(ph) * 0.42 * walk;
-    const bob = Math.abs(Math.sin(ph)) * h * 0.03 * walk;
-    const col = o.color || T.bone;
-    const alpha = o.alpha != null ? o.alpha : 1;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    // feet sit below and behind the lantern hand
-    ctx.translate(x - f * h * 0.3, y + h * 0.9 - bob);
-    ctx.scale(f, 1);
-    ctx.fillStyle = col;
-    const leg = (a, dx) => {
-      ctx.save();
-      ctx.translate(dx, -h * 0.36);
-      ctx.rotate(a);
-      ctx.beginPath();
-      ctx.moveTo(-h * 0.055, 0);
-      ctx.lineTo(h * 0.055, 0);
-      ctx.lineTo(h * 0.035, h * 0.33);
-      ctx.lineTo(h * 0.1, h * 0.345);
-      ctx.lineTo(h * 0.1, h * 0.37);
-      ctx.lineTo(-h * 0.04, h * 0.37);
-      ctx.lineTo(-h * 0.035, h * 0.33);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    };
-    leg(-swing, -h * 0.04);
-    leg(swing, h * 0.04);
-    // coat
-    ctx.beginPath();
-    ctx.moveTo(-h * 0.15, -h * 0.64);
-    ctx.lineTo(h * 0.15, -h * 0.64);
-    ctx.lineTo(h * 0.14, -h * 0.3);
-    ctx.lineTo(h * 0.05, -h * 0.27);
-    ctx.lineTo(-h * 0.03, -h * 0.31);
-    ctx.lineTo(-h * 0.15, -h * 0.28);
-    ctx.closePath();
-    ctx.fill();
-    // the free arm swings with the stride
-    ctx.save();
-    ctx.translate(-h * 0.12, -h * 0.6);
-    ctx.rotate(swing * 0.8 + 0.08);
-    ctx.beginPath();
-    ctx.moveTo(-h * 0.035, 0);
-    ctx.lineTo(h * 0.035, 0);
-    ctx.lineTo(h * 0.025, h * 0.27);
-    ctx.lineTo(-h * 0.03, h * 0.27);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-    // the lantern arm reaches up to the hand
-    ctx.beginPath();
-    ctx.moveTo(h * 0.07, -h * 0.64);
-    ctx.lineTo(h * 0.15, -h * 0.6);
-    ctx.lineTo(h * 0.33, -h * 0.88);
-    ctx.lineTo(h * 0.27, -h * 0.92);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-    // head and shoulders: the costume
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(x - f * h * 0.3, y + h * 0.9 - bob);
-    ctx.scale(f, 1);
-    drawSil(ctx, id, 0, -h * 0.79, h * 0.46, col);
-    ctx.restore();
-    if (o.lantern !== false) drawLantern(ctx, x, y + h * 0.05, h * 0.16, o.t || 0, alpha);
-  }
-
   // a small hand lantern: the one light every player carries
   function drawLantern(ctx, x, y, s, t, alpha = 1) {
     const fl = flicker(t, x * 0.01, 0.04);
@@ -1347,7 +1271,6 @@
     drawHammer,
     drawSoul,
     drawGhost,
-    drawBody,
     drawLantern,
     drawZombie,
     Particles,

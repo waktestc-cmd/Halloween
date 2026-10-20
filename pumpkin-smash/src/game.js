@@ -101,14 +101,14 @@ class Game {
     setInterval(() => this.sendPeers(), 150);
   }
 
-  // Everyone in a room sees the others in it: lantern position, facing, walking.
+  // Everyone in a room sees the others in it: where their lanterns are.
   sendPeers() {
     if (this.phase !== 'HUNT') return;
     const now = Date.now();
     const byRoom = S.ROOMS.map(() => []);
     for (const p of this.players.values()) {
       if (!p.connected || p.room == null || !p.pos || now - p.pos.t > 4000) continue;
-      byRoom[p.room].push({ n: p.name, c: p.costume, u: p.pos.u, v: p.pos.v, f: p.pos.f, w: p.pos.w, d: p.deadUntil > now ? 1 : 0 });
+      byRoom[p.room].push({ n: p.name, c: p.costume, u: p.pos.u, v: p.pos.v, d: p.deadUntil > now ? 1 : 0 });
     }
     for (const p of this.players.values()) {
       if (!p.connected || !p.socketId || p.room == null) continue;
@@ -762,7 +762,7 @@ class Game {
     socket.on('pos', (data) => {
       const p = me();
       if (!p || this.phase !== 'HUNT' || !data || !this.rateOk(socket, 'pos', 20)) return;
-      p.pos = { u: clamp01(data.u), v: clamp01(data.v), f: data.f < 0 ? -1 : 1, w: !!data.w, t: Date.now() };
+      p.pos = { u: clamp01(data.u), v: clamp01(data.v), t: Date.now() };
     });
 
     socket.on('disconnect', () => {

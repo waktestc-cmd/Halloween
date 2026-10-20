@@ -113,9 +113,9 @@ The command prints the service URL. Players use `https://…run.app/`, and you o
 * `public/player.js`: the hunt in room space (items rest on the painted surfaces; the camera pans toward the
   torch so phones in portrait can look around), client-side ghosts (Hollow Butler, Rag Doll Wraith, Bone
   Warden, Drowned Bride, Choir Shade) and floor-bound zombies (one per room, two in act 3) that shamble toward
-  your light, the other players in your room as faint figures carrying their own lanterns, your own walking
-  cut-paper body holding the lantern, doors that open a crack of light, dust in the beam, hints, death and
-  respawn; plus join, pitches, vote, smash and result.
+  your light, the other players in your room as their lanterns and silhouettes (their light reveals the room
+  around them), doors that open a crack of light, dust in the beam, hints, death and respawn; plus join,
+  pitches, vote, smash and result.
 * `public/host.js`: the broadcast: house-facade lobby, the mantel of six pumpkins, a candle timer, the séance
   log, a floor plan, vote-by-brightness, the smash and end credits.
 * `public/common.js`: design tokens, the 12 cut-paper costume silhouettes, pumpkins (unlit / lit), hammer,

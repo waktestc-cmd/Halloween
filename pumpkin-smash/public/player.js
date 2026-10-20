@@ -456,10 +456,6 @@
     zombies: [],
     lastPos: 0,
     sentPos: null,
-    facing: 1,
-    stride: 0,
-    speed: 0,
-    prev: { x: 0, y: 0 },
     walk: 0,
     lastStep: 0,
     splash: null,
@@ -640,7 +636,7 @@
   }
 
   // ---- other players in this room: where their lanterns are
-  const peers = new Map(); // name -> {c, u, v, tu, tv, f, w, d, stride}
+  const peers = new Map(); // name -> {c, u, v, tu, tv, d}
   socket.on('peers', (list) => {
     if (!state || state.phase !== 'HUNT') return;
     const seen = new Set();
@@ -648,14 +644,22 @@
       seen.add(p.n);
       let q = peers.get(p.n);
       if (!q) {
-        q = { u: p.u, v: p.v, stride: rand(0, TAU) };
+        q = { u: p.u, v: p.v };
         peers.set(p.n, q);
       }
-      Object.assign(q, { c: p.c, tu: p.u, tv: p.v, f: p.f, w: p.w, d: p.d });
+      Object.assign(q, { c: p.c, tu: p.u, tv: p.v, d: p.d });
     }
     for (const k of [...peers.keys()]) if (!seen.has(k)) peers.delete(k);
   });
-  const bodyH = (R) => Math.max(64, R * 0.95);
+  // a player is their light: the costume silhouette at its centre and a small hand lantern
+  const presenceSize = (R) => Math.max(28, R * 0.34);
+  function drawPresence(costume, x, y, size, alpha, t) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    PS.drawSil(ctx, costume, x, y, size, T.bone);
+    ctx.restore();
+    PS.drawLantern(ctx, x + size * 0.58, y + size * 0.22, size * 0.3, t, alpha);
+  }
   function sendPos(now) {
     if (now - Hunt.lastPos < 120 || !Hunt.ready) return;
     const r = torchRoom();
@@ -663,7 +667,7 @@
     if (s && Math.abs(s.u - r.u) < 0.002 && Math.abs(s.v - r.v) < 0.002 && now - Hunt.lastPos < 1000) return;
     Hunt.lastPos = now;
     Hunt.sentPos = r;
-    socket.volatile.emit('pos', { u: r.u, v: r.v, f: Hunt.facing, w: Hunt.speed > 40 });
+    socket.volatile.emit('pos', { u: r.u, v: r.v });
   }
 
   function updateGhosts(dt, now, R) {
@@ -958,20 +962,11 @@
       updateGhosts(dt, now, R);
       updateZombies(dt, now, R);
     }
-    // the body follows the light: facing, speed, stride
-    const mvx = Hunt.torch.x - Hunt.prev.x;
-    const mv = Math.hypot(mvx, Hunt.torch.y - Hunt.prev.y);
-    Hunt.prev = { x: Hunt.torch.x, y: Hunt.torch.y };
-    Hunt.speed = lerp(Hunt.speed, mv / Math.max(dt, 0.001), 0.15);
-    if (Math.abs(mvx) > 1.5) Hunt.facing = mvx < 0 ? -1 : 1;
-    Hunt.stride += Math.min(mv, 40) * 0.06;
     if (!paused && !Hunt.dead) sendPos(now);
     for (const q of peers.values()) {
       const k = Math.min(1, dt * 8);
-      const step = Math.hypot(q.tu - q.u, q.tv - q.v);
       q.u += (q.tu - q.u) * k;
       q.v += (q.tv - q.v) * k;
-      q.stride += Math.min(step * 900, 6) * k;
     }
 
     // footsteps as the light moves
@@ -1087,20 +1082,20 @@
       drawFlame(ctx, sp.x, sp.y, s, t);
     }
 
-    // other players: faint figures carrying their own lanterns
-    const bh = bodyH(R);
+    // other players: their light, their silhouette, their name
+    const ps = presenceSize(R) * 0.85;
     for (const [name, q] of peers) {
       if (q.d) continue;
       const sp = view.toScreen(q.u, q.v);
-      const L = lightAt(sp.x, sp.y + bh * 0.4, R);
-      PS.drawBody(ctx, q.c, sp.x, sp.y, bh * 0.92, { facing: q.f, phase: q.stride, walk: q.w ? 1 : 0, alpha: 0.28 + 0.5 * L, t, color: T.bone });
+      const L = lightAt(sp.x, sp.y, R);
+      drawPresence(q.c, sp.x, sp.y, ps, 0.35 + 0.5 * L, t);
       ctx.save();
-      ctx.globalAlpha = 0.4 + 0.4 * L;
+      ctx.globalAlpha = 0.45 + 0.4 * L;
       ctx.fillStyle = T.ash;
       ctx.font = 'italic 500 15px Fraunces, Georgia, serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(name, sp.x - (q.f < 0 ? -1 : 1) * bh * 0.28, sp.y + bh * 0.95);
+      ctx.fillText(name, sp.x, sp.y + ps * 0.62);
       ctx.restore();
     }
     // zombies: only light shows them
@@ -1157,10 +1152,7 @@
     // the player, at the centre of their own light
     if (!Hunt.dead) {
       const invis = now < Hunt.invisUntil;
-      ctx.save();
-      ctx.globalAlpha = invis ? 0.3 + 0.2 * Math.sin(t * 8) : 0.92;
-      PS.drawBody(ctx, me.costume, Hunt.torch.x, Hunt.torch.y, bodyH(R), { facing: Hunt.facing, phase: Hunt.stride, walk: clamp(Hunt.speed / 300, 0, 1), alpha: invis ? 0.3 + 0.2 * Math.sin(t * 8) : 1, t, color: T.bone });
-      ctx.restore();
+      drawPresence(me.costume, Hunt.torch.x, Hunt.torch.y, presenceSize(R), invis ? 0.3 + 0.2 * Math.sin(t * 8) : 0.92, t);
     }
 
     // room change: a fade to ink and the room's name

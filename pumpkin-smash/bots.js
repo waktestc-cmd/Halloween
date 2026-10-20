@@ -122,7 +122,7 @@ async function main() {
       const d = Math.hypot(du, dv) || 1;
       b.u += (du / d) * 0.02;
       b.v += (dv / d) * 0.02;
-      b.sock.volatile.emit('pos', { u: b.u, v: b.v, f: du < 0 ? -1 : 1, w: true });
+      b.sock.volatile.emit('pos', { u: b.u, v: b.v });
     }
   }, 150);
 
