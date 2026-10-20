@@ -5,8 +5,13 @@ Players hunt through a pitch-dark haunted house with a torch. Six of them find n
 one finds the hammer, and everyone collects souls (vote weight). The room votes on which pumpkin
 to smash. One of the six secretly holds **Friday afternoon off**, an exact 1-in-6 chance.
 
-Built to be easy for people who don't play games: everything is one click, the lantern says what a click
-will do ("Open the wardrobe"), and nothing kills you without warning.
+Built to be easy for people who don't play games: everything is one click, the mouse says what a click
+will do ("Look under the stairs"), and nothing kills you without warning.
+
+**Walking**: you are a figure in a long cloak with your costume for a head, holding a lantern. Click the
+floor to walk there; click a wardrobe, a door, a soul or the ringing telephone and you walk over and do it.
+The lantern points where your mouse is, but only so far: walk closer to see the far side of a room.
+Arrow keys and WASD walk too. Zombies, ghosts and the residents come for where you stand.
 
 **The house** has twelve rooms over four floors. It opens about one room for every two or three players
 and more each act, so it is never empty. Doors lead to the quietest open room.
@@ -21,11 +26,11 @@ get a fright and drop a soul, never a death:
 | --- | --- | --- |
 | Kitchen | Michael Myers | Comes closer while your light is elsewhere. Your light stops him; three seconds of it sends him away. |
 | Lake | Jason | Rises out of the water, then the same as Michael. |
-| Chapel | Valak | Steps out of the painting if you stop watching it, then the same. |
+| Drawing room | Valak | Steps out of the painting above the fireplace if you stop watching it, then the same. |
 | Parlour | Samara | The television turns itself on; what crawls out stops in your light. |
 | Nursery | Annabelle | Moves closer every time you look away. |
 | Boiler room | Freddy | Comes if you stand still. Keep moving. |
-| Hall | Ghostface | The telephone rings. Answer it for a fright and two souls. |
+| Hall | Ghostface | The telephone rings. Walk over and answer it for a fright and two souls. |
 | Cellar | Pennywise | Do not take the balloon. |
 
 * Node.js + Express + Socket.io, all state in memory, single process, single room.

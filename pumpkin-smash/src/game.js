@@ -115,7 +115,7 @@ class Game {
     const byRoom = S.ROOMS.map(() => []);
     for (const p of this.players.values()) {
       if (!p.connected || p.room == null || !p.pos || now - p.pos.t > 4000) continue;
-      byRoom[p.room].push({ n: p.name, c: p.costume, u: p.pos.u, v: p.pos.v, d: p.deadUntil > now ? 1 : 0 });
+      byRoom[p.room].push({ n: p.name, c: p.costume, u: p.pos.u, v: p.pos.v, fu: p.pos.fu, fv: p.pos.fv, f: p.pos.f, d: p.deadUntil > now ? 1 : 0 });
     }
     for (const p of this.players.values()) {
       if (!p.connected || !p.socketId || p.room == null) continue;
@@ -861,11 +861,12 @@ class Game {
       this.markDirty();
     });
 
-    // where this player's lantern is (no ack; sent ~8 times a second while hunting)
+    // where this player stands and where their lantern shines (no ack; ~8 times a second)
     socket.on('pos', (data) => {
       const p = me();
       if (!p || this.phase !== 'HUNT' || !data || !this.rateOk(socket, 'pos', 20)) return;
-      p.pos = { u: clamp01(data.u), v: clamp01(data.v), t: Date.now() };
+      // u, v: where their lantern shines; fu, fv: where they stand; f: which way they face
+      p.pos = { u: clamp01(data.u), v: clamp01(data.v), fu: clamp01(data.fu), fv: clamp01(data.fv), f: data.f < 0 ? -1 : 1, t: Date.now() };
     });
 
     socket.on('disconnect', () => {

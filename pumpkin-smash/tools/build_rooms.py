@@ -138,6 +138,8 @@ ROOMS = [
                C('Search the reeds', 'in the reeds', 0.23, 0.36, 0.38, 0.68),
                C('Search the far reeds', 'in the far reeds', 0.87, 0.36, 1.0, 0.8)],
          floor=[(0.66, 0.42, 0.62), (0.76, 0.37, 0.68), (0.86, 0.32, 0.72), (0.76, 0.03, 0.3)],
+         # where you can walk: the jetty, and the boards in front of the boathouse
+         walk=[[0.43, 0.62], [0.61, 0.62], [0.78, 0.97], [0.02, 0.97], [0.02, 0.72], [0.36, 0.7]],
          spots={'rise': [0.52, 0.62]}),
 ]
 
@@ -156,6 +158,9 @@ def room_meta(r):
         'surfaces': [{'x1': a, 'x2': b, 'y': v, 's': scale_at(v)} for v, a, b in floor],
         'candles': [{'x': x, 'y': y, 's': 0.5} for x, y in r.get('candles', [])],
         'spots': r.get('spots', {}),
+        # the floor you can walk on: inside the room's box, or an explicit outline
+        'wall': [round(x, 4) for x in r['wall']],
+        'walk': r.get('walk'),
     }
 
 

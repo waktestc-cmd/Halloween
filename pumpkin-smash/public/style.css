@@ -120,7 +120,7 @@ canvas.layer {
   touch-action: none;
 }
 body.hunting #fx {
-  cursor: none;
+  cursor: default;
 }
 
 /* ================================================================ player */

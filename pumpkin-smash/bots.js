@@ -136,7 +136,9 @@ async function main() {
       const d = Math.hypot(du, dv) || 1;
       b.u += (du / d) * 0.02;
       b.v += (dv / d) * 0.02;
-      b.sock.volatile.emit('pos', { u: b.u, v: b.v });
+      // they stand on the floor below where their lantern points
+      const fv = Math.min(0.95, Math.max(0.74, b.v + 0.25));
+      b.sock.volatile.emit('pos', { u: b.u, v: b.v, fu: b.u, fv, f: du < 0 ? -1 : 1 });
     }
   }, 150);
 
