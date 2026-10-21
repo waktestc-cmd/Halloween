@@ -296,6 +296,15 @@
     }
     function drawPhone(ctx, R, tt) {
       if (!r.ring) return;
+      // while it rings, he stands in the dark across the hall with the receiver to his ear
+      const st = (meta.spots || {}).stand;
+      if (st) {
+        const sp = view.toScreen(st[0], st[1]);
+        const h = hpx(st[1], 1.9);
+        const L = env.lightAt(sp.x, sp.y - h * 0.6, R);
+        const k = ease.out(clamp((now() - r.ring) / 1500, 0, 1));
+        PS.drawLitSprite(ctx, PS.sprite('ghostface'), sp.x, sp.y, h, { torch: env.torch(), R, alpha: k * (0.1 + 0.9 * L) });
+      }
       const pr = phoneRect();
       if (!pr) return;
       // the bell shakes the receiver: a small warm flicker on the table
