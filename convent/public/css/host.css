@@ -94,6 +94,11 @@ body.host {
   color: #7fbf7f;
   text-decoration: line-through;
 }
+.legend {
+  color: var(--dim);
+  font-size: 0.9em;
+  margin: 10px 0;
+}
 #h-feed {
   flex: 1;
   overflow: hidden;

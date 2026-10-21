@@ -1,4 +1,4 @@
-// Builds the convent in three.js from the shared level: floors, walls, ceilings, doors,
+// Builds the manor in three.js from the shared level: floors, walls, ceilings, doors,
 // furniture, the rainy courtyard, and the lamps that come on when the power is fixed.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -23,7 +23,7 @@ export function buildWorld(renderer) {
     parts.get(mat).push(geo);
   };
   const floorMat = (ch) => ({ k: M.tiles, w: M.tiles, c: M.stone, p: M.stone, e: M.stone, x: M.stone, t: M.stone, g: M.ground })[ch] || M.wood;
-  const wallMat = (ch, out) => (ch === 'g' ? M.brick : out ? M.brick : ch === 'c' || ch === 'x' || ch === 't' ? M.wallCold : M.wall);
+  const wallMat = (ch, out) => (ch === 'g' ? M.brick : out ? M.brick : ch === 'c' || ch === 'x' || ch === 't' || ch === 'p' ? M.wallCold : M.wall);
 
   for (let r = 0; r < L.H; r++)
     for (let c = 0; c < L.W; c++) {
@@ -199,7 +199,7 @@ export function buildWorld(renderer) {
   // Every lamp and candle in the house is a light source, but only the few nearest you really shine:
   // a small pool of lights moves to them. Many lights at once is what makes laptops slow.
   const sources = [];
-  // lamps along the cloister: dark until the fuse is fixed
+  // lamps along the gallery: dark until the fuse is fixed
   const lampSpots = [[8, 6.5], [18, 6.5], [26.5, 9.5], [24, 16.5], [14, 16.5], [5.5, 13.5]];
   const bulbMat = new THREE.MeshStandardMaterial({ color: 0x302820, emissive: 0xffb060, emissiveIntensity: 0 });
   const fixtures = [];
@@ -228,6 +228,12 @@ export function buildWorld(renderer) {
   for (const p of L.PROPS.filter((p) => p.type === 'altar' || p.type === 'candles')) candleAt(p.x, p.type === 'altar' ? 1.4 : 1.3, p.z, p.type === 'altar' ? 1.6 : 1.2);
   // a candle inside each carved pumpkin
   for (const p of L.PROPS.filter((p) => p.glow)) candleAt(p.x, 0.3, p.z, 0.9, 4);
+  // the laboratory's coils crackle blue once the power is back
+  const sparks = [];
+  for (const p of L.PROPS.filter((p) => p.spark)) {
+    sources.push({ x: p.x, y: p.h + 0.2, z: p.z, color: 0x88aaff, base: 3, range: 8, decay: 1.6, power: true, spark: true, phase: Math.random() * 10 });
+    sparks.push([p.x, p.h + 0.15, p.z]);
+  }
   const POOL = 4;
   const pool = [];
   for (let i = 0; i < POOL; i++) {
@@ -253,6 +259,13 @@ export function buildWorld(renderer) {
     const s = new THREE.Sprite(glowMat);
     s.position.set(x, y, z);
     s.scale.setScalar(0.9);
+    scene.add(s);
+    return s;
+  });
+  const sparkMat = new THREE.SpriteMaterial({ map: glowTex, color: 0x99bbff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 });
+  const sparkGlows = sparks.map(([x, y, z]) => {
+    const s = new THREE.Sprite(sparkMat);
+    s.position.set(x, y, z);
     scene.add(s);
     return s;
   });
@@ -352,7 +365,8 @@ export function buildWorld(renderer) {
       dip = Math.max(0, dip - dt);
       const dipK = dip > 0 ? (Math.sin(t * 37) * Math.sin(t * 11) > 0.3 ? 0.35 : 0.03) : 1;
       for (const s of sources) {
-        if (s.power) {
+        if (s.spark) s.now = power ? s.base * (Math.random() < 0.25 ? 1.6 : 0.3 + Math.random() * 0.4) * dipK : 0;
+        else if (s.power) {
           const f = 0.85 + 0.15 * Math.sin(t * 13 + s.phase) * Math.sin(t * 3.1 + s.phase * 2);
           const blink = Math.sin(t * 0.7 + s.phase) > 0.985 ? 0.2 : 1;
           s.now = power ? s.base * f * blink * dipK : 0;
@@ -384,6 +398,8 @@ export function buildWorld(renderer) {
         }
       }
       for (const [i, g] of glows.entries()) g.scale.setScalar(0.8 + 0.12 * Math.sin(t * 11 + i * 2.3));
+      sparkMat.opacity = power ? (Math.random() < 0.3 ? 0.9 : 0.25) * dipK : 0;
+      for (const g of sparkGlows) g.scale.setScalar(0.6 + Math.random() * 0.8);
     },
   };
   return world;
@@ -730,6 +746,31 @@ function makeProp(p, M) {
         g.add(hand);
       }
       g.add(box(0.12, 0.12, 0.02, M.brass, 0, 0.9, d * 0.43 + 0.02));
+      break;
+    }
+    case 'slab': {
+      // the Doctor's operating table, with leather straps
+      g.add(box(w, 0.12, d, M.iron, 0, h - 0.12, 0));
+      g.add(box(w - 0.1, 0.06, d - 0.1, M.linen, 0, h, 0));
+      for (const z of [-0.6, 0, 0.6]) g.add(box(w + 0.04, 0.03, 0.1, M.leather, 0, h + 0.03, z));
+      legs(M.iron, 0.12, h - 0.12, 0.08);
+      break;
+    }
+    case 'coil': {
+      // a tall coil of copper on a stone base, with a ball on top
+      g.add(box(w, 0.3, d, M.stoneProp));
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, h - 0.6, 10), M.iron);
+      core.position.y = 0.3 + (h - 0.6) / 2;
+      g.add(core);
+      for (let i = 0; i < 9; i++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.16 - i * 0.008, 0.025, 6, 16), M.copper);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.45 + i * 0.12;
+        g.add(ring);
+      }
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 10), M.copper);
+      ball.position.y = h - 0.15;
+      g.add(ball);
       break;
     }
     // plain stand-ins for the decorations, used only when their models are missing

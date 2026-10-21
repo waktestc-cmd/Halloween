@@ -30,12 +30,17 @@
   "player": {
     "files": [
       "characters/Wizard.glb", "characters/Pirate_Female.glb", "characters/Pirate_Male.glb", "characters/Ninja_Female.glb",
-      "characters/Viking_Female.glb", "characters/Knight_Male.glb", "characters/Cowboy_Female.glb", "characters/Zombie_Male.glb",
+      "characters/Viking_Female.glb", "characters/Knight_Male.glb", "characters/Cowboy_Female.glb", "characters/Witch.glb",
       "characters/Chef_Male.glb", "characters/Doctor_Female_Old.glb"
     ],
     "height": 1.75,
     "tint": ["Clothes", "Main", "Jacket", "Shirt", "Band"],
     "tintBoost": 1.6,
     "tone": 0.15
+  },
+  "zombie": {
+    "files": ["characters/Zombie_Male.glb", "characters/Zombie_Female.glb"],
+    "height": 1.8,
+    "tone": 0.5
   }
 }

@@ -1,11 +1,11 @@
-// Escape the Convent: the player's browser. You walk the house in first person; the server tells us
+// Monster Manor: the player's browser. You walk the house in first person; the server tells us
 // where everyone and everything else is.
 import * as THREE from 'three';
 import { io } from '/socket.io/socket.io.esm.min.js';
 import * as L from '/shared/level.js';
 import * as C from '/shared/config.js';
 import { buildWorld } from './world.js';
-import { Avatar, Nun, Ghost, looseItem } from './actors.js';
+import { Avatar, makeMonster, Ghost, looseItem } from './actors.js';
 import { Sound } from './audio.js';
 import { Dust, Haunts, setDanger } from './atmosphere.js';
 import { propModels } from './models.js';
@@ -93,7 +93,7 @@ const S = {
   finaleAt: 0,
   roster: [],
   avatars: new Map(),
-  nuns: new Map(),
+  monsters: new Map(),
   ghosts: new Map(),
   loose: new Map(),
   looseInfo: [],
@@ -104,7 +104,7 @@ const S = {
   watching: null, // whom you follow once you are out
   heartbeatAt: 0,
   chaseUntil: 0,
-  bellAt: {},
+  soundAt: {}, // when each monster last made its noise
   stepAt: 0,
   sendAt: 0,
   shine: {},
@@ -146,14 +146,17 @@ socket.on('roster', (r) => {
 // a new night: clear out whoever was in the house last time
 function clearHouse() {
   for (const a of S.avatars.values()) a.remove();
-  for (const n of S.nuns.values()) {
+  for (const n of S.monsters.values()) {
     n.remove();
     n.voice?.out.disconnect();
   }
-  for (const g of S.ghosts.values()) g.remove();
+  for (const g of S.ghosts.values()) {
+    g.remove();
+    g.voice?.out.disconnect();
+  }
   for (const l of S.loose.values()) scene.remove(l.mesh);
   S.avatars.clear();
-  S.nuns.clear();
+  S.monsters.clear();
   S.ghosts.clear();
   S.loose.clear();
   sound.setChase(0);
@@ -191,7 +194,7 @@ socket.on('stage', (m) => {
   applyState(m);
   if (was === 'power' && m.stage !== 'power') {
     sound.powerUp();
-    UI.toast('The lights flicker on in the cloister.');
+    UI.toast('The lights flicker on in the gallery.');
   }
   if (m.stage === 'escape' && was !== 'escape') UI.toast('The front door is open. RUN!', 5000);
 });
@@ -215,10 +218,15 @@ socket.on('found', (m) => {
   sound.chime();
   UI.toast(`You found the ${C.ITEMS[m.item].name.toLowerCase()}! ${C.ITEMS[m.item].hint}.`, 5000);
 });
-socket.on('spotted', () => {
+socket.on('spotted', (m) => {
   S.chaseUntil = performance.now() + 6000;
   S.fovKick = 1;
-  UI.toast("She's seen you. RUN! (hold Shift)", 3500);
+  const kind = S.monsters.get(m?.by)?.kind;
+  UI.toast(
+    { zombie: 'A zombie has seen you. Get away from it!', creature: "The Doctor's Monster has seen you. RUN! (hold Shift)" }[kind] ||
+      'The Count has seen you. RUN, or shine your light in his face!',
+    3500,
+  );
 });
 socket.on('sfx', (m) => onSfx(m));
 socket.on('hit', (m) => onHit(m));
@@ -260,7 +268,7 @@ function applyMe(m, jump) {
   UI.setCarry(S.me.carrying);
   $('hiding').className = m.hidden != null ? `on ${L.PROPS[m.hidden].type}` : '';
   if (m.state === 'dead') {
-    $('out-title').textContent = 'The convent keeps you.';
+    $('out-title').textContent = 'The manor keeps you.';
     $('out-text').textContent = 'You were caught three times. You can still watch the others: click to switch whom you follow.';
     UI.show('panel-out');
     document.exitPointerLock();
@@ -511,8 +519,8 @@ function describe(a) {
       if (S.stage !== 'power') return ['The fuse box hums', ''];
       return carrying === 'fuse' ? 'Put the fuse in' : ['The fuse box. A fuse is missing', ''];
     case 'desk':
-      if (S.stage === 'power') return ["Mother Superior's desk. Locked", ''];
-      if (S.stage === 'desk') return carrying === 'brass' ? 'Unlock the desk with the brass key' : ["Mother Superior's desk. It needs a small brass key", ''];
+      if (S.stage === 'power') return ["The Count's desk. Locked", ''];
+      if (S.stage === 'desk') return carrying === 'brass' ? 'Unlock the desk with the brass key' : ["The Count's desk. It needs a small brass key", ''];
       return 'Read the note again';
     case 'pickup':
       return `Pick up the ${C.ITEMS[a.item].name.toLowerCase()}`;
@@ -551,14 +559,13 @@ function onTick(m) {
     a.set(x, z, yaw, anim, light, state);
   }
   for (const [id, a] of S.avatars) if (!seen.has(id)) (a.remove(), S.avatars.delete(id));
-  for (const [id, x, z, yaw, state] of m.n) {
-    let n = S.nuns.get(id);
+  for (const [id, x, z, yaw, state, kind] of m.n) {
+    let n = S.monsters.get(id);
     if (!n) {
-      n = new Nun(scene);
+      n = makeMonster(scene, kind, id);
       n.x = n.tx = x;
       n.z = n.tz = z;
-      S.nuns.set(id, n);
-      n.voice = sound.ctx ? sound.makeHum(S.nuns.size - 1) : null;
+      S.monsters.set(id, n);
     }
     n.set(x, z, yaw, state);
   }
@@ -584,14 +591,26 @@ function onTick(m) {
   for (const [id, l] of S.loose) if (!ls.has(id)) (scene.remove(l.mesh), S.loose.delete(id));
 }
 
-function onSfx({ kind, x, z }) {
+function monsterCry(who, x, z, muffled, loud) {
+  if (who === 'creature') sound.roar(x, z, muffled, loud);
+  else if (who === 'zombie') sound.groan(x, z, muffled, loud);
+  else sound.shriek(x, z);
+}
+function onSfx({ kind, x, z, who }) {
   if (!sound.ctx) return;
   const muffled = !L.clearLine(S.me.x, S.me.z, x, z, (id) => S.doors[id]);
   const at = [x, z];
   if (kind === 'door-open') sound.play('doorOpen', { at, vol: 0.8, muffled });
   if (kind === 'door-close') sound.play('slam') || sound.play('doorClose', { at, vol: 0.9, rate: 0.7, muffled });
   if (kind === 'door-creak') sound.play('doorCreak', { at, vol: 0.9, muffled });
-  if (kind === 'shriek') sound.shriek(x, z);
+  // each monster has its own cry when it sees you, and the Count hisses at your light
+  if (kind === 'shriek') monsterCry(who, x, z, muffled, true);
+  if (kind === 'roar') {
+    monsterCry('creature', x, z, muffled, true);
+    UI.toast('Something wakes up in the laboratory…', 4000);
+  }
+  if (kind === 'flinch') sound.hiss(x, z);
+  if (kind === 'bell') sound.bell(x, z, muffled, true);
   if (kind === 'boo') sound.boo(x, z);
   if (kind === 'banish') sound.shriek(x, z);
   if (kind === 'padlock' || kind === 'unlock') sound.clunk(x, z);
@@ -609,9 +628,9 @@ function onSfx({ kind, x, z }) {
 
 /* ---------- being caught ---------- */
 function onHit(m) {
-  const nun = m.by === 'nun' ? [...S.nuns.values()].sort((a, b) => Math.hypot(a.x - S.me.x, a.z - S.me.z) - Math.hypot(b.x - S.me.x, b.z - S.me.z))[0] : null;
+  const monster = m.by !== 'ghost' ? [...S.monsters.values()].sort((a, b) => Math.hypot(a.x - S.me.x, a.z - S.me.z) - Math.hypot(b.x - S.me.x, b.z - S.me.z))[0] : null;
   const ghost = m.by === 'ghost' ? [...S.ghosts.values()].sort((a, b) => Math.hypot(a.x - S.me.x, a.z - S.me.z) - Math.hypot(b.x - S.me.x, b.z - S.me.z))[0] : null;
-  const who = nun || ghost;
+  const who = monster || ghost;
   S.scare = { t: 0, start: performance.now(), who, by: m.by, m };
   sound.sting(UI.settings.gentle);
   sound.play('hit', { vol: 0.8 });
@@ -628,7 +647,8 @@ function updateScare(dt) {
     while (d > Math.PI) d -= 2 * Math.PI;
     while (d < -Math.PI) d += 2 * Math.PI;
     S.me.yaw += d * Math.min(1, dt * 14);
-    S.me.pitch += ((sc.by === 'nun' ? 0.12 : 0) - S.me.pitch) * Math.min(1, dt * 10);
+    // look up into its face: the Doctor's Monster is a head taller than the Count
+    S.me.pitch += (({ creature: 0.32, vampire: 0.14, zombie: 0.02 }[sc.by] || 0) - S.me.pitch) * Math.min(1, dt * 10);
   }
   const black = $('blackout');
   if (sc.t > (gentle ? 0.1 : 0.9)) black.classList.add('on');
@@ -639,7 +659,7 @@ function updateScare(dt) {
       S.me.z = m.z;
       S.me.yaw = m.yaw;
       S.me.pitch = 0;
-      $('wake').textContent = `You wake up in the dormitory. ${m.lives} ${m.lives === 1 ? 'life' : 'lives'} left.`;
+      $('wake').textContent = `You wake up in the guest bedrooms. ${m.lives} ${m.lives === 1 ? 'life' : 'lives'} left.`;
       $('wake').classList.add('on');
       setTimeout(() => $('wake').classList.remove('on'), 4000);
     }
@@ -664,7 +684,7 @@ function showResults(r) {
   S.phase = 'RESULTS';
   document.exitPointerLock();
   sound.setChase(0);
-  $('result-title').textContent = r.escaped ? `${r.escaped} of ${r.total} escaped the convent` : 'Nobody escaped. The convent keeps you all.';
+  $('result-title').textContent = r.escaped ? `${r.escaped} of ${r.total} escaped the manor` : 'Nobody escaped. The manor keeps you all.';
   $('awards').innerHTML = r.awards.map((a) => `<li><b>${a.title}</b>${a.name.replace(/[<>&]/g, '')}<small>${a.why}</small></li>`).join('');
   $('scores').innerHTML = r.list
     .map((p) => `<tr class="${p.id === S.id ? 'me' : ''}"><td>${p.name.replace(/[<>&]/g, '')}</td><td>${{ escaped: 'Escaped', dead: 'Taken', kept: 'Still inside' }[p.state]}</td><td>${p.score}</td></tr>`)
@@ -778,37 +798,50 @@ function frame() {
     if (lookAgain) a.inView = d < 6 || (d < 30 && L.clearLine(camera.position.x, camera.position.z, a.x, a.z, (id) => S.doors[id]));
     a.update(dt, d);
   }
-  let nearestNun = Infinity;
+  let nearestMonster = Infinity; // the nearest monster
   let hunted = false;
-  for (const [id, n] of S.nuns) {
-    const moved = n.update(dt);
+  for (const [id, n] of S.monsters) {
+    n.update(dt);
     const d = Math.hypot(n.x - me.x, n.z - me.z);
-    nearestNun = Math.min(nearestNun, d);
-    if ((n.state === 'chase' || n.state === 'finale') && d < 18) hunted = true;
-    // her hum and her bell
-    if (sound.ctx) {
-      if (!n.voice) n.voice = sound.makeHum(S.nuns.size);
-      const clear = L.clearLine(me.x, me.z, n.x, n.z, (id) => S.doors[id]);
-      n.voice.set(n.x, n.z, n.state === 'chase' || n.state === 'finale' ? 0.05 : 0.55, !clear);
-      if (moved > 0.01 && t - (S.bellAt[id] || 0) > 0.75) {
-        S.bellAt[id] = t;
-        if (d < 22) sound.bell(n.x, n.z, !clear);
+    nearestMonster = Math.min(nearestMonster, d);
+    if (n.hunting && d < 18) hunted = true;
+    // every monster can be heard coming: the Count's breathing, the Monster's footsteps, the zombies' groans
+    if (sound.ctx && n.state !== 'asleep') {
+      const clear = d < 30 && L.clearLine(me.x, me.z, n.x, n.z, (id) => S.doors[id]);
+      if (n.kind === 'vampire') {
+        n.voice ||= sound.makeBreath();
+        n.voice.set(n.x, n.z, n.hunting ? 0.9 : 0.55, !clear);
+      } else if (n.kind === 'creature') {
+        if (n.footfall && d < 30) sound.stomp(n.x, n.z, !clear);
+        if (t > (S.soundAt[id] || 0)) {
+          S.soundAt[id] = t + 7 + Math.random() * 6;
+          if (d < 26) sound.roar(n.x, n.z, !clear, false);
+        }
+      } else if (t > (S.soundAt[id] || 0)) {
+        S.soundAt[id] = t + (n.hunting ? 2.5 : 4) + Math.random() * 4;
+        if (d < 26) sound.groan(n.x, n.z, !clear, false);
       }
     }
   }
   let nearestGhost = Infinity;
-  for (const g of S.ghosts.values()) {
+  for (const [id, g] of S.ghosts) {
     g.update(dt, camera.position.x, camera.position.z);
-    if (g.alive) nearestGhost = Math.min(nearestGhost, Math.hypot(g.x - me.x, g.z - me.z));
+    const d = Math.hypot(g.x - me.x, g.z - me.z);
+    if (g.alive) nearestGhost = Math.min(nearestGhost, d);
+    // the ghosts hum as they drift
+    if (sound.ctx) {
+      g.voice ||= sound.makeHum(Number(id.slice(1)) || 0);
+      g.voice.set(g.x, g.z, g.alive && d < 25 ? 0.4 : 0, d < 25 && !L.clearLine(me.x, me.z, g.x, g.z, (k) => S.doors[k]));
+    }
   }
   // how close something is: makes the flashlight stutter and the edges of the screen darken
   const alive = playing && me.state === 'alive';
-  S.dread = alive ? Math.max(0, 1 - nearestNun / 9, 0.7 * (1 - nearestGhost / 5)) : 0;
-  setDanger(dangerEl, alive ? Math.max(0, 1 - nearestNun / 14) : 0, alive && (hunted && nearestNun < 18 || now < S.chaseUntil), t, UI.settings.gentle);
+  S.dread = alive ? Math.max(0, 1 - nearestMonster / 9, 0.7 * (1 - nearestGhost / 5)) : 0;
+  setDanger(dangerEl, alive ? Math.max(0, 1 - nearestMonster / 14) : 0, alive && (hunted && nearestMonster < 18 || now < S.chaseUntil), t, UI.settings.gentle);
   haunts.update(dt, {
     me,
     eye: camera.position,
-    calm: alive && !hunted && now > S.chaseUntil && nearestNun > 10 && me.hidden == null && !S.scare,
+    calm: alive && !hunted && now > S.chaseUntil && nearestMonster > 10 && me.hidden == null && !S.scare,
     gentle: UI.settings.gentle,
     playing: alive,
     lit: S.light && torch.intensity > 0,
@@ -819,16 +852,16 @@ function frame() {
 
   if (sound.ctx && playing) {
     sound.listen(camera.position.x, camera.position.z, camera.rotation.y);
-    // heartbeat when a nun is close, faster the closer she is
-    sound.setHeart(me.state === 'alive' && nearestNun < 14 ? 1 - nearestNun / 14 : 0);
-    if (me.state === 'alive' && nearestNun < 14) {
-      const k = 1 - nearestNun / 14;
+    // heartbeat when a monster is close, faster the closer it is
+    sound.setHeart(me.state === 'alive' && nearestMonster < 14 ? 1 - nearestMonster / 14 : 0);
+    if (me.state === 'alive' && nearestMonster < 14) {
+      const k = 1 - nearestMonster / 14;
       if (now - S.heartbeatAt > 1100 - k * 650) {
         S.heartbeatAt = now;
         sound.heartbeat(0.15 + k * 0.6);
       }
     }
-    sound.setChase(me.state === 'alive' && (hunted && nearestNun < 18 || now < S.chaseUntil) ? 1 : 0);
+    sound.setChase(me.state === 'alive' && (hunted && nearestMonster < 18 || now < S.chaseUntil) ? 1 : 0);
     const y = world.yard;
     const dx = Math.max(y.x0 - me.x, 0, me.x - y.x1);
     const dz = Math.max(y.z0 - me.z, 0, me.z - y.z1);
@@ -877,13 +910,13 @@ function frame() {
     const st = serverNow();
     if (S.stage === 'escape') UI.setTimer(C.DURATION.finale - (st - S.finaleAt), true);
     else UI.setTimer(C.DURATION.night - st, false);
-    if (st < (S.grace ?? C.DURATION.grace) && me.state === 'alive') $('grace').textContent = `The sisters are at prayer. Look around while you can… ${Math.ceil((S.grace ?? C.DURATION.grace) - st)}`;
+    if (st < (S.grace ?? C.DURATION.grace) && me.state === 'alive') $('grace').textContent = `The house is still asleep. Look around while you can… ${Math.ceil((S.grace ?? C.DURATION.grace) - st)}`;
     else $('grace').textContent = '';
   }
 
   world.update(dt, t, UI.settings.brightness, camera.position);
   if (!dust.off) dust.update(t, torch.visible ? torch.intensity / 22 : 0);
-  // the view widens for a moment when she sees you
+  // the view widens for a moment when a monster sees you
   if (S.fovKick > 0.001) {
     S.fovKick = Math.max(0, S.fovKick - dt * 0.8);
     camera.fov = 72 + (UI.settings.gentle ? 0 : Math.sin(Math.min(1, (1 - S.fovKick) * 3) * Math.PI * 0.5) * S.fovKick * 8);
@@ -940,13 +973,13 @@ if (DEBUG) {
       S.me.pitch = pitch;
     },
     interact,
-    // a still nun or ghost of our own, to look at
+    // a still monster ('vampire', 'creature', 'zombie') or ghost of our own, to look at
     preview(kind, x, z, yaw = 0, state = 'patrol') {
-      const o = kind === 'nun' ? new Nun(scene) : new Ghost(scene);
+      const o = kind === 'ghost' ? new Ghost(scene) : makeMonster(scene, kind, 'p' + x);
       o.x = o.tx = x;
       o.z = o.tz = z;
       o.yaw = o.tyaw = yaw;
-      if (kind === 'nun') o.state = state;
+      if (kind !== 'ghost') o.state = state;
       else o.set(x, z, true, state === 'chase');
       (S.previews ||= []).push(o);
       return S.previews.length - 1;

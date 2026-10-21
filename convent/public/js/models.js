@@ -6,7 +6,7 @@
 //   { "props":  { "bed": { "file": "furniture/bedSingle.glb", "turn": 180, "fit": "stretch" },
 //                 "grave": { "files": ["graveyard/a.glb", "graveyard/b.glb"] } },
 //     "player": { "file": "characters/Worker.glb", "height": 1.75, "turn": 0, "tint": "Shirt" },
-//     "nun":    { "file": "characters/Nun.glb", "height": 1.85, "hide": ["Hat"], "colors": { "Clothes": "#000" } },
+//     "zombie": { "files": ["characters/Zombie_Male.glb"], "height": 1.8 },
 //     "recolor": { "wood": "#4a3322" } }
 //
 // fit: "stretch" fills the footprint exactly; "contain" (the default) keeps the model's proportions
@@ -90,7 +90,7 @@ function fitted(scene, spec, { w, d, h }) {
   return g;
 }
 
-// animated characters for a kind ("player", "nun"): { count, get(i) } where get loads the i-th file
+// animated characters for a kind ("player", "zombie"): { count, get(i) } where get loads the i-th file
 // listed (only when someone needs it) as { scene, animations, spec, scale }. count is 0 when none is
 // listed; get gives null when a file fails to load.
 export async function characters(kind) {

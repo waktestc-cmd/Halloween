@@ -1,5 +1,5 @@
-// Escape the Convent: the server runs the house. Players report where they are; the server owns
-// the doors, the hidden items, the puzzle stages, the nuns and ghosts, and who gets caught.
+// Monster Manor: the server runs the house. Players report where they are; the server owns
+// the doors, the hidden items, the puzzle stages, the monsters and ghosts, and who gets caught.
 import crypto from 'crypto';
 import * as L from '../shared/level.js';
 import * as C from '../shared/config.js';
@@ -70,7 +70,7 @@ function route(from, to, ghost) {
 const WALK_TILES = [];
 for (let r = 0; r < L.H; r++) for (let c = 0; c < L.W; c++) if (walkable(c, r) && L.at(c, r) !== '+') WALK_TILES.push([c, r]);
 const tilesIn = (room) => WALK_TILES.filter(([c, r]) => L.at(c, r) === room);
-// places the nuns like to walk to: mostly the cloister, sometimes into a room
+// places the monsters like to walk to: mostly the gallery, sometimes into a room
 const PATROL = Object.keys(L.ROOMS).filter((k) => k !== 'd');
 
 export class Game {
@@ -91,7 +91,7 @@ export class Game {
     this.stage = 'power';
     this.padlocks = 0;
     this.finaleAt = 0;
-    this.nuns = [];
+    this.monsters = [];
     this.ghosts = [];
     this.loose = []; // items dropped on the floor
     this.boxes = new Map(); // prop id -> item
@@ -165,7 +165,7 @@ export class Game {
       const x = Number(m.x);
       const z = Number(m.z);
       if (!Number.isFinite(x) || !Number.isFinite(z)) return;
-      // after a catch, wait until the browser has moved you back to the dormitory
+      // after a catch, wait until the browser has moved you back to the guest bedrooms
       if (me.wakeAt) {
         if (Math.hypot(x - me.wakeAt.x, z - me.wakeAt.z) > 3) return;
         me.wakeAt = null;
@@ -236,8 +236,8 @@ export class Game {
       me.hidden = p.id;
       this.hidden.set(p.id, me.id);
       socket.emit('me', this.mine(me));
-      // a nun who watched you climb in knows exactly where you are
-      for (const n of this.nuns) if (n.target === me.id && this.t - n.sawAt < 1.2) n.pullFrom = p.id;
+      // a monster that watched you climb in knows exactly where you are
+      for (const n of this.monsters) if (n.target === me.id && this.t - n.sawAt < 1.2) n.pullFrom = p.id;
     });
     socket.on('unhide', () => {
       if (!me || me.hidden == null) return;
@@ -259,7 +259,7 @@ export class Game {
     });
     if (DEV) {
       // test hooks: where things are hidden, and stepping anywhere
-      socket.on('dev:where', () => socket.emit('dev:where', { boxes: [...this.boxes], nuns: this.nuns.map((n) => ({ x: n.x, z: n.z, yaw: n.yaw, state: n.state })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
+      socket.on('dev:where', () => socket.emit('dev:where', { boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
       socket.on('dev:tp', (m = {}) => me && Object.assign(me, { x: Number(m.x), z: Number(m.z) }));
       socket.on('dev:freeze', (on) => (this.frozen = !!on));
     }
@@ -290,12 +290,15 @@ export class Game {
     this.t = 0;
     this.hideItems();
     const n = [...this.players.values()].filter((p) => p.online).length || 1;
-    const nuns = Math.min(C.NUN.max, Math.max(1, Math.ceil(n / this.level.perPlayers)));
-    const homes = shuffle(['p', 'x', 'l', 'o']);
-    this.nuns = Array.from({ length: nuns }, (_, i) => {
-      const [c, r] = pick(tilesIn(homes[i]));
-      const [x, z] = L.centre(c, r);
-      return { id: 'n' + i, name: ['Sister Madeline', 'Sister Agatha', 'Sister Ursula'][i], x, z, yaw: 0, state: 'idle', path: [], wait: 0, target: null, sawAt: -99, last: null, gloatUntil: 0, pullFrom: null, heard: null, hum: i };
+    // the Count always, the Doctor's Monster from two players, then zombies as more join
+    const count = Math.min(C.MONSTER.max, Math.ceil(n / this.level.perPlayers) + 1);
+    this.monsters = C.LINEUP.slice(0, count).map((kind, i) => {
+      const K = C.KINDS[kind];
+      let [x, z] = L.centre(...pick(tilesIn(K.home)));
+      // the Doctor's Monster lies on the slab in the laboratory until the power comes back
+      const slab = K.sleeps && L.PROPS.find((p) => p.type === 'slab');
+      if (slab) [x, z] = [slab.x, slab.z];
+      return { id: 'n' + i, kind, name: K.name, x, z, yaw: 0, state: K.sleeps ? 'asleep' : 'idle', path: [], wait: 0, target: null, sawAt: -99, last: null, gloatUntil: 0, pullFrom: null, heard: null, hum: i, stunUntil: 0, flinchAgain: 0 };
     });
     const ghosts = Math.min(C.GHOST.max, Math.round((C.GHOST.base + Math.floor(n / C.GHOST.perPlayers)) * this.level.ghosts));
     this.ghosts = Array.from({ length: ghosts }, (_, i) => this.newGhost('g' + i));
@@ -346,6 +349,12 @@ export class Game {
     this.noise(me, C.NOISE.padlock);
     this.sfx('power', L.FUSEBOX.x, L.FUSEBOX.z);
     this.say(`${me.name} fixed the fuse box. The lights flicker on.`);
+    // ...and the current reaches the laboratory
+    for (const m of this.monsters.filter((m) => m.state === 'asleep')) {
+      m.state = 'patrol';
+      this.sfx('roar', m.x, m.z, m.kind);
+      this.say('Something wakes up in the laboratory…');
+    }
     this.emitStage();
     me.socket.emit('me', this.mine(me));
   }
@@ -390,7 +399,7 @@ export class Game {
       this.finaleAt = this.t;
       this.emitDoors();
       this.say('The front door swings open. Everyone get out!');
-      for (const n of this.nuns) n.state = 'finale';
+      for (const n of this.monsters) n.state = 'finale';
     }
     this.emitStage();
     me.socket.emit('me', this.mine(me));
@@ -423,7 +432,7 @@ export class Game {
     me.carrying = null;
   }
 
-  // caught by a nun or touched by a ghost
+  // caught by a monster or touched by a ghost
   hit(me, by) {
     if (me.state !== 'alive' || this.t < me.safeUntil) return;
     if (me.hidden != null) this.unhide(me);
@@ -470,20 +479,20 @@ export class Game {
       const p = list.filter(ok).sort(f)[0];
       if (p) awards.push({ title, name: p.name, why });
     };
-    best((p) => p.caught === 0, (a, b) => b.score - a.score, 'Never caught', 'Slipped past every nun');
+    best((p) => p.caught === 0, (a, b) => b.score - a.score, 'Never caught', 'Slipped past every monster');
     best((p) => p.placed > 0, (a, b) => b.placed - a.placed, 'Locksmith', 'Fixed the most locks');
     best((p) => p.found > 0, (a, b) => b.found - a.found, 'Finder', 'Found the most hidden things');
-    best((p) => p.caught > 0, (a, b) => b.caught - a.caught, 'Nun magnet', 'Caught the most times');
-    best((p) => p.closest < 2.5, (a, b) => a.closest - b.closest, 'Closest call', 'Felt her breath');
+    best((p) => p.caught > 0, (a, b) => b.caught - a.caught, 'Monster magnet', 'Caught the most times');
+    best((p) => p.closest < 2.5, (a, b) => a.closest - b.closest, 'Closest call', 'Felt its breath');
     this.result = { escaped, total: list.length, list, awards, won: escaped > 0 };
     this.io.to('players').to('hosts').emit('end', this.result);
   }
 
-  /* ---------- noise, sight and the nuns ---------- */
+  /* ---------- noise, sight and the monsters ---------- */
   noise(src, radius) {
     if (this.phase !== 'PLAYING' || this.t < GRACE) return;
-    for (const n of this.nuns) {
-      if (n.state === 'chase' || n.state === 'gloat' || n.state === 'finale') continue;
+    for (const n of this.monsters) {
+      if (n.state === 'chase' || n.state === 'gloat' || n.state === 'finale' || n.state === 'asleep') continue;
       const d = dist(n, src);
       const through = L.clearLine(n.x, n.z, src.x, src.z, (id) => this.doors[id]) ? 1 : 0.55;
       if (d <= radius * through) {
@@ -498,10 +507,10 @@ export class Game {
     if (p.state !== 'alive' || p.hidden != null || this.t < p.safeUntil) return false;
     const d = dist(n, p);
     const lit = this.stage !== 'power' && L.roomAt(p.x, p.z) === 'c';
-    const range = (p.light || lit ? C.NUN.sightLit : C.NUN.sight) * this.level.sight;
+    const range = (p.light || lit ? C.MONSTER.sightLit : C.MONSTER.sight) * this.level.sight * C.KINDS[n.kind].sight;
     if (d > range) return false;
     const toward = Math.atan2(p.x - n.x, p.z - n.z);
-    if (d > C.NUN.near && Math.abs(angDiff(toward, n.yaw)) > C.NUN.fov) return false;
+    if (d > C.MONSTER.near && Math.abs(angDiff(toward, n.yaw)) > C.MONSTER.fov) return false;
     return L.clearLine(n.x, n.z, p.x, p.z, (id) => this.doors[id]);
   }
 
@@ -537,9 +546,30 @@ export class Game {
     return false;
   }
 
-  nunTick(n, dt) {
+  monsterTick(n, dt) {
     const alive = [...this.players.values()].filter((p) => p.state === 'alive' && p.online);
-    if (this.t < GRACE) return;
+    if (this.t < GRACE || n.state === 'asleep') return;
+    const K = C.KINDS[n.kind];
+    // the Count shrinks back from a flashlight shone in his face
+    if (this.t < n.stunUntil) return;
+    if (K.flinch && this.t >= n.flinchAgain && n.state !== 'finale') {
+      const glare = alive.find((p) => {
+        if (!p.light || p.hidden != null) return false;
+        const d = dist(n, p);
+        if (d > C.FLINCH.range || d < 0.3) return false;
+        const fx = -Math.sin(p.yaw);
+        const fz = -Math.cos(p.yaw);
+        const cos = ((n.x - p.x) * fx + (n.z - p.z) * fz) / d;
+        return cos > Math.cos(C.FLINCH.cone) && L.clearLine(p.x, p.z, n.x, n.z, (id) => this.doors[id]);
+      });
+      if (glare) {
+        n.stunUntil = this.t + C.FLINCH.stun;
+        n.flinchAgain = this.t + C.FLINCH.again;
+        n.yaw = Math.atan2(n.x - glare.x, n.z - glare.z); // turns his face away
+        this.sfx('flinch', n.x, n.z, n.kind);
+        return;
+      }
+    }
     if (n.state === 'gloat') {
       if (this.t < n.gloatUntil) return;
       n.state = 'patrol';
@@ -552,7 +582,7 @@ export class Game {
       if (!who || who.hidden !== n.pullFrom) n.pullFrom = null;
       else {
         if (!n.path.length) n.path = route(n, { x: p.x, z: p.z }) || [];
-        this.step(n, C.NUN.chase, dt);
+        this.step(n, C.MONSTER.chase * K.speed, dt);
         if (Math.hypot(n.x - p.x, n.z - p.z) < Math.max(p.hw, p.hd) + 1.3) {
           n.pullFrom = null;
           this.sfx('pull', p.x, p.z);
@@ -561,7 +591,7 @@ export class Game {
         return;
       }
     }
-    // who can she see?
+    // whom can it see?
     let seen = null;
     let best = Infinity;
     for (const p of alive) {
@@ -574,7 +604,7 @@ export class Game {
     }
     if (seen) {
       if (n.state !== 'chase' && n.state !== 'finale') {
-        this.sfx('shriek', n.x, n.z);
+        this.sfx('shriek', n.x, n.z, n.kind);
         seen.socket.emit('spotted', { by: n.id });
       }
       if (n.state !== 'finale') n.state = 'chase';
@@ -584,7 +614,7 @@ export class Game {
     }
     const target = n.target && this.players.get(n.target);
     if (n.state === 'finale') {
-      // once the door is open she knows where everyone is
+      // once the door is open it knows where everyone is
       let near = null;
       let nd = Infinity;
       for (const p of alive) {
@@ -602,30 +632,30 @@ export class Game {
     }
     if ((n.state === 'chase' || n.state === 'finale') && n.last) {
       const t = target && target.state === 'alive' ? target : null;
-      if (t && dist(n, t) < C.NUN.catchAt && this.t >= t.safeUntil && t.hidden == null) return this.catch(n, t);
-      if (n.state === 'chase' && this.t - n.sawAt > C.NUN.loseAfter) {
+      if (t && dist(n, t) < C.MONSTER.catchAt && this.t >= t.safeUntil && t.hidden == null) return this.catch(n, t);
+      if (n.state === 'chase' && this.t - n.sawAt > C.MONSTER.loseAfter) {
         n.state = 'search';
-        n.wait = C.NUN.search;
+        n.wait = C.MONSTER.search;
         n.path = route(n, n.last) || [];
       } else {
         // straight at you when nothing is in the way, otherwise along the corridors
         const goal = this.t - n.sawAt < 0.3 && t ? t : n.last;
         if (L.clearLine(n.x, n.z, goal.x, goal.z, (id) => this.doors[id]) && dist(n, goal) < 8) n.path = [[goal.x, goal.z]];
         else if (!n.path.length || this.tickN % 10 === 0) n.path = route(n, goal) || [];
-        this.step(n, (n.state === 'finale' ? C.NUN.finale : C.NUN.chase) * this.level.speed, dt);
+        this.step(n, (n.state === 'finale' ? C.MONSTER.finale : C.MONSTER.chase) * K.speed * this.level.speed, dt);
       }
       return;
     }
     if (n.state === 'investigate') {
-      if (!this.step(n, C.NUN.investigate * this.level.speed, dt)) {
+      if (!this.step(n, C.MONSTER.investigate * K.speed * this.level.speed, dt)) {
         n.state = 'search';
-        n.wait = C.NUN.search * 0.6;
+        n.wait = C.MONSTER.search * 0.6;
       }
       return;
     }
     if (n.state === 'search') {
       n.wait -= dt;
-      if (!this.step(n, C.NUN.patrol, dt)) {
+      if (!this.step(n, C.MONSTER.patrol * K.speed, dt)) {
         // look around a nearby spot
         const [c, r] = L.tileOf(n.x, n.z);
         const opts = WALK_TILES.filter(([cc, rr]) => Math.abs(cc - c) + Math.abs(rr - r) <= 3);
@@ -641,13 +671,13 @@ export class Game {
     }
     // patrol: walk somewhere, pause, look about, walk somewhere else
     if (n.state === 'idle') n.state = 'patrol';
-    if (!this.step(n, C.NUN.patrol, dt)) {
+    if (!this.step(n, C.MONSTER.patrol * K.speed, dt)) {
       if (n.wait > 0) {
         n.wait -= dt;
         n.yaw += dt * 0.8 * Math.sin(this.t * 0.7 + n.hum);
         return;
       }
-      const room = Math.random() < 0.45 ? 'c' : pick(PATROL);
+      const room = K.roams ? pick(K.roams) : Math.random() < 0.45 ? 'c' : pick(PATROL);
       const [c, r] = pick(tilesIn(room));
       const [x, z] = L.centre(c, r);
       n.path = route(n, { x, z }) || [];
@@ -657,9 +687,9 @@ export class Game {
 
   catch(n, p) {
     this.sfx('caught', p.x, p.z);
-    this.hit(p, { kind: 'nun', name: n.name });
+    this.hit(p, { kind: n.kind, name: n.name });
     n.state = this.stage === 'escape' ? 'finale' : 'gloat';
-    n.gloatUntil = this.t + C.NUN.gloat;
+    n.gloatUntil = this.t + C.MONSTER.gloat;
     n.target = null;
     n.path = [];
   }
@@ -705,7 +735,7 @@ export class Game {
 
   /* ---------- the house itself ----------
      Now and then something happens near someone: a door slams or creaks open on its own, knocking
-     behind a closed door, the lamps stutter, a wail far off. It never hurts anyone, and the nuns
+     behind a closed door, the lamps stutter, a wail far off. It never hurts anyone, and the monsters
      ignore it. */
   haunt() {
     this.hauntAt = this.t + C.HAUNT.every[0] + Math.random() * (C.HAUNT.every[1] - C.HAUNT.every[0]);
@@ -719,9 +749,9 @@ export class Game {
       const [x, z] = L.centre(d.c, d.r);
       const far = Math.hypot(x - p.x, z - p.z);
       // never close a door on someone standing in it
-      return far > 4 && far < 14 && people.every((q) => Math.hypot(q.x - x, q.z - z) > 2.6) && this.nuns.every((n) => Math.hypot(n.x - x, n.z - z) > 2.6);
+      return far > 4 && far < 14 && people.every((q) => Math.hypot(q.x - x, q.z - z) > 2.6) && this.monsters.every((n) => Math.hypot(n.x - x, n.z - z) > 2.6);
     });
-    const kinds = ['wail'];
+    const kinds = ['wail', 'bell'];
     if (doors.some((d) => !this.doors[d.id])) kinds.push('knock', 'knock');
     if (doors.some((d) => this.doors[d.id])) kinds.push('slam', 'slam');
     if (doors.some((d) => !this.doors[d.id])) kinds.push('creak');
@@ -736,6 +766,12 @@ export class Game {
       const d = pick(doors.filter((d) => !this.doors[d.id]));
       this.sfx('knock', ...L.centre(d.c, d.r));
     } else if (kind === 'flicker') this.sfx('flicker', L.FUSEBOX.x, L.FUSEBOX.z);
+    else if (kind === 'bell') {
+      // a handbell rung in a room nearby, by nobody
+      const near = Object.entries(L.ROOMS).filter(([k, r]) => k !== 'c' && k !== 'g' && Math.hypot(((r.c0 + r.c1 + 1) / 2) * L.TILE - p.x, ((r.r0 + r.r1 + 1) / 2) * L.TILE - p.z) < 18);
+      const [, r] = near.length ? pick(near) : ['d', L.ROOMS.d];
+      this.sfx('bell', ((r.c0 + r.c1 + 1) / 2) * L.TILE, ((r.r0 + r.r1 + 1) / 2) * L.TILE);
+    }
     else {
       // far off, somewhere in the house
       const [c, r] = pick(WALK_TILES.filter(([c, r]) => {
@@ -760,7 +796,7 @@ export class Game {
     this.t += TICK;
     this.tickN++;
     if (!this.frozen) {
-      for (const n of this.nuns) this.nunTick(n, TICK);
+      for (const n of this.monsters) this.monsterTick(n, TICK);
       for (const g of this.ghosts) this.ghostTick(g, TICK);
       if (this.t > this.hauntAt) this.haunt();
     }
@@ -777,7 +813,7 @@ export class Game {
       p: [...this.players.values()]
         .filter((p) => p.online && p.state !== 'escaped')
         .map((p) => [p.id, r(p.x), r(p.z), r(p.yaw), p.moving ? (p.run ? 2 : 1) : 0, p.light ? 1 : 0, p.state === 'dead' ? 0 : p.hidden != null ? 2 : 1]),
-      n: this.nuns.map((n) => [n.id, r(n.x), r(n.z), r(n.yaw), n.state]),
+      n: this.monsters.map((n) => [n.id, r(n.x), r(n.z), r(n.yaw), this.t < n.stunUntil ? 'flinch' : n.state, n.kind]),
       g: this.ghosts.map((g) => [g.id, r(g.x), r(g.z), g.alive ? 1 : 0, g.chasing ? 1 : 0]),
       l: this.loose.map((l) => [l.id, l.item, r(l.x), r(l.z)]),
     };
@@ -815,8 +851,9 @@ export class Game {
   emitStage() {
     this.io.to('players').to('hosts').emit('stage', { stage: this.stage, padlocks: this.padlocks, keyRooms: this.stage === 'keys' || this.stage === 'escape' ? this.keyRooms : [], finaleAt: this.finaleAt, roster: this.roster() });
   }
-  sfx(kind, x, z) {
-    this.io.to('players').to('hosts').emit('sfx', { kind, x, z });
+  // who: which kind of monster made it, when it matters for the sound
+  sfx(kind, x, z, who) {
+    this.io.to('players').to('hosts').emit('sfx', { kind, x, z, who });
   }
   say(text) {
     this.feed.push({ t: this.t, text });

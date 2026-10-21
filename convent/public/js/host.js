@@ -1,4 +1,4 @@
-// The big screen: who has joined, then a live map of the whole house (nuns and ghosts included,
+// The big screen: who has joined, then a live map of the whole house (monsters and ghosts included,
 // which the players cannot see), the progress so far, and the news as it happens.
 import { io } from '/socket.io/socket.io.esm.min.js';
 import * as L from '/shared/level.js';
@@ -85,7 +85,7 @@ function addFeed(text) {
 }
 function results(r) {
   S.phase = 'RESULTS';
-  $('h-result-title').textContent = r.escaped ? `${r.escaped} of ${r.total} escaped the convent!` : 'Nobody escaped. The convent keeps them all.';
+  $('h-result-title').textContent = r.escaped ? `${r.escaped} of ${r.total} escaped the manor!` : 'Nobody escaped. The manor keeps them all.';
   $('h-awards').innerHTML = r.awards.map((a) => `<li><b>${a.title}</b>${esc(a.name)}<br /><small>${a.why}</small></li>`).join('');
   $('h-scores').innerHTML = r.list.map((p) => `<li>${esc(p.name)}: ${p.score} ${{ escaped: '(escaped)', dead: '(taken)', kept: '' }[p.state]}</li>`).join('');
   render();
@@ -109,7 +109,7 @@ function frame() {
   drawMap(c, {
     host: true,
     others: m.p.filter((p) => p[6] !== 0).map(([id, x, z]) => ({ x, z, visible: true, name: names.get(id) })),
-    nuns: m.n.map(([id, x, z, yaw, state]) => ({ x, z, state })),
+    monsters: m.n.map(([id, x, z, yaw, state, kind]) => ({ x, z, state, kind })),
     ghosts: m.g.map(([id, x, z, alive]) => ({ x, z, alive })),
     loose: m.l.map(([id, item, x, z]) => ({ x, z })),
     stage: S.stage,

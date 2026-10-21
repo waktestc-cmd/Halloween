@@ -126,8 +126,9 @@ export function setBars(battery, stamina, lightOn) {
 }
 
 /* ---------- the map ---------- */
+export const MONSTER_SIGN = { vampire: '🧛', creature: '⚡', zombie: '🧟' };
 const ROOM_TINT = { c: '#3a352c', g: '#1f2a1c' };
-export function drawMap(canvas, { me, others = [], nuns = null, ghosts = null, stage, keyRooms = [], host = false, loose = [] }) {
+export function drawMap(canvas, { me, others = [], monsters = null, ghosts = null, stage, keyRooms = [], host = false, loose = [] }) {
   const g = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
@@ -178,7 +179,7 @@ export function drawMap(canvas, { me, others = [], nuns = null, ghosts = null, s
     words.forEach((w, i) => g.fillText(w, cx, cy + (i - (words.length - 1) / 2) * fs * 1.1));
   }
   g.font = `italic ${Math.max(11, s * 0.5)}px Georgia, serif`;
-  g.fillText('Cloister', ox + 11 * s, oy + 7 * s);
+  g.fillText('Gallery', ox + 11 * s, oy + 7 * s);
   // the things that matter
   const icon = (x, z, color, text) => {
     g.fillStyle = color;
@@ -207,15 +208,22 @@ export function drawMap(canvas, { me, others = [], nuns = null, ghosts = null, s
       g.fillText(o.name, X(o.x), Y(o.z) - Math.max(9, s * 0.45));
     }
   }
-  if (nuns)
-    for (const n of nuns) {
-      g.fillStyle = n.state === 'chase' || n.state === 'finale' ? '#ff3030' : '#c02020';
+  // the monsters (big screen only): a red dot, brighter when hunting, grey while asleep, with a sign
+  if (monsters)
+    for (const n of monsters) {
+      g.fillStyle = n.state === 'asleep' ? '#666' : n.state === 'chase' || n.state === 'finale' ? '#ff3030' : '#c02020';
+      const r = Math.max(7, s * 0.42);
       g.beginPath();
-      g.arc(X(n.x), Y(n.z), Math.max(5, s * 0.32), 0, Math.PI * 2);
+      g.arc(X(n.x), Y(n.z), r, 0, Math.PI * 2);
       g.fill();
       g.strokeStyle = '#fff';
       g.lineWidth = 2;
       g.stroke();
+      g.font = `${r * 1.3}px sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(MONSTER_SIGN[n.kind] || '', X(n.x), Y(n.z) + 1);
+      g.textBaseline = 'alphabetic';
     }
   if (ghosts)
     for (const gh of ghosts) {

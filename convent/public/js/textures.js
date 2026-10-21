@@ -1,4 +1,4 @@
-// Surfaces for the convent: two photo textures from the three.js examples (hardwood floor, brick)
+// Surfaces for the manor: two photo textures from the three.js examples (hardwood floor, brick)
 // and the rest painted on canvases here, so the house needs no other image files.
 import * as THREE from 'three';
 
@@ -285,6 +285,8 @@ export function makeMaterials(maxAniso) {
     bark: std({ map: tex(woodCanvas('#1e1812')), roughness: 1 }),
     book: [0x4a1c14, 0x1c2a3a, 0x2a3a1c, 0x3a2a14, 0x2a1830].map((c) => std({ color: c, roughness: 0.8 })),
     wax: std({ color: 0xe8dcc0, roughness: 0.6 }),
+    leather: std({ color: 0x3a2416, roughness: 0.8 }),
+    copper: std({ color: 0xb06a3a, metalness: 0.6, roughness: 0.4 }),
     pumpkin: std({ color: 0xb05a18, roughness: 0.7, emissive: 0x401800, emissiveIntensity: 0.5 }),
     flame: new THREE.MeshBasicMaterial({ color: 0xffb04a }),
   };
