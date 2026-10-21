@@ -285,6 +285,7 @@ export function makeMaterials(maxAniso) {
     bark: std({ map: tex(woodCanvas('#1e1812')), roughness: 1 }),
     book: [0x4a1c14, 0x1c2a3a, 0x2a3a1c, 0x3a2a14, 0x2a1830].map((c) => std({ color: c, roughness: 0.8 })),
     wax: std({ color: 0xe8dcc0, roughness: 0.6 }),
+    pumpkin: std({ color: 0xb05a18, roughness: 0.7, emissive: 0x401800, emissiveIntensity: 0.5 }),
     flame: new THREE.MeshBasicMaterial({ color: 0xffb04a }),
   };
   for (const v of Object.values(m)) for (const k of ['map', 'bumpMap']) if (v[k]) v[k].anisotropy = Math.min(8, maxAniso);

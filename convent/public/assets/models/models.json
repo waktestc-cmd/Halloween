@@ -1,1 +1,41 @@
-{}
+{
+  "recolor": {
+    "wood": "#4a3322", "woodDark": "#2e1f14", "metal": "#6f6a62", "metalLight": "#8a857a", "metalDark": "#2a2826",
+    "metalMedium": "#3f3b36", "carpet": "#5a2626", "carpetDarker": "#3d1a1a", "carpetWhite": "#a89f8a", "_defaultMat": "#8a8478", "lamp": "#b8a070"
+  },
+  "props": {
+    "bed": { "file": "furniture/bedSingle.glb", "turn": 90, "fit": "stretch", "tone": 0.15 },
+    "wardrobe": { "file": "furniture/bookcaseClosedDoors.glb", "fit": "stretch", "tone": 0.15 },
+    "cabinet": { "file": "furniture/bookcaseClosedDoors.glb", "fit": "stretch", "tone": 0.15 },
+    "table": { "file": "furniture/table.glb", "fit": "stretch", "tone": 0.15 },
+    "desk": { "file": "furniture/desk.glb", "fit": "stretch", "tone": 0.15 },
+    "officedesk": { "file": "furniture/desk.glb", "fit": "stretch", "tone": 0.15 },
+    "stove": { "file": "furniture/kitchenStove.glb", "fit": "stretch", "tone": 0.15 },
+    "sink": { "file": "furniture/kitchenSink.glb", "fit": "stretch", "tone": 0.15 },
+    "crate": { "file": "furniture/cardboardBoxClosed.glb", "fit": "stretch", "tone": 0.15 },
+    "tub": { "file": "furniture/bathtub.glb", "fit": "stretch", "tone": 0.15 },
+    "rug": { "file": "furniture/rugRectangle.glb", "turn": 90, "fit": "stretch", "tone": 0.15, "raise": 0.005 },
+    "coatrack": { "file": "furniture/coatRackStanding.glb", "fit": "height", "tone": 0.15 },
+    "bench": { "file": "graveyard/bench.glb", "fit": "stretch", "tone": 0.55 },
+    "pew": { "file": "graveyard/bench.glb", "fit": "stretch", "tone": 0.8 },
+    "altar": { "file": "graveyard/altar-stone.glb", "fit": "stretch", "tone": 0.55 },
+    "grave": { "files": ["graveyard/gravestone-round.glb", "graveyard/gravestone-bevel.glb", "graveyard/gravestone-roof.glb", "graveyard/gravestone-decorative.glb", "graveyard/gravestone-broken.glb", "graveyard/gravestone-wide.glb"], "fit": "height", "tone": 0.65 },
+    "coffin": { "file": "graveyard/coffin-old.glb", "turn": 90, "fit": "stretch", "tone": 0.5 },
+    "crypt": { "file": "graveyard/crypt-small.glb", "fit": "contain", "tone": 0.6 },
+    "urn": { "file": "graveyard/urn-round.glb", "fit": "height", "tone": 0.55 },
+    "shovel": { "file": "graveyard/shovel-dirt.glb", "fit": "contain", "tone": 0.5 },
+    "fence": { "file": "graveyard/iron-fence.glb", "fit": "stretch", "tone": 0.8 },
+    "pumpkin": { "files": ["graveyard/pumpkin-carved.glb", "graveyard/pumpkin-tall-carved.glb"], "fit": "contain", "tone": 0.1 }
+  },
+  "player": {
+    "files": [
+      "characters/Wizard.glb", "characters/Pirate_Female.glb", "characters/Pirate_Male.glb", "characters/Ninja_Female.glb",
+      "characters/Viking_Female.glb", "characters/Knight_Male.glb", "characters/Cowboy_Female.glb", "characters/Zombie_Male.glb",
+      "characters/Chef_Male.glb", "characters/Doctor_Female_Old.glb"
+    ],
+    "height": 1.75,
+    "tint": ["Clothes", "Main", "Jacket", "Shirt", "Band"],
+    "tintBoost": 1.6,
+    "tone": 0.15
+  }
+}

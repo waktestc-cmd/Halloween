@@ -820,6 +820,7 @@ function frame() {
   if (sound.ctx && playing) {
     sound.listen(camera.position.x, camera.position.z, camera.rotation.y);
     // heartbeat when a nun is close, faster the closer she is
+    sound.setHeart(me.state === 'alive' && nearestNun < 14 ? 1 - nearestNun / 14 : 0);
     if (me.state === 'alive' && nearestNun < 14) {
       const k = 1 - nearestNun / 14;
       if (now - S.heartbeatAt > 1100 - k * 650) {

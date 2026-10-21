@@ -19,8 +19,8 @@ const FILES = {
   whisper: ['ghost-whisper'],
   boo: ['ghost-boo'],
   heartbeat: ['heartbeat'],
-  thunder: ['thunder'],
-  scare: ['jump-scare'],
+  thunder: ['thunder', 'thunder-2'],
+  scare: ['jump-scare', 'jump-scare-2'],
   slam: ['door-slam'],
 };
 
@@ -70,7 +70,13 @@ export class Sound {
       }
     }
     if (list.length) this.buffers.set(key, list);
-    if (key === 'ambience' && list.length) this.loopFile('ambience', 0.5);
+    if (key === 'ambience' && list.length) this.loopFile('ambience', 0.6);
+    if (key === 'heartbeat' && list.length) {
+      // a recorded heartbeat loops quietly all the time; setHeart turns it up and speeds it up
+      this.heart = this.loopFile('heartbeat', 0);
+      this.heart.g.disconnect();
+      this.heart.g.connect(this.sfxBus);
+    }
     if (key === 'chase' && list.length) {
       const l = this.loopFile('chase', 1);
       l.g.disconnect();
@@ -125,7 +131,8 @@ export class Sound {
     } else p.setPosition(x, y, z);
   }
   // play a recording; at (x, z) in the house, or right at your ears
-  play(key, { at, vol = 1, rate = 1, muffled = false, bus } = {}) {
+  // len cuts a long recording short with a quick fade
+  play(key, { at, vol = 1, rate = 1, muffled = false, bus, len } = {}) {
     if (!this.ctx) return false;
     const list = this.buffers.get(key);
     if (!list) return false;
@@ -146,6 +153,12 @@ export class Sound {
     if (at) g.connect(this.panner(at[0], at[1])).connect(bus || this.sfxBus);
     else g.connect(bus || this.sfxBus);
     src.start();
+    if (len) {
+      const end = this.ctx.currentTime + len;
+      g.gain.setValueAtTime(vol, end - 0.15);
+      g.gain.linearRampToValueAtTime(0.0001, end);
+      src.stop(end + 0.05);
+    }
     return src;
   }
   loopFile(key, vol) {
@@ -339,7 +352,7 @@ export class Sound {
   }
   // a small bell at the nun's belt, jingling as she moves
   bell(x, z, muffled) {
-    if (this.play('bell', { at: [x, z], vol: 0.5, rate: 0.9 + Math.random() * 0.2, muffled })) return;
+    if (this.play('bell', { at: [x, z], vol: 0.35, rate: 0.95 + Math.random() * 0.1, muffled, len: 0.6 })) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
     const pan = this.panner(x, z, { ref: 1.5, max: 25, roll: 1.5, y: 1 });
@@ -405,9 +418,15 @@ export class Sound {
     s.start(now, Math.random());
     s.stop(now + 1.5);
   }
+  // how near danger is, 0 to 1: drives the recorded heartbeat when there is one
+  setHeart(level) {
+    if (!this.heart) return;
+    const now = this.ctx.currentTime;
+    this.heart.g.gain.setTargetAtTime(level > 0 ? 0.25 + level * 0.75 : 0, now, 0.4);
+    this.heart.src.playbackRate.setTargetAtTime(0.9 + level * 0.5, now, 0.5);
+  }
   heartbeat(vol) {
-    if (vol < 0.02) return;
-    if (this.play('heartbeat', { vol })) return;
+    if (vol < 0.02 || this.heart) return;
     const ctx = this.ctx;
     for (const [dt, a] of [[0, 1], [0.24, 0.7]]) {
       const now = ctx.currentTime + dt;

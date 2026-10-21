@@ -4,6 +4,7 @@ import path from 'path';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import express from 'express';
+import compression from 'compression';
 import { Server } from 'socket.io';
 import QRCode from 'qrcode';
 import { Game } from './src/game.js';
@@ -17,6 +18,8 @@ if (!process.env.HOST_KEY) console.warn('[warn] HOST_KEY not set; using the defa
 
 const app = express();
 app.disable('x-powered-by');
+// squeeze pages, scripts and models on the way out (recorded sound is compressed already, except .wav)
+app.use(compression({ filter: (req, res) => /\.(glb|gltf|wav)$/.test(req.path) || compression.filter(req, res) }));
 const server = http.createServer(app);
 const io = new Server(server, { pingInterval: 10000, pingTimeout: 20000, maxHttpBufferSize: 1e5 });
 const game = new Game(io);

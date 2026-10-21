@@ -102,7 +102,8 @@ Don't redeploy during the party: a new version starts an empty game. Afterwards,
   - `jump-scare`, `door-slam`
 
   Each can be `.mp3`, `.ogg` or `.wav`.
-- **Models:** `public/assets/models/models.json` says which `.glb` file to use for each kind of furniture
+- **Models:** the furniture and courtyard use Kenney's Furniture and Graveyard kits, the players wear one of ten
+  Quaternius costumes (picked per player), and the nun stays the tall built figure. `public/assets/models/models.json` says which `.glb` file to use for each kind of furniture
   (the names in `PROP_TYPES` in `shared/level.js`), for the players and for the nun. A model is turned and
   sized to the same footprint as the shape it replaces, so hiding places and walls stay the same. Anything
   not listed keeps the built shape; with no `player` entry the players use `Soldier.glb`. See the top of

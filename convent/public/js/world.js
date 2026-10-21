@@ -226,6 +226,8 @@ export function buildWorld(renderer) {
     flames.push([x, y, z]);
   };
   for (const p of L.PROPS.filter((p) => p.type === 'altar' || p.type === 'candles')) candleAt(p.x, p.type === 'altar' ? 1.4 : 1.3, p.z, p.type === 'altar' ? 1.6 : 1.2);
+  // a candle inside each carved pumpkin
+  for (const p of L.PROPS.filter((p) => p.glow)) candleAt(p.x, 0.3, p.z, 0.9, 4);
   const POOL = 4;
   const pool = [];
   for (let i = 0; i < POOL; i++) {
@@ -730,6 +732,26 @@ function makeProp(p, M) {
       g.add(box(0.12, 0.12, 0.02, M.brass, 0, 0.9, d * 0.43 + 0.02));
       break;
     }
+    // plain stand-ins for the decorations, used only when their models are missing
+    case 'pumpkin': {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(w / 2, 14, 10), M.pumpkin);
+      b.scale.y = h / w;
+      b.position.y = h / 2;
+      g.add(b);
+      break;
+    }
+    case 'rug':
+      g.add(box(w, 0.01, d, M.blanket, 0, 0.005, 0));
+      break;
+    case 'fence':
+      for (let i = 0; i < 5; i++) g.add(box(0.04, h, 0.04, M.iron, -w / 2 + 0.1 + i * ((w - 0.2) / 4), 0, 0));
+      g.add(box(w, 0.04, 0.04, M.iron, 0, h * 0.8, 0));
+      break;
+    case 'coffin':
+    case 'crypt':
+    case 'urn':
+      g.add(box(w, h, d, p.type === 'coffin' ? M.darkWood : M.stoneProp));
+      break;
     default:
       g.add(box(w, h, d, M.oldWood));
   }

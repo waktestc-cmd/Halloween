@@ -6,7 +6,8 @@
 //   { "props":  { "bed": { "file": "furniture/bedSingle.glb", "turn": 180, "fit": "stretch" },
 //                 "grave": { "files": ["graveyard/a.glb", "graveyard/b.glb"] } },
 //     "player": { "file": "characters/Worker.glb", "height": 1.75, "turn": 0, "tint": "Shirt" },
-//     "nun":    { "file": "characters/Nun.glb", "height": 1.85 } }
+//     "nun":    { "file": "characters/Nun.glb", "height": 1.85, "hide": ["Hat"], "colors": { "Clothes": "#000" } },
+//     "recolor": { "wood": "#4a3322" } }
 //
 // fit: "stretch" fills the footprint exactly; "contain" (the default) keeps the model's proportions
 // inside it; "height" keeps proportions and matches the height only. "raise" lifts it (metres),
@@ -27,13 +28,15 @@ export const manifest = fetch('/assets/models/models.json')
 
 // make bright game colours fit a dark old house, once per material
 const toned = new WeakSet();
-function tone(root, amount) {
+// "recolor" in models.json repaints materials by name first (old dark wood instead of pine)
+function tone(root, amount, recolor = {}) {
   const grey = new THREE.Color(0x777068);
   root.traverse((o) => {
     if (!o.isMesh) return;
     for (const m of [].concat(o.material)) {
       if (toned.has(m)) continue;
       toned.add(m);
+      if (m.color && recolor[m.name]) m.color.set(recolor[m.name]);
       if (m.color) m.color.lerp(grey, amount * 0.5).multiplyScalar(1 - amount * 0.4);
       // without reflections around, metal looks black: keep it mostly matte
       if (m.metalness != null) m.metalness = Math.min(m.metalness, 0.3);
@@ -44,14 +47,15 @@ function tone(root, amount) {
 
 // a ready model for every prop type that has one: prop -> THREE.Object3D (or null)
 export async function propModels() {
-  const list = (await manifest).props || {};
+  const all = await manifest;
+  const list = all.props || {};
   const ready = {};
   await Promise.all(
     Object.entries(list).map(async ([type, spec]) => {
       const urls = spec.files || [spec.file];
       const scenes = (await Promise.all(urls.map((u) => loadFile('/assets/models/' + u)))).filter(Boolean).map((g) => g.scene);
       if (!scenes.length) return;
-      for (const s of scenes) tone(s, spec.tone ?? 0.35);
+      for (const s of scenes) tone(s, spec.tone ?? 0.35, all.recolor);
       ready[type] = { spec, scenes };
     }),
   );
@@ -86,20 +90,29 @@ function fitted(scene, spec, { w, d, h }) {
   return g;
 }
 
-// animated characters for a kind ("player", "nun"): a list of { scene, animations, spec, scale },
-// one per file listed, or an empty list when none is listed or loads
+// animated characters for a kind ("player", "nun"): { count, get(i) } where get loads the i-th file
+// listed (only when someone needs it) as { scene, animations, spec, scale }. count is 0 when none is
+// listed; get gives null when a file fails to load.
 export async function characters(kind) {
   const spec = (await manifest)[kind];
-  if (!spec) return [];
+  if (!spec) return { count: 0, get: async () => null };
   const urls = spec.files || [spec.file];
-  const out = [];
-  for (const g of await Promise.all(urls.map((u) => loadFile('/assets/models/' + u)))) {
-    if (!g) continue;
-    tone(g.scene, spec.tone ?? 0.15);
-    const size = new THREE.Box3().setFromObject(g.scene).getSize(new THREE.Vector3());
-    out.push({ scene: g.scene, animations: g.animations, spec, scale: spec.height ? spec.height / (size.y || 1) : 1 });
-  }
-  return out;
+  const ready = new Map();
+  const get = (i) => {
+    const url = urls[i % urls.length];
+    if (!ready.has(url))
+      ready.set(
+        url,
+        loadFile('/assets/models/' + url).then((g) => {
+          if (!g) return null;
+          tone(g.scene, spec.tone ?? 0.15);
+          const size = new THREE.Box3().setFromObject(g.scene).getSize(new THREE.Vector3());
+          return { scene: g.scene, animations: g.animations, spec, scale: spec.height ? spec.height / (size.y || 1) : 1 };
+        }),
+      );
+    return ready.get(url);
+  };
+  return { count: urls.length, get };
 }
 
 // the animation that best matches a name: exact, then contained ("CharacterArmature|Walk")
