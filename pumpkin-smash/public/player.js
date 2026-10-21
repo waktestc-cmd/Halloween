@@ -9,6 +9,12 @@
   const view = new PS.RoomView($('room'));
   const roomCv = view.canvas; // the renderer may swap in a fresh canvas for its 2D fallback
   let META = null;
+  // where each painted player figure holds its lantern (tools/build_rooms.py)
+  let LANTERNS = {};
+  fetch('/sprites/players.json')
+    .then((r) => r.json())
+    .then((m) => (LANTERNS = m))
+    .catch(() => {});
   fetch('/rooms/rooms.json')
     .then((r) => r.json())
     .then((m) => (META = m))
@@ -36,11 +42,19 @@
   let dpr = 1;
 
   const isMild = () => mode === 'mild' || PS.reducedMotion;
+  // Dark: a tight lantern in a black house. Bright: a bigger lantern, more of the room visible.
+  let light = store.get('ps_light', 'dark') === 'bright' ? 'bright' : 'dark';
+  const isBright = () => light === 'bright';
+  const LIGHT = {
+    dark: { r: [0.085, 0.12, 60], ambient: 0.001, gain: 7, halo: 0.025 },
+    bright: { r: [0.105, 0.15, 72], ambient: 0.014, gain: 4.4, halo: 0.07 },
+  };
   function applyMode() {
     Sound.mild = isMild();
     stage.mild = isMild();
     $('btn-mode').textContent = mode === 'mild' ? 'Mild' : 'Spooky';
     $('btn-mute').textContent = Sound.isMuted() ? 'Sound off' : 'Sound on';
+    $('btn-light').textContent = isBright() ? 'Bright' : 'Dark';
   }
   applyMode();
   $('btn-mode').onclick = () => {
@@ -48,6 +62,12 @@
     store.set('ps_mode', mode);
     applyMode();
     toast(mode === 'mild' ? 'Mild. Gentler, and no screaming.' : 'Spooky. As intended.');
+  };
+  $('btn-light').onclick = () => {
+    light = isBright() ? 'dark' : 'bright';
+    store.set('ps_light', light);
+    applyMode();
+    toast(isBright() ? 'Bright. A bigger lantern, more of the room.' : 'Dark. A small lantern in a black house.');
   };
   $('btn-mute').onclick = () => {
     Sound.unlock();
@@ -144,7 +164,7 @@
       const hero = $('j-hero');
       if (hero.dataset.id !== costume) {
         hero.dataset.id = costume;
-        hero.innerHTML = PS.silSVG(costume);
+        hero.innerHTML = `<img class="painted" alt="" src="/sprites/player-${costume}.webp">`;
         hero.classList.remove('pop');
         void hero.offsetWidth;
         hero.classList.add('pop');
@@ -461,6 +481,15 @@
     ready: false,
     torch: { x: 0, y: 0 },
     hasPointer: false,
+    // where you stand (room space), where the mouse points, your lantern hand on screen
+    me: { u: 0.5, v: 0.85, tu: 0.5, tv: 0.85, f: 1, step: 0, moving: false },
+    ptr: { x: 0, y: 0 },
+    hand: { x: 0, y: 0 },
+    feet: { x: 0, y: 0 },
+    bh: 200,
+    goal: null,
+    mark: null,
+    keys: {},
     ghosts: [],
     door: null,
     nextDoor: 0,
@@ -517,8 +546,8 @@
         this.graceUntil = t + 2500;
         this.setHp(3);
         if (!this.hasPointer) {
-          this.torch.x = W / 2;
-          this.torch.y = H * 0.55;
+          this.ptr.x = W / 2;
+          this.ptr.y = H * 0.55;
         }
       }
       if (this.room == null && me.room != null) this.enterRoom(me.room);
@@ -540,8 +569,9 @@
       return !!state && state.events.some((e) => e.type === type && (room == null || e.room === room));
     },
     baseRadius() {
-      // a generous beam: this is for people who do not play games
-      let r = Math.max(W * 0.105, Math.min(W, H) * 0.15, 72);
+      // the lantern's size: Dark or Bright, each player's choice (see LIGHT)
+      const lr = LIGHT[isBright() ? 'bright' : 'dark'].r;
+      let r = Math.max(W * lr[0], Math.min(W, H) * lr[1], lr[2]);
       if (this.hasEvent('bloodMoon')) r *= 0.5;
       // a hurt lantern burns lower, and gutters for a moment when struck
       r *= [0.7, 0.78, 0.89, 1][this.hp];
@@ -578,6 +608,14 @@
       this.graceUntil = Math.max(this.graceUntil, now + 1500);
       $('hud-room').textContent = `The ${S.ROOMS[r].name.toLowerCase()}`;
       this.opening = [];
+      this.goal = null;
+      this.mark = null;
+      // you come in by the door
+      const m = this.meta();
+      const d = m.doors[0];
+      const at = d ? (d.q ? d.q[3] : [d.x + d.w / 2, d.y + d.h]) : [0.5, 0.85];
+      const p = clampWalk(at[0] + (at[0] < 0.5 ? 0.1 : -0.1), at[1] + 0.08, m);
+      Object.assign(this.me, { u: p.u, v: p.v, tu: p.u, tv: p.v, f: at[0] < 0.5 ? 1 : -1, moving: false });
       Sound.setDrone(r);
     },
     respawnGhosts() {
@@ -596,6 +634,7 @@
   const residents = PS.Residents({
     view,
     torch: () => Hunt.torch,
+    player: () => Hunt.me,
     lightAt: (x, y, R) => (Hunt.dead ? 0 : lightAt(x, y, R)),
     mild: () => isMild(),
     fast: () => fastMul(),
@@ -611,8 +650,124 @@
   function torchRoom() {
     return view.toRoom(Hunt.torch.x, Hunt.torch.y);
   }
+  // where you stand, in room space
+  const feetRoom = () => ({ u: Hunt.me.u, v: Hunt.me.v });
+
+  // ---- walking: you are a figure on the floor; click the floor to walk, click a thing to go to it
+  const VPV = 500 / 1080; // the horizon: where the floor's edges meet
+  const figH = (v) => (1.55 * Math.max(20, v * 1080 - 500)) / 1.6 * view.view.scale;
+  function inPoly(u, v, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i];
+      const [xj, yj] = poly[j];
+      if (yi > v !== yj > v && u < ((xj - xi) * (v - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  // the nearest point on the floor you can stand on
+  function clampWalk(u, v, m = Hunt.meta()) {
+    if (m.walk) {
+      if (inPoly(u, v, m.walk)) return { u, v };
+      let best = { u, v };
+      let bd = Infinity;
+      for (let i = 0; i < m.walk.length; i++) {
+        const [ax, ay] = m.walk[i];
+        const [bx, by] = m.walk[(i + 1) % m.walk.length];
+        const t = clamp(((u - ax) * (bx - ax) + (v - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2 || 1), 0, 1);
+        const px = ax + (bx - ax) * t;
+        const py = ay + (by - ay) * t;
+        const d = (px - u) ** 2 + (py - v) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = { u: px + (0.5 - px) * 0.02, v: py + (0.85 - py) * 0.02 };
+        }
+      }
+      return best;
+    }
+    const w = m.wall || [0.18, 0.13, 0.82, 0.665];
+    const vv = clamp(v, w[3] + 0.025, 0.97);
+    // the floor narrows towards the back wall, along the lines to the vanishing point
+    const k = (vv - VPV) / (w[3] - VPV);
+    const uL = 0.5 + (w[0] - 0.5) * k;
+    const uR = 0.5 + (w[2] - 0.5) * k;
+    return { u: clamp(u, Math.max(0.03, uL + 0.025), Math.min(0.97, uR - 0.025)), v: vv };
+  }
+  // walk somewhere; when you get there, maybe do something
+  function walkTo(u, v, goal) {
+    const p = clampWalk(u, v);
+    Hunt.me.tu = p.u;
+    Hunt.me.tv = p.v;
+    Hunt.goal = goal || null;
+    Hunt.mark = { u: p.u, v: p.v, t: performance.now() };
+  }
+  const near = (a, b, d) => Math.hypot((a.u - b.u) / AS, a.v - b.v) < d;
+  function updateMe(dt, now) {
+    const m = Hunt.me;
+    // arrow keys and WASD walk too
+    const k = Hunt.keys;
+    const kx = (k.ArrowRight || k.KeyD ? 1 : 0) - (k.ArrowLeft || k.KeyA ? 1 : 0);
+    const ky = (k.ArrowDown || k.KeyS ? 1 : 0) - (k.ArrowUp || k.KeyW ? 1 : 0);
+    if (kx || ky) {
+      const p = clampWalk(m.u + kx * 0.06, m.v + ky * 0.05);
+      m.tu = p.u;
+      m.tv = p.v;
+      Hunt.goal = null;
+    }
+    const du = (m.tu - m.u) / AS;
+    const dv = m.tv - m.v;
+    const d = Math.hypot(du, dv);
+    const speed = 0.42; // room heights per second
+    if (d > 0.004) {
+      const st = Math.min(d, speed * dt);
+      m.u += (du / d) * st * AS;
+      m.v += (dv / d) * st;
+      m.moving = true;
+      if (Math.abs(du) > 0.002) m.f = du < 0 ? -1 : 1;
+      m.step += st * 9;
+      if (now - Hunt.lastStep > 330) {
+        Hunt.lastStep = now;
+        Sound.footstep(clamp((m.u - 0.5) * 2, -1, 1) * 0.6);
+      }
+    } else {
+      m.moving = false;
+      const g = Hunt.goal;
+      if (g) {
+        Hunt.goal = null;
+        g.act();
+      }
+    }
+    // souls on the floor are picked up as you walk over them
+    for (const it of items.values()) {
+      if (it.r === Hunt.room && it.t === 's' && it.c == null && !it.pending && near(m, { u: it.x, v: it.y }, 0.05)) claim(it);
+    }
+  }
+  // the lantern: held in your hand, pointed where the mouse is, as far as your arm and its light reach
+  function placeLight(R) {
+    const m = Hunt.me;
+    const F = view.toScreen(m.u, m.v);
+    const bh = figH(m.v);
+    if (!m.moving && Math.abs(Hunt.ptr.x - F.x) > bh * 0.1) m.f = Hunt.ptr.x < F.x ? -1 : 1;
+    const hand = figureGeom(me.costume, F.x, F.y, m.v, m.f).hand;
+    const reach = Math.max(R * 2.6, bh * 1.1);
+    let dx = Hunt.ptr.x - hand.x;
+    let dy = Hunt.ptr.y - hand.y;
+    const dl = Math.hypot(dx, dy);
+    if (dl > reach) {
+      dx *= reach / dl;
+      dy *= reach / dl;
+    }
+    Hunt.feet = F;
+    Hunt.bh = bh;
+    Hunt.hand = hand;
+    // ease the light so it swings like something held, not a cursor
+    const tx = hand.x + dx;
+    const ty = hand.y + dy;
+    Hunt.torch.x += (tx - Hunt.torch.x) * 0.35;
+    Hunt.torch.y += (ty - Hunt.torch.y) * 0.35;
+  }
   function makeGhost(room, extra) {
-    const tr = torchRoom();
+    const tr = feetRoom();
     let u;
     let v;
     let tries = 0;
@@ -628,7 +783,7 @@
   // ---- zombies: slow, floor-bound, drawn to light
   const AS = 1080 / 1920;
   function makeZombie(room) {
-    const tr = torchRoom();
+    const tr = feetRoom();
     let u;
     let tries = 0;
     do {
@@ -641,13 +796,13 @@
   // A zombie never kills on contact. It has to reach you, rear up (a snarl, arms raised: the
   // warning) and swipe; if the lantern is still in reach when the swipe lands, it is a hit.
   // Three hits and the lantern goes out. A hurt lantern relights after a while.
-  const Z_WIND = () => (isMild() ? 850 : 650);
+  const Z_WIND = () => (isMild() ? 1300 : 1000);
   const Z_SWIPE = 220;
   const Z_BACK = 1500;
   const Z_HEAL = () => 20000 * Math.max(0.4, fastMul());
   // where the lantern sits relative to a zombie, in its own frame (x forward, y up from the feet)
   function zLocal(z) {
-    return { x: (Hunt.torch.x - z.sx) * z.f / z.h, y: (Hunt.torch.y - z.sy) / z.h };
+    return { x: (Hunt.hand.x - z.sx) * z.f / z.h, y: (Hunt.hand.y - z.sy) / z.h };
   }
   const inReach = (q, extra = 0) => q.x > -0.08 && q.x < 0.5 + extra && q.y > -1.05 && q.y < -0.3;
   // a zombie's swipe or a ghost's touch: the lantern takes it, three times
@@ -664,7 +819,7 @@
     toast(Hunt.hp === 2 ? first : 'Once more and the lantern goes out.', 2600);
   }
   function updateZombies(dt, now, R) {
-    const tr = torchRoom();
+    const tr = feetRoom();
     const t = now / 1000;
     const base = 0.02 * speedMul();
     // the lantern relights, one notch at a time
@@ -691,7 +846,7 @@
         z.u -= z.f * base * 0.8 * dt * AS * Math.max(0, 1 - sk / Z_BACK);
       } else if (near) {
         const sp = base * 1.8 * lurch;
-        const tv = clamp(tr.v + 0.12, 0.72, 0.93);
+        const tv = clamp(tr.v, 0.72, 0.95);
         const d = Math.hypot(du, tv - z.v) || 1;
         z.u += (du / d) * sp * dt * AS;
         z.v += ((tv - z.v) / d) * sp * dt;
@@ -770,27 +925,85 @@
         q = { u: p.u, v: p.v };
         peers.set(p.n, q);
       }
-      Object.assign(q, { c: p.c, tu: p.u, tv: p.v, d: p.d });
+      if (q.fu == null) Object.assign(q, { fu: p.fu, fv: p.fv, step: 0 });
+      Object.assign(q, { c: p.c, tu: p.u, tv: p.v, tfu: p.fu, tfv: p.fv, f: p.f || 1, d: p.d });
     }
     for (const k of [...peers.keys()]) if (!seen.has(k)) peers.delete(k);
   });
-  // a player is their light: the costume silhouette at its centre and a small hand lantern
+  // a player: the painted figure in their costume, lantern in hand (or, until it loads, a cut-paper one)
   const presenceSize = (R) => Math.max(28, R * 0.34);
-  function drawPresence(costume, x, y, size, alpha, t) {
+  function figureGeom(costume, x, y, v, f) {
+    const img = PS.sprite('player-' + costume);
+    if (!img) {
+      const h = figH(v);
+      return { img: null, h, hand: { x: x + f * h * 0.2, y: y - h * 0.47 } };
+    }
+    const h = figH(v) * 1.12;
+    const w = (h * img.naturalWidth) / img.naturalHeight;
+    const l = LANTERNS[costume] || { x: 0.86, y: 0.49 };
+    return { img, h, w, hand: { x: x + f * (l.x - 0.5) * w, y: y - (1 - l.y) * h } };
+  }
+  function drawPlayer(costume, x, y, v, f, step, moving, alpha, t) {
+    const g = figureGeom(costume, x, y, v, f);
+    if (!g.img) return drawFigure(costume, x, y, g.h, f, step, alpha, 0.8, t);
+    // a walking bob; standing still is still
+    const bob = moving ? Math.abs(Math.sin(step)) * g.h * 0.012 : 0;
+    PS.drawLitSprite(ctx, g.img, x, y - bob, g.h, { torch: g.hand, R: g.h * 0.75, facing: f, alpha, rot: moving ? Math.sin(step) * 0.012 : 0 });
+    // the lantern itself burns
+    PS.drawLantern(ctx, g.hand.x, g.hand.y - bob, g.h * 0.03, t, alpha * 0.9);
+  }
+  function drawFigure(costume, x, y, h, f, step, alpha, lit, t) {
+    const sway = Math.sin(step) * h * 0.025;
+    // dark cloth, warm only on the side its own lantern lights
+    const L = clamp(lit, 0, 1);
+    const col = (k) => {
+      const v = Math.round(lerp(22, 215, k));
+      return `rgb(${v},${Math.round(v * 0.86)},${Math.round(v * 0.7)})`;
+    };
+    const shade = ctx.createLinearGradient(x - f * h * 0.22, 0, x + f * h * 0.24, 0);
+    shade.addColorStop(0, col(L * 0.12));
+    shade.addColorStop(1, col(L * 0.7));
+    const cloak = shade;
     ctx.save();
     ctx.globalAlpha = alpha;
-    PS.drawSil(ctx, costume, x, y, size, T.bone);
+    // feet, stepping out from under the hem
+    ctx.fillStyle = cloak;
+    for (const s of [-1, 1]) {
+      const fx = x + s * h * 0.06 + Math.sin(step + (s > 0 ? Math.PI : 0)) * h * 0.04;
+      ctx.beginPath();
+      ctx.ellipse(fx + f * h * 0.02, y - h * 0.012, h * 0.045, h * 0.016, 0, 0, TAU);
+      ctx.fill();
+    }
+    // the cloak: narrow at the shoulders, wide at a ragged hem
+    ctx.beginPath();
+    ctx.moveTo(x - h * 0.13, y - h * 0.6);
+    ctx.lineTo(x + h * 0.13, y - h * 0.6);
+    ctx.quadraticCurveTo(x + h * 0.17 + sway, y - h * 0.3, x + h * 0.21 + sway, y - h * 0.03);
+    for (let i = 1; i <= 6; i++) ctx.lineTo(x + h * (0.21 - (i / 6) * 0.42) + sway, y - h * (i % 2 ? 0.07 : 0.02));
+    ctx.quadraticCurveTo(x - h * 0.17 + sway, y - h * 0.3, x - h * 0.13, y - h * 0.6);
+    ctx.fill();
+    // the arm that holds the lantern out
+    ctx.strokeStyle = cloak;
+    ctx.lineWidth = Math.max(2, h * 0.045);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x + f * h * 0.1, y - h * 0.56);
+    ctx.lineTo(x + f * h * 0.2, y - h * 0.5);
+    ctx.stroke();
+    // the costume is the head and shoulders
+    PS.drawSil(ctx, costume, x, y - h * 0.76, h * 0.42, col(L * 0.55));
     ctx.restore();
-    PS.drawLantern(ctx, x + size * 0.58, y + size * 0.22, size * 0.3, t, alpha);
+    PS.drawLantern(ctx, x + f * h * 0.2, y - h * 0.47, h * 0.055, t, alpha);
   }
   function sendPos(now) {
     if (now - Hunt.lastPos < 120 || !Hunt.ready) return;
     const r = torchRoom();
+    const m = Hunt.me;
     const s = Hunt.sentPos;
-    if (s && Math.abs(s.u - r.u) < 0.002 && Math.abs(s.v - r.v) < 0.002 && now - Hunt.lastPos < 1000) return;
+    if (s && Math.abs(s.u - r.u) < 0.002 && Math.abs(s.v - r.v) < 0.002 && Math.abs(s.fu - m.u) < 0.002 && Math.abs(s.fv - m.v) < 0.002 && now - Hunt.lastPos < 1000) return;
     Hunt.lastPos = now;
-    Hunt.sentPos = r;
-    socket.volatile.emit('pos', { u: r.u, v: r.v });
+    Hunt.sentPos = { u: r.u, v: r.v, fu: m.u, fv: m.v };
+    socket.volatile.emit('pos', { u: r.u, v: r.v, fu: m.u, fv: m.v, f: m.f });
   }
 
   function updateGhosts(dt, now, R) {
@@ -798,7 +1011,7 @@
     const extras = Hunt.ghosts.filter((g) => g.extra).length;
     if (extras < want) for (let i = extras; i < want; i++) Hunt.ghosts.push(makeGhost(Hunt.room, true));
     if (extras > want) Hunt.ghosts = Hunt.ghosts.filter((g) => !g.extra);
-    const tr = torchRoom();
+    const tr = view.toRoom(Hunt.hand.x, Hunt.hand.y);
     const base = 0.04 * speedMul(); // room heights per second
     const t = now / 1000;
     let nearest = Infinity;
@@ -870,7 +1083,7 @@
       const sp = view.toScreen(g.u, g.v);
       g.sx = sp.x;
       g.sy = sp.y;
-      const d = Math.hypot(sp.x - Hunt.torch.x, sp.y - Hunt.torch.y);
+      const d = Math.hypot(sp.x - Hunt.hand.x, sp.y - Hunt.hand.y);
       if (d < nearest) {
         nearest = d;
         nearPan = clamp((sp.x - Hunt.torch.x) / (W / 2), -1, 1);
@@ -896,7 +1109,7 @@
     Hunt.dead = true;
     const gi = g.gi;
     Hunt.deathInfo = { gi, kind, t: performance.now() };
-    const tr = torchRoom();
+    const tr = feetRoom();
     socket.emit('died', { ghost: gi, zombie: kind === 'zombie', x: tr.u, y: tr.v }, (res) => {
       if (res && res.ok && Hunt.deathInfo) {
         $('death-sub').textContent = res.dropped ? `You dropped ${res.dropped} soul${res.dropped === 1 ? '' : 's'}. They are on the floor somewhere.` : 'Your pumpkin is safe. Your souls, less so.';
@@ -1058,8 +1271,8 @@
   // words by the lantern for what a click would do: plain instructions for everyone
   function drawLabel(t) {
     if (Hunt.dead || Hunt.trans || !me) return;
-    const x = Hunt.torch.x;
-    const y = Hunt.torch.y;
+    const x = Hunt.ptr.x;
+    const y = Hunt.ptr.y;
     let text = residents.label(x, y, t);
     if (!text && Hunt.door && Hunt.door.k > 0.3) {
       const r = doorRect(Hunt.door);
@@ -1067,16 +1280,16 @@
     }
     if (!text) {
       const hit = containerAt(x, y);
-      if (hit) text = `Open ${hit.k.name}`;
+      if (hit) text = hit.k.do;
     }
-    fx.style.cursor = text ? 'pointer' : '';
+    fx.style.cursor = text ? 'pointer' : 'default';
     if (!text) return;
     const size = Math.round(clamp(Math.min(W, H) * 0.028, 15, 22));
     ctx.save();
     ctx.font = `italic 600 ${size}px Fraunces, Georgia, serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const ly = Math.min(y + presenceSize(Hunt.baseRadius()) * 0.75 + 10, H - size * 3);
+    const ly = Math.min(y + 24, H - size * 3);
     // keep the words on screen near the edges
     const half = ctx.measureText(text).width / 2 + 14;
     const lx = clamp(x, half, Math.max(half, W - half));
@@ -1103,7 +1316,7 @@
       Hunt.lastCollect = performance.now();
       if (res.found === 'p' || res.found === 'h') {
         if (res.kept === false) {
-          if (res.found === 'p') toast(`Pumpkin ${res.n} is in ${k.name}. You already carry ${me.hammer ? 'the hammer' : 'Pumpkin ' + me.pumpkin}. Leave it for someone else.`, 3600);
+          if (res.found === 'p') toast(`Pumpkin ${res.n} is ${k.where}. You already carry ${me.hammer ? 'the hammer' : 'Pumpkin ' + me.pumpkin}. Leave it for someone else.`, 3600);
           return;
         }
         Sound.claim();
@@ -1111,12 +1324,12 @@
         const size = 135 * view.view.scale;
         Hunt.ignite.push({ t: performance.now(), x: cx, y: cy, size, n: res.n, kind: res.found });
         particles.emit(cx, cy, { count: isMild() ? 20 : 60, color: [T.ember, T.flame], speed: 260, life: 1.4, size: 4, gravity: -60, shape: 'ember' });
-        if (res.found === 'p') banner(`Pumpkin ${res.n} is yours.`, `It was in ${k.name}. It is safe now. You will pitch it later.`, true);
+        if (res.found === 'p') banner(`Pumpkin ${res.n} is yours.`, `It was ${k.where}. It is safe now. You will pitch it later.`, true);
         else banner('The hammer is yours.', 'You will be the one who swings it.', true);
       } else if (res.found === 's') {
         Sound.ping(clamp((cx - W / 2) / (W / 2), -1, 1));
         particles.emit(cx, cy, { count: 10, color: [T.bone], speed: 80, life: 0.9, size: 2.5, shape: 'ember' });
-        toast(`A soul was hiding in ${k.name}.`, 2200);
+        toast(`A soul was hiding ${k.where}.`, 2200);
       } else toast(pick(EMPTY), 1600);
     });
   }
@@ -1132,17 +1345,87 @@
     el.classList.toggle('mild', mild);
     el.classList.add('go');
     el.hidden = false;
-    if (mild) Sound.moan();
+    // Ghostface says his line instead of a scream
+    if (id === 'ghostface') Sound.voice('ghostface', 0, () => (mild ? Sound.moan() : Sound.scream()));
+    else if (mild) Sound.moan();
     else Sound.scream();
     shaker.add(mild ? 3 : 20);
     clearTimeout(scare.timer);
-    scare.timer = setTimeout(() => (el.hidden = true), mild ? 2000 : 1500);
+    scare.timer = setTimeout(() => (el.hidden = true), id === 'ghostface' ? 2300 : mild ? 2000 : 1500);
     Hunt.graceUntil = Math.max(Hunt.graceUntil, performance.now() + 2500);
     if (!loss) return;
-    const tr = torchRoom();
+    const tr = feetRoom();
     socket.emit('scared', { x: tr.u, y: tr.v }, (res) => {
       if (res && res.ok && res.dropped) setTimeout(() => toast('You dropped a soul. It is on the floor somewhere.', 2600), mild ? 2000 : 1500);
     });
+  }
+
+  // the light of an opening door, drawn on the painted door itself (q: its four corners, the back
+  // edge first, where the gap opens)
+  function drawDoorLight(d, t) {
+    const q = d.q || [[d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, d.y + d.h], [d.x, d.y + d.h]];
+    const P = q.map(([u, v]) => view.toScreen(u, v));
+    const [bt, ft, fb, bb] = P;
+    const k = d.k * flicker(t, 2, 0.05);
+    const mix = (p, r, f) => ({ x: p.x + (r.x - p.x) * f, y: p.y + (r.y - p.y) * f });
+    const leafW = Math.hypot(ft.x - bt.x, ft.y - bt.y);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (d.kind === 'gate') {
+      // light through the bars: the whole gateway glows from behind
+      const cx = (bt.x + fb.x) / 2;
+      const cy = (bt.y + fb.y) / 2 + Math.abs(bb.y - bt.y) * 0.1;
+      const hh = Math.abs(bb.y - bt.y) * 0.5;
+      ctx.save();
+      ctx.beginPath();
+      P.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.clip();
+      // an oval of light that fades to nothing before it reaches the gateway's edges
+      ctx.translate(cx, cy);
+      ctx.scale(Math.max(0.3, (leafW / hh) * 0.45), 1);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, hh);
+      g.addColorStop(0, hexA(T.ember, 0.4 * k));
+      g.addColorStop(0.5, hexA(T.flame, 0.15 * k));
+      g.addColorStop(1, hexA(T.flame, 0));
+      ctx.fillStyle = g;
+      ctx.fillRect(-hh, -hh, hh * 2, hh * 2);
+      ctx.restore();
+    } else {
+      // the gap: a sliver of the door's width at the latch edge, brightest at the frame
+      const gap = 0.02 + 0.07 * k;
+      const gt = mix(bt, ft, gap);
+      const gb = mix(bb, fb, gap);
+      const lg = ctx.createLinearGradient(bt.x, bt.y, gt.x, gt.y);
+      lg.addColorStop(0, hexA(T.ember, 0.95 * k));
+      lg.addColorStop(0.6, hexA(T.flame, 0.7 * k));
+      lg.addColorStop(1, hexA(T.flame, 0));
+      ctx.shadowColor = hexA(T.flame, 0.8 * k);
+      ctx.shadowBlur = 22 * k;
+      ctx.fillStyle = lg;
+      ctx.beginPath();
+      ctx.moveTo(bt.x, bt.y);
+      ctx.lineTo(gt.x, gt.y);
+      ctx.lineTo(gb.x, gb.y);
+      ctx.lineTo(bb.x, bb.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    // the spill on the floor in front of the gap: a soft ellipse, no edges
+    const sx = d.kind === 'gate' ? (bb.x + fb.x) / 2 : bb.x;
+    const sy = d.kind === 'gate' ? (bb.y + fb.y) / 2 : bb.y;
+    const rx = Math.max(30, leafW * 1.4);
+    ctx.translate(sx, sy);
+    ctx.scale(1, 0.28);
+    const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    sg.addColorStop(0, hexA(T.flame, 0.3 * k));
+    sg.addColorStop(1, hexA(T.flame, 0));
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, TAU);
+    ctx.fill();
+    ctx.restore();
   }
 
   function doorRect(d) {
@@ -1151,58 +1434,81 @@
     return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
   }
 
-  function handlePress(x, y, litFrom) {
+  // one click: walk to whatever is there, and do it when you arrive
+  function standBefore(k) {
+    // the floor just in front of a hiding place
+    return clampWalk(k.x + k.w / 2, k.y + k.h + 0.05);
+  }
+  function handlePress(x, y) {
     if (!state || state.phase !== 'HUNT' || state.paused || Hunt.dead || Hunt.trans || !Hunt.ready) return;
     Sound.unlock();
-    const R = Hunt.baseRadius();
-    if (residents.press(x, y, performance.now() / 1000)) return;
+    const tt = performance.now() / 1000;
+    const res = residents.target(x, y, tt);
+    if (res) return walkTo(res.u, res.v, { label: res.label, act: () => residents.activate(res.act) });
     if (Hunt.door && Hunt.door.k > 0.3) {
       const r = doorRect(Hunt.door);
-      const pad = 12;
-      if (x > r.x - pad && x < r.x + r.w + pad && y > r.y - pad && y < r.y + r.h + pad) return useDoor();
+      const pad = 14;
+      if (x > r.x - pad && x < r.x + r.w + pad && y > r.y - pad && y < r.y + r.h + pad) {
+        const d = Hunt.door;
+        const b = d.q ? d.q[3] : [d.x + d.w / 2, d.y + d.h];
+        d.held = true; // it waits for you
+        return walkTo(b[0] + (b[0] < 0.5 ? 0.04 : -0.04), b[1] + 0.03, { act: () => (Hunt.door ? useDoor() : toast('The door closed again.', 1800)) });
+      }
     }
-    const lx = litFrom ? litFrom.x : x;
-    const ly = litFrom ? litFrom.y : y;
+    // a soul on the floor
     let best = null;
     let bestD = Infinity;
     for (const it of items.values()) {
-      if (it.r !== Hunt.room || !visibleTo(it) || it.c != null) continue;
+      if (it.r !== Hunt.room || it.t !== 's' || it.c != null) continue;
       const g = itemGeom(it);
       const d = Math.hypot(g.x - x, g.y - y);
-      if (d < g.hit + 6 && Math.hypot(g.x - lx, g.y - ly) < R * 1.1 && d < bestD) {
+      if (d < g.hit + 8 && d < bestD) {
         best = it;
         bestD = d;
       }
     }
-    if (best) return claim(best);
+    if (best) return walkTo(best.x, best.y, { act: () => items.has(best.id) && claim(best) });
     const hit = containerAt(x, y);
-    if (hit && Math.hypot(hit.r.x + hit.r.w / 2 - lx, hit.r.y + hit.r.h / 2 - ly) < R * 1.6 + Math.max(hit.r.w, hit.r.h) / 2) openContainer(hit);
+    if (hit) {
+      const st = standBefore(hit.k);
+      return walkTo(st.u, st.v, { act: () => openContainer({ c: hit.c, k: hit.k, r: containerRect(hit.k) }) });
+    }
+    // the floor: just walk there
+    const r = view.toRoom(x, y);
+    walkTo(r.u, r.v);
   }
 
   fx.addEventListener('pointermove', (e) => {
     Hunt.hasPointer = true;
-    Hunt.walk += Math.hypot(e.clientX - Hunt.torch.x, e.clientY - Hunt.torch.y);
-    Hunt.torch.x = e.clientX;
-    Hunt.torch.y = e.clientY;
+    Hunt.ptr.x = e.clientX;
+    Hunt.ptr.y = e.clientY;
   });
   fx.addEventListener('pointerdown', (e) => {
-    const prev = { x: Hunt.torch.x, y: Hunt.torch.y };
-    const touch = e.pointerType !== 'mouse';
     Hunt.hasPointer = true;
-    Hunt.torch.x = e.clientX;
-    Hunt.torch.y = e.clientY;
-    handlePress(e.clientX, e.clientY, touch ? prev : null);
+    Hunt.ptr.x = e.clientX;
+    Hunt.ptr.y = e.clientY;
+    handlePress(e.clientX, e.clientY);
   });
+  const WALK_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
+  window.addEventListener('keydown', (e) => {
+    if (!WALK_KEYS.includes(e.code) || !state || state.phase !== 'HUNT' || e.target.tagName === 'INPUT') return;
+    Hunt.keys[e.code] = true;
+    e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => delete Hunt.keys[e.code]);
+  window.addEventListener('blur', () => (Hunt.keys = {}));
 
   function huntEvents(now, paused) {
     const m = Hunt.meta();
     const locked = Hunt.hasEvent('lockedDoors');
     // a door opens a crack and light leaks out
     if (!paused && !locked && !Hunt.door && now > Hunt.nextDoor && !Hunt.trans && m.doors.length) {
-      Hunt.door = Object.assign({ t0: now, life: 3500 }, pick(m.doors));
+      Hunt.door = Object.assign({ t0: now, life: 9000 }, pick(m.doors));
       Sound.creak(clamp(((Hunt.door.x + Hunt.door.w / 2) - 0.5) * 2, -1, 1), 0.18);
     }
     if (Hunt.door) {
+      if (Hunt.door.held && !Hunt.goal) Hunt.door.held = false;
+      if (Hunt.door.held) Hunt.door.t0 = Math.min(Hunt.door.t0, now - Hunt.door.life * 0.5);
       const k = (now - Hunt.door.t0) / Hunt.door.life;
       if (k >= 1 || locked) {
         Hunt.door = null;
@@ -1235,6 +1541,8 @@
     const paused = state.paused;
     const fl = isMild() ? 1 + 0.01 * Math.sin(t * 3) : flicker(t, 0, 0.03);
     const R = Hunt.baseRadius() * (1 + (fl - 1) * 0.6);
+    if (!paused && !Hunt.dead && !Hunt.trans && Hunt.ready) updateMe(dt, now);
+    placeLight(R);
     view.layout(W, H, Hunt.torch, dt);
     huntEvents(now, paused);
     if (!paused && Hunt.ready) {
@@ -1247,19 +1555,19 @@
       const k = Math.min(1, dt * 8);
       q.u += (q.tu - q.u) * k;
       q.v += (q.tv - q.v) * k;
-    }
-
-    // footsteps as the light moves
-    if (Hunt.walk > 160 && now - Hunt.lastStep > 340 && !paused) {
-      Hunt.walk = 0;
-      Hunt.lastStep = now;
-      Sound.footstep(clamp((Hunt.torch.x - W / 2) / (W / 2), -1, 1) * 0.6);
+      if (q.tfu != null) {
+        const mv = Math.hypot(q.tfu - q.fu, q.tfv - q.fv);
+        q.fu += (q.tfu - q.fu) * k;
+        q.fv += (q.tfv - q.fv) * k;
+        q.step += Math.min(mv, 0.05) * 60;
+      }
     }
 
     const lights = [];
     if (Hunt.door) {
       const d = Hunt.door;
-      lights.push({ u: d.x + d.w / 2, v: d.y + d.h * 0.92, intensity: 2.6 * d.k * flicker(t, 3, 0.04), color: [1, 0.48, 0.1] });
+      const base = d.q ? { u: d.q[3][0], v: d.q[3][1] - 0.03 } : { u: d.x + d.w / 2, v: d.y + d.h * 0.92 };
+      lights.push({ u: base.u, v: base.v, intensity: 2.4 * d.k * flicker(t, 3, 0.04), color: [1, 0.48, 0.1] });
     }
     if (Hunt.flare) lights.push({ u: Hunt.flare.x, v: Hunt.flare.y, intensity: 1.4 * Hunt.flare.k * flicker(t, 5, 0.04), color: [1, 0.62, 0.25] });
     for (const ig of Hunt.ignite) {
@@ -1285,8 +1593,10 @@
         time: t,
         flicker: fl,
         lights,
-        ambient: torchOn ? 0.014 : 0,
-        gain: torchOn ? 4.4 : 0,
+        // Dark: a near-black room and a strong lantern; Bright: more of the room
+        ambient: torchOn ? LIGHT[light].ambient : 0,
+        gain: torchOn ? LIGHT[light].gain : 0,
+        halo: LIGHT[light].halo,
       },
       roomCv.width / W
     );
@@ -1322,41 +1632,8 @@
       ctx.restore();
     }
 
-    // the crack of light from an opening door
-    if (Hunt.door) {
-      const d = Hunt.door;
-      const r = doorRect(d);
-      const k = d.k * flicker(t, 2, 0.04);
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      let cx;
-      let w;
-      if (d.kind === 'double') {
-        cx = r.x + r.w / 2;
-        w = Math.max(2, r.w * 0.05 * k);
-      } else if (d.kind === 'gate') {
-        cx = r.x + r.w / 2;
-        w = r.w * 0.8 * k;
-      } else if (d.kind === 'side') {
-        cx = r.x + r.w * 0.15;
-        w = Math.max(2, r.w * 0.12 * k);
-      } else {
-        cx = r.x + r.w * 0.9;
-        w = Math.max(2, r.w * 0.08 * k);
-      }
-      const g = ctx.createLinearGradient(cx - w, 0, cx + w, 0);
-      g.addColorStop(0, hexA(T.flame, 0));
-      g.addColorStop(0.5, hexA(T.ember, 0.95 * k));
-      g.addColorStop(1, hexA(T.flame, 0));
-      ctx.fillStyle = g;
-      ctx.fillRect(cx - w, r.y, w * 2, r.h);
-      const spill = ctx.createRadialGradient(cx, r.y + r.h, 0, cx, r.y + r.h, r.w * 1.2);
-      spill.addColorStop(0, hexA(T.flame, 0.35 * k));
-      spill.addColorStop(1, hexA(T.flame, 0));
-      ctx.fillStyle = spill;
-      ctx.fillRect(cx - r.w * 1.2, r.y + r.h - r.w * 0.3, r.w * 2.4, r.w * 0.6);
-      ctx.restore();
-    }
+    // the door comes ajar: a crack of warm light down its latch edge, spilling onto the floor
+    if (Hunt.door) drawDoorLight(Hunt.door, t);
     // a candle flame
     if (Hunt.flare) {
       const sp = view.toScreen(Hunt.flare.x, Hunt.flare.y);
@@ -1366,20 +1643,43 @@
 
     residents.draw(ctx, R, t);
 
-    // other players: their light, their silhouette, their name
-    const ps = presenceSize(R) * 0.85;
-    for (const [name, q] of peers) {
-      if (q.d) continue;
-      const sp = view.toScreen(q.u, q.v);
-      const L = lightAt(sp.x, sp.y, R);
-      drawPresence(q.c, sp.x, sp.y, ps, 0.35 + 0.5 * L, t);
+    // people on the floor, back to front: the others, and you
+    const crowd = [];
+    for (const [name, q] of peers) if (!q.d && q.fu != null) crowd.push({ v: q.fv, name, q });
+    if (!Hunt.dead) crowd.push({ v: Hunt.me.v, self: true });
+    crowd.sort((a, b) => a.v - b.v);
+    for (const c of crowd) {
+      if (c.self) {
+        const invis = now < Hunt.invisUntil;
+        const m = Hunt.me;
+        drawPlayer(me.costume, Hunt.feet.x, Hunt.feet.y, m.v, m.f, m.step, m.moving, invis ? 0.35 + 0.2 * Math.sin(t * 8) : 1, t);
+        continue;
+      }
+      const q = c.q;
+      const sp = view.toScreen(q.fu, q.fv);
+      const h = figH(q.fv);
+      const L = lightAt(sp.x, sp.y - h * 0.5, R);
+      const moving = Math.hypot((q.tfu || q.fu) - q.fu, (q.tfv || q.fv) - q.fv) > 0.002;
+      drawPlayer(q.c, sp.x, sp.y, q.fv, q.f || 1, q.step || 0, moving, 0.75 + 0.25 * L, t);
       ctx.save();
-      ctx.globalAlpha = 0.45 + 0.4 * L;
+      ctx.globalAlpha = 0.5 + 0.4 * L;
       ctx.fillStyle = T.ash;
       ctx.font = 'italic 500 15px Fraunces, Georgia, serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(name, sp.x, sp.y + ps * 0.62);
+      ctx.fillText(c.name, sp.x, sp.y + 6);
+      ctx.restore();
+    }
+    // where you are walking to: a small ring on the floor
+    if (Hunt.mark && Hunt.me.moving) {
+      const mk = view.toScreen(Hunt.mark.u, Hunt.mark.v);
+      const k = (now - Hunt.mark.t) / 600;
+      ctx.save();
+      ctx.strokeStyle = hexA(T.ember, 0.5 * Math.max(0.3, 1 - k));
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(mk.x, mk.y, 16 * view.view.scale + 6, (16 * view.view.scale + 6) * 0.3, 0, 0, TAU);
+      ctx.stroke();
       ctx.restore();
     }
     // zombies: only light shows them
@@ -1477,11 +1777,6 @@
 
     drawLabel(t);
 
-    // the player, at the centre of their own light
-    if (!Hunt.dead) {
-      const invis = now < Hunt.invisUntil;
-      drawPresence(me.costume, Hunt.torch.x, Hunt.torch.y, presenceSize(R), invis ? 0.3 + 0.2 * Math.sin(t * 8) : 0.92, t);
-    }
     // struck: the dark closes in at the edges for a moment
     const hk = (now - Hunt.hurtAt) / 900;
     if (hk >= 0 && hk < 1 && !isMild()) {
@@ -1709,6 +2004,18 @@
       get zombieStates() {
         return Hunt.zombies.map((z) => z.st);
       },
+      walkTo: (u, v) => walkTo(u, v),
+      act: (a) => residents.activate(a),
+      get goal() {
+        return Hunt.goal ? { u: Hunt.me.tu, v: Hunt.me.tv } : null;
+      },
+      get pos() {
+        return { u: Hunt.me.u, v: Hunt.me.v, moving: Hunt.me.moving, hand: Hunt.hand, feet: Hunt.feet };
+      },
+      openDoor: () => {
+        const m = Hunt.meta();
+        if (m.doors.length) Hunt.door = Object.assign({ t0: performance.now(), life: 6000 }, m.doors[0]);
+      },
       door: (to) => {
         Hunt.debugTo = to;
         useDoor();
@@ -1719,7 +2026,7 @@
       get containers() {
         return (Hunt.meta().containers || []).map((k, c) => {
           const r = containerRect(k);
-          return { c, name: k.name, x: r.x + r.w / 2, y: r.y + r.h / 2, has: hiddenIn(c) ? hiddenIn(c).t : null };
+          return { c, name: k.do, x: r.x + r.w / 2, y: r.y + r.h / 2, has: hiddenIn(c) ? hiddenIn(c).t : null };
         });
       },
       get zombies() {

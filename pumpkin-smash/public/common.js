@@ -1255,6 +1255,8 @@
     sample('snarl', '/sounds/zombie-snarl.wav');
     sample('laugh', '/sounds/evil-laugh.wav');
     sample('groan', '/sounds/zombie-groan.wav');
+    // the residents' own voices (see ASSETS.md)
+    for (const who of ['ghostface', 'jason', 'freddy', 'pennywise']) sample('voice-' + who, `/sounds/voice-${who}.mp3`);
     api.preload = () => Object.keys(samples).forEach(decoded);
 
     api.snarl = (pan) => {
@@ -1268,6 +1270,13 @@
       }
       [0, 7].forEach((det) => tone({ f: 70 + det, f2: 150 + det, glide: 0.5, type: 'sawtooth', vol: v, dur: 0.6, lp: 700, vib: [11, 9], pan }));
       noise({ f: 900, f2: 1600, q: 1.5, vol: v * 0.6, dur: 0.55, pan });
+    };
+    // a resident speaks; if their voice has not loaded, the fallback plays instead
+    api.voice = (who, pan, fallback) => {
+      const buf = ensure() && decoded('voice-' + who);
+      if (buf && !muted) play(buf, { pan: pan * 0.6, vol: api.mild ? 0.55 : 1 });
+      else if (fallback) fallback();
+      return !!buf;
     };
     // the house laughs as the doors open
     api.laugh = () => {
@@ -1432,6 +1441,42 @@
       d.g.gain.cancelScheduledValues(t);
       d.g.gain.setTargetAtTime(0.0001, t, 0.4);
       d.nodes.forEach((n) => n.stop(t + 2));
+    };
+
+    // Recorded effects (Kenney, CC0; see ASSETS.md) in place of the synthesised ones above, which
+    // stay as the fallback until a file has loaded.
+    const SFX = ['door-creak', 'door-open', 'hit', 'knock', 'open-wood', 'pumpkin-found', 'smash', 'soul', 'step-1', 'step-2', 'step-3', 'step-4', 'win'];
+    for (const n of SFX) sample('sfx-' + n, `/sounds/sfx-${n}.mp3`);
+    function sfx(name, o, fallback) {
+      const buf = decoded('sfx-' + name);
+      if (buf && !muted) {
+        play(buf, o);
+        return true;
+      }
+      if (fallback) fallback();
+      return false;
+    }
+    const synth = Object.assign({}, api);
+    api.footstep = (pan) => sfx(`step-${1 + Math.floor(Math.random() * 4)}`, { pan: pan * 0.6, rate: rand(0.9, 1.08), vol: 0.3 }, () => synth.footstep(pan));
+    api.creak = (pan, vol = 0.32) => sfx('door-creak', { pan, rate: rand(0.85, 1.05), vol: Math.min(1, vol * 2.2) }, () => synth.creak(pan, vol));
+    api.door = (pan) => sfx('door-open', { pan, vol: 0.8 }, () => synth.door(pan));
+    api.open = (pan) => sfx('open-wood', { pan, rate: rand(0.95, 1.08), vol: 0.6 }, () => synth.open(pan));
+    api.hurt = (pan) => sfx('hit', { pan, vol: api.mild ? 0.5 : 0.95 }, () => synth.hurt(pan));
+    // three knocks somewhere in the house
+    api.knock = (pan) => {
+      if (sfx('knock', { pan, vol: 0.45 }, () => synth.knock(pan))) [0.32, 0.6].forEach((at) => sfx('knock', { pan, at, rate: rand(0.95, 1.05), vol: 0.4 }));
+    };
+    api.ping = (pan) => sfx('soul', { pan, rate: rand(0.95, 1.1), vol: 0.3 }, () => synth.ping(pan));
+    api.claim = () => sfx('pumpkin-found', { vol: 0.8 }, () => synth.claim());
+    // the hammer lands: a hard impact on top of the low boom
+    api.boom = () => {
+      sfx('smash', { vol: 1 });
+      synth.boom();
+    };
+    // the win: a short jingle, then the bells swell under it
+    api.fanfare = () => {
+      sfx('win', { vol: 0.8 });
+      setTimeout(() => synth.fanfare(), 420);
     };
     return api;
   })();

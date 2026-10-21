@@ -7,7 +7,7 @@
   const { S, T, rand, pick, clamp, lerp, ease, hexA } = PS;
 
   PS.Residents = function (env) {
-    // env: view, torch(), lightAt(x, y, R), mild(), fast(), toast(text), scare(id, loss), phone()
+    // env: view, torch(), player() {u, v}, lightAt(x, y, R), mild(), fast(), toast(text), scare(id, loss), phone()
     const { view } = env;
     let room = null; // the room id
     let meta = null;
@@ -48,7 +48,6 @@
     }
     function updateWalker(dt, R) {
       const t = now();
-      const tr = env.torch();
       if (r.st === 'wait') {
         // Valak waits in her painting; looking at the painting keeps her there
         if (r.id === 'valak' && frameLit(R) > 0.4) r.until = Math.max(r.until, t + slow(3000));
@@ -59,7 +58,10 @@
           r.lit = 0;
           r.f = r.u < 0.5 ? 1 : -1;
           tell();
-          if (r.id === 'jason') PS.Sound.splash(pan(r.u));
+          if (r.id === 'jason') {
+            PS.Sound.splash(pan(r.u));
+            setTimeout(() => PS.Sound.voice('jason', pan(r.u)), 500);
+          }
           if (r.id === 'samara') r.tvOn = t;
           if (r.id === 'valak') env.toast('She is not in the painting.', 2600);
         }
@@ -94,15 +96,21 @@
         return;
       }
       r.lit = Math.max(0, r.lit - dt * 0.5);
-      r.v += r.def.speed * dt / Math.max(0.35, env.fast());
-      // drift towards the middle of the room, where you are
-      r.u += (0.5 - r.u) * 0.04 * dt + (view.toRoom(tr.x, tr.y).u - r.u) * 0.02 * dt;
-      r.f = view.toRoom(tr.x, tr.y).u < r.u ? -1 : 1;
+      // towards where you stand, slowly
+      const me = env.player();
+      const AS = 1080 / 1920;
+      const du = (me.u - r.u) / AS;
+      const dv = me.v - r.v;
+      const dist = Math.hypot(du, dv) || 1;
+      const step = (r.def.speed * 1.6 * dt) / Math.max(0.35, env.fast());
+      r.u += (du / dist) * step * AS;
+      r.v += (dv / dist) * step;
+      r.f = du < 0 ? -1 : 1;
       if (r.def.step && t > r.nextStep) {
         r.nextStep = t + r.def.step * 1000;
         PS.Sound.footstep(pan(r.u));
       }
-      if (r.v >= 0.965) {
+      if (dist < 0.07) {
         env.scare(r.id, true);
         rest(true);
       }
@@ -200,8 +208,8 @@
       r.still += dt / Math.max(0.35, env.fast());
       if (r.still > 8 && !r.warned) {
         r.warned = true;
-        PS.Sound.lullaby();
-        env.toast('One, two. Freddy is coming for you.', 3000);
+        PS.Sound.voice('freddy', 0, () => PS.Sound.lullaby());
+        env.toast('One, two. Freddy is coming for you.', 3600);
       }
       if (r.still > 13 && !r.show) r.show = now();
       if (r.show && now() - r.show > 700) {
@@ -317,10 +325,12 @@
       const sp = view.toScreen(home[0], home[1] - 0.04);
       const h = hpx(home[1] - 0.04, 1.85);
       r.L = env.lightAt(sp.x, sp.y - h * 0.6, R);
-      if (r.L > 0.35 && !r.seen) {
+      // the first time your light finds him, and now and then after, he speaks
+      if (r.L > 0.35 && now() > (r.nextVoice || 0)) {
+        r.nextVoice = now() + slow(25000);
+        PS.Sound.voice('pennywise', pan(home[0]), () => PS.Sound.giggle(pan(home[0])));
+        if (!r.seen) tell();
         r.seen = true;
-        PS.Sound.giggle(pan(home[0]));
-        tell();
       }
     }
     function drawBalloon(ctx, R, tt) {
@@ -409,6 +419,33 @@
         }
         if (r.kind === 'balloon' && balloonHit(x, y, tt)) return 'Take the balloon';
         return null;
+      },
+      // a click on a resident's thing: where to stand to do it, and what doing it is
+      target(x, y, tt) {
+        if (!r) return null;
+        if (r.kind === 'phone' && r.ring && this.label(x, y, tt)) {
+          const p = meta.spots.phone;
+          return { u: p[0] + p[2] / 2 - 0.05, v: p[1] + p[3] + 0.18, act: 'phone' };
+        }
+        if (r.kind === 'balloon' && balloonHit(x, y, tt)) {
+          const b = balloonPos(tt);
+          return { u: b.u, v: Math.max(b.v + 0.3, 0.72), act: 'balloon' };
+        }
+        return null;
+      },
+      // you got there: do it, if it is still there to do
+      activate(act) {
+        if (!r) return;
+        if (act === 'phone' && r.kind === 'phone') {
+          if (!r.ring) return env.toast('It stopped ringing.', 1800);
+          r.ring = 0;
+          r.next = now() + slow(rand(25000, 35000));
+          env.scare('ghostface', false);
+          env.phone();
+        } else if (act === 'balloon' && r.kind === 'balloon' && now() >= r.gone) {
+          r.gone = now() + slow(20000);
+          env.scare('pennywise', true);
+        }
       },
       // a click: true if a resident took it
       press(x, y, tt) {

@@ -24,7 +24,7 @@ precision mediump float;
 #endif
 uniform sampler2D uAlb, uNrm, uDat, uFg;
 uniform vec2 uRes, uOff, uScale, uPar, uTorch;
-uniform float uRadius, uTime, uAmbient, uGain, uGrain, uFlash;
+uniform float uRadius, uTime, uAmbient, uGain, uGrain, uFlash, uHalo;
 uniform vec3 uLamp, uLampCol;
 uniform vec4 uLights[${MAX_LIGHTS}];
 uniform vec3 uLightCol[${MAX_LIGHTS}];
@@ -52,7 +52,7 @@ void main() {
 
   // the lantern: a soft beam on screen, lit in 3D by the surface normal
   float sd = distance(frag, uTorch) / uRadius;
-  float beam = smoothstep(1.3, 0.1, sd) + 0.07 * smoothstep(3.2, 1.0, sd);
+  float beam = smoothstep(1.3, 0.1, sd) + uHalo * smoothstep(2.6, 1.0, sd);
   vec3 Lv = uLamp - P;
   float dist = length(Lv);
   vec3 L = Lv / dist;
@@ -153,7 +153,7 @@ void main() {
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
       this.u = {};
-      ['uAlb', 'uNrm', 'uDat', 'uFg', 'uRes', 'uOff', 'uScale', 'uPar', 'uTorch', 'uRadius', 'uTime', 'uAmbient', 'uGain', 'uGrain', 'uFlash', 'uLamp', 'uLampCol', 'uLights', 'uLightCol'].forEach(
+      ['uAlb', 'uNrm', 'uDat', 'uFg', 'uRes', 'uOff', 'uScale', 'uPar', 'uTorch', 'uRadius', 'uTime', 'uAmbient', 'uGain', 'uGrain', 'uFlash', 'uHalo', 'uLamp', 'uLampCol', 'uLights', 'uLightCol'].forEach(
         (n) => (this.u[n] = gl.getUniformLocation(prog, n))
       );
       gl.uniform1i(this.u.uAlb, 0);
@@ -287,6 +287,7 @@ void main() {
       gl.uniform1f(u.uGain, (p.gain != null ? p.gain : 3.2) * (p.flicker || 1));
       gl.uniform1f(u.uGrain, p.grain != null ? p.grain : 0.05);
       gl.uniform1f(u.uFlash, p.flash || 0);
+      gl.uniform1f(u.uHalo, p.halo != null ? p.halo : 0.025);
       // the lantern hangs below and to the side of the eye, aimed where the torch points
       const r = this.toRoom(p.torch.x, p.torch.y);
       const aim = this.worldAt(r.u, r.v);
