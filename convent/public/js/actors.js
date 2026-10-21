@@ -67,8 +67,10 @@ export class Avatar {
     this.body = SkeletonUtils.clone(f.scene);
     const tint = new THREE.Color(LOOKS[this.info.look || 0]);
     const tintNames = [].concat(spec.tint || []);
+    this.meshes = [];
     this.body.traverse((o) => {
       if (o.isMesh) {
+        this.meshes.push(o);
         o.castShadow = true;
         if (tintNames.some((n) => (o.material.name || '').includes(n))) {
           o.material = o.material.clone();
@@ -116,6 +118,12 @@ export class Avatar {
       for (let i = 0; i < 3; i++) {
         this.weights[i] += ((i === this.anim ? 1 : 0) - this.weights[i]) * Math.min(1, dt * 6);
         this.actions[i]?.setEffectiveWeight(this.weights[i]);
+      }
+      // only people near you cast shadows
+      const shadow = far < 10;
+      if (shadow !== this.shadow) {
+        this.shadow = shadow;
+        for (const m of this.meshes) m.castShadow = shadow;
       }
       // people far away move their legs less often: nobody can tell, and it saves time
       this.skip = (this.skip || 0) + dt;
