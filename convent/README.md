@@ -47,9 +47,31 @@ node tools/bots.js 20 --url http://localhost:3000   # fake players for trying it
 - The host picks Easy, Normal or Scary and starts the night.
 - During the game the big screen shows the whole map, including where the nuns and ghosts are (the players can't see that), progress, and news as it happens.
 
-On GCP, the `Dockerfile` runs as is on Cloud Run. Set `HOST_KEY`, and keep it to one instance, since
-the game lives in that server's memory. Use session affinity and a request timeout of at least an hour
-so the websockets stay up.
+## Putting it online (Google Cloud Run)
+
+The game lives in one server's memory, so it must run as **one instance**, with websockets kept open.
+`deploy.sh` does it all. In [Google Cloud Shell](https://shell.cloud.google.com), with this repository
+cloned:
+
+```bash
+cd convent
+HOST_KEY=choose-a-secret ./deploy.sh                    # your current gcloud project, europe-west1
+HOST_KEY=choose-a-secret ./deploy.sh my-project us-central1
+```
+
+It prints the address for players and the big-screen address. What it sets, and why:
+
+| Setting | Why |
+| --- | --- |
+| `--min-instances 1 --max-instances 1` | exactly one copy of the game, already warm when people arrive |
+| `--session-affinity` | each laptop keeps talking to that one copy |
+| `--timeout 3600` | a websocket can stay open for an hour (Cloud Run's maximum); the game reconnects by itself after that |
+| `--no-cpu-throttling` | the nuns keep moving between messages |
+| `--concurrency 100` | room for 25 players, the big screen and reconnections |
+| `HOST_KEY` | the password in the big-screen address |
+
+Don't redeploy during the party: a new version starts an empty game. Afterwards, set
+`--min-instances 0` (the script prints the command) or delete the service so it costs nothing.
 
 ## How it's built
 
@@ -66,7 +88,11 @@ so the websockets stay up.
   - `audio.js` handles sound, placed in 3D.
   - `ui.js` handles the map, settings and on-screen display.
   - `main.js` holds it all together.
-- If a laptop struggles, the game lowers its own resolution and shadow quality.
+  - `atmosphere.js` has the dust, the danger edge and each player's small events.
+  - `models.js` loads the models listed in `models.json`.
+- Furniture is merged into a few meshes per room and only the nearest four lamps or candles really shine,
+  so ordinary laptops cope. If one still struggles, the game lowers its own resolution, then its shadow
+  quality, then turns shadows off.
 
 ## Swapping in better art and sound
 
@@ -76,4 +102,17 @@ so the websockets stay up.
   - `jump-scare`, `door-slam`
 
   Each can be `.mp3`, `.ogg` or `.wav`.
-- **Models:** the other players use `public/assets/models/Soldier.glb`, which has idle, walk and run animations. A character pack with the same animations can replace it. See `ASSETS.md`.
+- **Models:** the furniture and courtyard use Kenney's Furniture and Graveyard kits, the players wear one of ten
+  Quaternius costumes (picked per player), and the nun stays the tall built figure. `public/assets/models/models.json` says which `.glb` file to use for each kind of furniture
+  (the names in `PROP_TYPES` in `shared/level.js`), for the players and for the nun. A model is turned and
+  sized to the same footprint as the shape it replaces, so hiding places and walls stay the same. Anything
+  not listed keeps the built shape; with no `player` entry the players use `Soldier.glb`. See the top of
+  `public/js/models.js` for the options, and `ASSETS.md` for where each file came from.
+
+## What makes it scary (and what gentle mode turns down)
+
+- Dust drifts in your flashlight beam. The flashlight stutters and the screen edge darkens red when a nun or ghost is close.
+- The house acts up on its own, the same for everyone nearby: a door slams or creaks open, knocking behind a closed door, the cloister lamps stutter, a far-off wail.
+- Each player also gets small moments of their own: a creak behind you, footsteps that stop when you turn, a book falling, a music box in the next room, a pale figure at the end of a corridor that is gone when you get close.
+- Portraits change while the lightning flashes. The hall clock ticks, taps drip, the boiler rumbles.
+- None of it can catch you. Gentle mode leaves out the footsteps, the figure and the wail, and makes the rest less frequent.

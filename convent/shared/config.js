@@ -54,6 +54,9 @@ export const DURATION = {
   finale: 120, // once the front door is open
 };
 
+// the house acting up on its own (doors, knocking, lamps, a wail): seconds between events
+export const HAUNT = { first: 25, every: [28, 55] };
+
 export const BATTERY = { drainPerSec: 1 / 200, refill: 0.5, spares: 8 };
 
 export const ITEMS = {

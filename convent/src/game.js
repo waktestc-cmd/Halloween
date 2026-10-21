@@ -299,6 +299,7 @@ export class Game {
     });
     const ghosts = Math.min(C.GHOST.max, Math.round((C.GHOST.base + Math.floor(n / C.GHOST.perPlayers)) * this.level.ghosts));
     this.ghosts = Array.from({ length: ghosts }, (_, i) => this.newGhost('g' + i));
+    this.hauntAt = GRACE + C.HAUNT.first;
     this.say('The doors lock behind you. Find a way out before dawn.');
     this.io.to('players').to('hosts').emit('start', this.publicState());
     for (const p of this.players.values()) p.socket.emit('me', this.mine(p));
@@ -702,6 +703,50 @@ export class Game {
     }
   }
 
+  /* ---------- the house itself ----------
+     Now and then something happens near someone: a door slams or creaks open on its own, knocking
+     behind a closed door, the lamps stutter, a wail far off. It never hurts anyone, and the nuns
+     ignore it. */
+  haunt() {
+    this.hauntAt = this.t + C.HAUNT.every[0] + Math.random() * (C.HAUNT.every[1] - C.HAUNT.every[0]);
+    if (this.stage === 'escape') return;
+    const alive = [...this.players.values()].filter((p) => p.state === 'alive' && p.online && p.hidden == null);
+    if (!alive.length) return;
+    const p = pick(alive);
+    const people = [...this.players.values()].filter((q) => q.state === 'alive' && q.online);
+    const doors = L.DOORS.filter((d) => {
+      if (d.arch || d.front) return false;
+      const [x, z] = L.centre(d.c, d.r);
+      const far = Math.hypot(x - p.x, z - p.z);
+      // never close a door on someone standing in it
+      return far > 4 && far < 14 && people.every((q) => Math.hypot(q.x - x, q.z - z) > 2.6) && this.nuns.every((n) => Math.hypot(n.x - x, n.z - z) > 2.6);
+    });
+    const kinds = ['wail'];
+    if (doors.some((d) => !this.doors[d.id])) kinds.push('knock', 'knock');
+    if (doors.some((d) => this.doors[d.id])) kinds.push('slam', 'slam');
+    if (doors.some((d) => !this.doors[d.id])) kinds.push('creak');
+    if (this.stage !== 'power') kinds.push('flicker');
+    const kind = pick(kinds);
+    if (kind === 'slam' || kind === 'creak') {
+      const d = pick(doors.filter((d) => this.doors[d.id] === (kind === 'slam')));
+      this.doors[d.id] = kind === 'creak';
+      this.emitDoors();
+      this.sfx(kind === 'slam' ? 'slam' : 'door-creak', ...L.centre(d.c, d.r));
+    } else if (kind === 'knock') {
+      const d = pick(doors.filter((d) => !this.doors[d.id]));
+      this.sfx('knock', ...L.centre(d.c, d.r));
+    } else if (kind === 'flicker') this.sfx('flicker', L.FUSEBOX.x, L.FUSEBOX.z);
+    else {
+      // far off, somewhere in the house
+      const [c, r] = pick(WALK_TILES.filter(([c, r]) => {
+        const [x, z] = L.centre(c, r);
+        const d = Math.hypot(x - p.x, z - p.z);
+        return d > 12 && d < 26;
+      }));
+      this.sfx('wail', ...L.centre(c, r));
+    }
+  }
+
   banishGhost(g, by) {
     g.alive = false;
     g.back = this.t + C.GHOST.back;
@@ -717,6 +762,7 @@ export class Game {
     if (!this.frozen) {
       for (const n of this.nuns) this.nunTick(n, TICK);
       for (const g of this.ghosts) this.ghostTick(g, TICK);
+      if (this.t > this.hauntAt) this.haunt();
     }
     if (this.tickN % SEND_EVERY === 0) this.snapshot();
     if (this.stage === 'escape' && this.t - this.finaleAt > C.DURATION.finale) this.end();

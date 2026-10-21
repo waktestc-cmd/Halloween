@@ -3,10 +3,21 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { LOOKS } from '/shared/config.js';
+import { characters, findClip } from './models.js';
 
-/* ---------- players ---------- */
-let figure = null;
-const loading = new GLTFLoader().loadAsync('/assets/models/Soldier.glb').then((g) => (figure = g));
+/* ---------- players ----------
+   The figure comes from models.json ("player"), or the three.js Soldier when none is listed. With
+   several files listed, each player gets one of them. */
+const soldier = () =>
+  new GLTFLoader().loadAsync('/assets/models/Soldier.glb').then((g) => ({ scene: g.scene, animations: g.animations, scale: 1, spec: { turn: 180, tint: 'VanguardBodyMat', tintBoost: 2.2 } }));
+const cast = characters('player');
+const nunCast = characters('nun').then((c) => (c.count ? c.get(0) : null));
+// the figure for one player: one of the listed files, picked from their id so it stays the same
+async function figureFor(id) {
+  const c = await cast;
+  return (c.count && (await c.get(hash(id)))) || soldier();
+}
+const hash = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 function label(text) {
   const c = document.createElement('canvas');
@@ -51,29 +62,39 @@ export class Avatar {
     this.bulb = bulb;
     this.root.add(bulb);
     scene.add(this.root);
-    loading.then(() => this.dress());
+    figureFor(info.id || info.name).then((f) => this.dress(f)).catch((e) => console.warn('no figure', e));
   }
-  dress() {
-    if (!figure || this.body) return;
-    this.body = SkeletonUtils.clone(figure.scene);
+  dress(f) {
+    if (!f || this.body || this.gone) return;
+    const spec = f.spec;
+    this.body = SkeletonUtils.clone(f.scene);
     const tint = new THREE.Color(LOOKS[this.info.look || 0]);
+    const tintNames = [].concat(spec.tint || []);
+    this.meshes = [];
     this.body.traverse((o) => {
       if (o.isMesh) {
+        this.meshes.push(o);
         o.castShadow = true;
-        o.material = o.material.clone();
-        if (o.material.name === 'VanguardBodyMat') o.material.color.copy(tint).multiplyScalar(2.2);
+        if (tintNames.some((n) => (o.material.name || '').includes(n))) {
+          o.material = o.material.clone();
+          o.material.color.copy(tint).multiplyScalar(spec.tintBoost ?? 1);
+        }
       }
     });
-    this.body.rotation.y = Math.PI;
+    this.body.scale.setScalar(f.scale);
+    this.body.rotation.y = THREE.MathUtils.degToRad(spec.turn || 0);
     this.root.add(this.body);
     this.mixer = new THREE.AnimationMixer(this.body);
-    const clip = (n) => this.mixer.clipAction(figure.animations.find((a) => a.name === n));
-    this.actions = [clip('Idle'), clip('Walk'), clip('Run')];
+    const idle = findClip(f.animations, spec.idle || 'idle');
+    const walk = findClip(f.animations, spec.walk || 'walk') || idle;
+    const run = findClip(f.animations, spec.run || ['run', 'jog']) || walk;
+    this.actions = [idle, walk, run].map((c) => (c ? this.mixer.clipAction(c) : null));
     for (const a of this.actions) {
+      if (!a) continue;
       a.play();
       a.setEffectiveWeight(0);
     }
-    this.actions[0].setEffectiveWeight(1);
+    this.actions[0]?.setEffectiveWeight(1);
     this.weights = [1, 0, 0];
   }
   set(x, z, yaw, anim, light, state) {
@@ -82,9 +103,9 @@ export class Avatar {
     this.tyaw = yaw;
     this.anim = anim;
     this.beam.visible = this.bulb.visible = !!light && state === 1;
-    this.root.visible = state === 1;
+    this.present = state === 1;
   }
-  update(dt) {
+  update(dt, far = 0) {
     const k = Math.min(1, dt * 8);
     this.x += (this.tx - this.x) * k;
     this.z += (this.tz - this.z) * k;
@@ -95,15 +116,28 @@ export class Avatar {
     this.root.position.set(this.x, 0, this.z);
     // the figure faces where the player looks: yaw 0 looks toward -z
     this.root.rotation.y = this.yaw + Math.PI;
-    if (this.mixer) {
+    this.root.visible = this.present && this.inView !== false;
+    if (this.mixer && this.root.visible) {
       for (let i = 0; i < 3; i++) {
         this.weights[i] += ((i === this.anim ? 1 : 0) - this.weights[i]) * Math.min(1, dt * 6);
-        this.actions[i].setEffectiveWeight(this.weights[i]);
+        this.actions[i]?.setEffectiveWeight(this.weights[i]);
       }
-      this.mixer.update(dt);
+      // only people near you cast shadows
+      const shadow = far < 10;
+      if (shadow !== this.shadow) {
+        this.shadow = shadow;
+        for (const m of this.meshes) m.castShadow = shadow;
+      }
+      // people far away move their legs less often: nobody can tell, and it saves time
+      this.skip = (this.skip || 0) + dt;
+      if (far < 12 || this.skip > 0.1) {
+        this.mixer.update(this.skip);
+        this.skip = 0;
+      }
     }
   }
   remove() {
+    this.gone = true;
     this.scene.remove(this.root);
   }
 }
@@ -234,12 +268,59 @@ export class Nun {
     bell.position.set(0.2, 0.95, 0.32);
     this.root.add(bell);
     this.root.traverse((o) => o.isMesh && (o.castShadow = true));
+    this.built = [habit, collar, ...this.arms];
+    nunCast.then((f) => f && this.dressModel(f)).catch((e) => console.warn('no nun model', e));
     this.x = this.tx = 0;
     this.z = this.tz = 0;
     this.yaw = this.tyaw = 0;
     this.state = 'patrol';
     this.t = Math.random() * 10;
     scene.add(this.root);
+  }
+  // the animated figure from models.json ("nun") in place of the built habit and arms; the white
+  // wimple, the veil and the eyes move onto its head
+  dressModel(f) {
+    if (this.gone) return;
+    const spec = f.spec;
+    const body = SkeletonUtils.clone(f.scene);
+    body.scale.setScalar(f.scale);
+    body.rotation.y = THREE.MathUtils.degToRad(spec.turn || 0);
+    const hide = spec.hide || [];
+    const colors = spec.colors || {};
+    body.traverse((o) => {
+      if (!o.isMesh) return;
+      const name = o.material.name || '';
+      if (hide.some((n) => name.includes(n))) o.visible = false;
+      const c = Object.keys(colors).find((n) => name.includes(n));
+      if (c) {
+        o.material = o.material.clone();
+        o.material.color.set(colors[c]);
+        o.material.roughness = 1;
+        o.material.metalness = 0;
+      }
+      o.castShadow = true;
+    });
+    for (const b of this.built) b.visible = false;
+    this.root.add(body);
+    this.root.updateMatrixWorld(true);
+    const head = body.getObjectByName(spec.headBone || 'Head');
+    if (head) {
+      // place the wimple where the model's head is, then let the head bone carry it
+      const at = head.getWorldPosition(new THREE.Vector3());
+      const k = spec.headScale || 1;
+      this.head.position.set(0, at.y + (spec.headY ?? 0.16), (spec.headZ ?? 0.02));
+      this.head.scale.setScalar(k);
+      this.root.updateMatrixWorld(true);
+      head.attach(this.head);
+      this.headBone = head;
+    }
+    this.mixer = new THREE.AnimationMixer(body);
+    const clips = [findClip(f.animations, 'idle'), findClip(f.animations, 'walk'), findClip(f.animations, 'run')];
+    this.actions = clips.map((c) => c && this.mixer.clipAction(c));
+    this.headAnimated = clips.some((c) => c && c.tracks.some((t) => t.name.startsWith((spec.headBone || 'Head') + '.')));
+    for (const a of this.actions) a && (a.play(), a.setEffectiveWeight(0));
+    this.weights = [1, 0, 0];
+    this.body = body;
   }
   set(x, z, yaw, state) {
     this.tx = x;
@@ -248,9 +329,11 @@ export class Nun {
     this.state = state;
   }
   remove() {
+    this.gone = true;
     this.root.parent?.remove(this.root);
   }
   update(dt) {
+    if (this.body) return this.updateModel(dt);
     this.t += dt;
     const k = Math.min(1, dt * 7);
     const moved = Math.hypot(this.tx - this.x, this.tz - this.z);
@@ -288,6 +371,39 @@ export class Nun {
     return moved;
   }
 }
+
+// the animated nun: walks, runs when she hunts, stands still to listen
+Nun.prototype.updateModel = function (dt) {
+  this.t += dt;
+  const k = Math.min(1, dt * 7);
+  const moved = Math.hypot(this.tx - this.x, this.tz - this.z);
+  this.x += (this.tx - this.x) * k;
+  this.z += (this.tz - this.z) * k;
+  let d = this.tyaw - this.yaw;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  this.yaw += d * k;
+  const chasing = this.state === 'chase' || this.state === 'finale';
+  this.root.position.set(this.x, 0, this.z);
+  this.root.rotation.y = this.yaw;
+  // how fast she is really going decides the legs
+  this.speed = (this.speed || 0) + ((dt > 0 ? moved / dt : 0) * k - (this.speed || 0)) * Math.min(1, dt * 4);
+  const want = this.speed < 0.25 ? 0 : chasing || this.speed > 3 ? 2 : 1;
+  for (let i = 0; i < 3; i++) {
+    this.weights[i] += ((i === want ? 1 : 0) - this.weights[i]) * Math.min(1, dt * 5);
+    this.actions[i]?.setEffectiveWeight(this.weights[i]);
+  }
+  // walk slower than the clip so the steps match her slow patrol
+  if (this.actions[1]) this.actions[1].timeScale = Math.max(0.5, Math.min(1.3, this.speed / 2.2));
+  this.mixer.update(dt);
+  // her head twitches when she hunts
+  if (this.headBone) {
+    const tilt = chasing ? Math.sin(this.t * 17) * 0.08 + 0.18 : Math.sin(this.t * 0.5) * 0.1;
+    if (this.headAnimated) this.headBone.rotation.z += tilt;
+    else this.headBone.rotation.z = tilt;
+  }
+  return moved;
+};
 
 /* ---------- the ghosts ("boo") ----------
    A sheet that floats with an empty face; it glows faintly so you see it coming. */

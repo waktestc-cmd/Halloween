@@ -112,6 +112,16 @@ export const PROP_TYPES = {
   officedesk: { w: 1.8, d: 0.9, h: 0.8, special: 'desk', solid: true },
   painting: { w: 1.2, d: 0.06, h: 0.9, wallH: 1.5, solid: false },
   candles: { w: 0.5, d: 0.5, h: 1.3, solid: false },
+  clock: { w: 0.6, d: 0.4, h: 2.15, solid: true },
+  // decoration only
+  coffin: { w: 0.8, d: 2.0, h: 0.55, solid: true },
+  crypt: { w: 2.4, d: 1.6, h: 2.6, solid: true },
+  pumpkin: { w: 0.55, d: 0.55, h: 0.5, solid: true, glow: true },
+  urn: { w: 0.5, d: 0.5, h: 0.9, solid: true },
+  shovel: { w: 0.9, d: 0.7, h: 0.9, solid: false },
+  fence: { w: 1.2, d: 0.15, h: 1.1, solid: false },
+  rug: { w: 1.8, d: 2.6, h: 0.02, solid: false },
+  coatrack: { w: 0.5, d: 0.5, h: 1.8, solid: true },
 };
 
 const P = (type, room, opts) => ({ type, room, ...opts });
@@ -164,6 +174,16 @@ const PROP_LIST = [
   P('fusebox', 'c', { wall: 'N', u: 16, wallOf: 6 }),
   P('painting', 'c', { wall: 'N', u: 9, wallOf: 6 }), P('painting', 'c', { wall: 'S', u: 21, wallOf: 17 }),
   P('bench', 'c', { at: [12, 17.3], face: 'N' }),
+  // a few candles left burning around the house (added last so the ids above stay the same)
+  P('candles', 'd', { at: [7.2, 1.6] }), P('candles', 'n', { at: [3.2, 11.3] }), P('candles', 'l', { at: [23.2, 1.2] }),
+  P('candles', 'o', { at: [29.2, 11.2] }), P('candles', 'i', { at: [29.2, 8.2] }),
+  P('clock', 'e', { wall: 'N', u: 16.5 }),
+  // the courtyard's graveyard, and pumpkins someone carved for tonight
+  P('coffin', 'g', { wall: 'S', u: 9.6 }), P('crypt', 'g', { wall: 'N', u: 23.5 }), P('urn', 'g', { at: [14.6, 13.2] }),
+  P('shovel', 'g', { at: [18.4, 9.5] }), P('fence', 'g', { wall: 'N', u: 19.4 }), P('fence', 'g', { wall: 'N', u: 20.7 }),
+  P('pumpkin', 'g', { at: [15, 13.9] }), P('pumpkin', 'g', { at: [17.1, 13.9] }),
+  P('pumpkin', 'e', { at: [12.6, 22.3] }), P('pumpkin', 'e', { at: [15.4, 22.3] }),
+  P('rug', 'd', { at: [4, 2.8] }), P('rug', 'o', { at: [29.6, 14.5] }), P('coatrack', 'e', { at: [11.3, 19.3] }),
 ];
 
 // resolve every prop to a centre (x, z), a facing angle and an axis-aligned footprint
@@ -212,7 +232,7 @@ export const floorTile = (c, r) => {
 export const BLOCKED = (() => {
   const b = new Set();
   for (const p of PROPS) {
-    if (!p.solid || p.type === 'grave' || p.type === 'candles' || p.type === 'chalkboard') continue;
+    if (!p.solid || p.type === 'grave' || p.type === 'candles' || p.type === 'chalkboard' || p.type === 'pumpkin' || p.type === 'urn') continue;
     const [c, r] = tileOf(p.x, p.z);
     // only a prop that covers most of the tile blocks it
     if (p.hw * 2 * p.hd * 2 >= TILE * TILE * 0.3) b.add(c + ',' + r);
