@@ -36,11 +36,19 @@
   let dpr = 1;
 
   const isMild = () => mode === 'mild' || PS.reducedMotion;
+  // Dark: a tight lantern in a black house. Bright: a bigger lantern, more of the room visible.
+  let light = store.get('ps_light', 'dark') === 'bright' ? 'bright' : 'dark';
+  const isBright = () => light === 'bright';
+  const LIGHT = {
+    dark: { r: [0.085, 0.12, 60], ambient: 0.001, gain: 7, halo: 0.025 },
+    bright: { r: [0.105, 0.15, 72], ambient: 0.014, gain: 4.4, halo: 0.07 },
+  };
   function applyMode() {
     Sound.mild = isMild();
     stage.mild = isMild();
     $('btn-mode').textContent = mode === 'mild' ? 'Mild' : 'Spooky';
     $('btn-mute').textContent = Sound.isMuted() ? 'Sound off' : 'Sound on';
+    $('btn-light').textContent = isBright() ? 'Bright' : 'Dark';
   }
   applyMode();
   $('btn-mode').onclick = () => {
@@ -48,6 +56,12 @@
     store.set('ps_mode', mode);
     applyMode();
     toast(mode === 'mild' ? 'Mild. Gentler, and no screaming.' : 'Spooky. As intended.');
+  };
+  $('btn-light').onclick = () => {
+    light = isBright() ? 'dark' : 'bright';
+    store.set('ps_light', light);
+    applyMode();
+    toast(isBright() ? 'Bright. A bigger lantern, more of the room.' : 'Dark. A small lantern in a black house.');
   };
   $('btn-mute').onclick = () => {
     Sound.unlock();
@@ -549,8 +563,9 @@
       return !!state && state.events.some((e) => e.type === type && (room == null || e.room === room));
     },
     baseRadius() {
-      // a tight circle of light: the house stays dark around it
-      let r = Math.max(W * 0.085, Math.min(W, H) * 0.12, 60);
+      // the lantern's size: Dark or Bright, each player's choice (see LIGHT)
+      const lr = LIGHT[isBright() ? 'bright' : 'dark'].r;
+      let r = Math.max(W * lr[0], Math.min(W, H) * lr[1], lr[2]);
       if (this.hasEvent('bloodMoon')) r *= 0.5;
       // a hurt lantern burns lower, and gutters for a moment when struck
       r *= [0.7, 0.78, 0.89, 1][this.hp];
@@ -1552,9 +1567,10 @@
         time: t,
         flicker: fl,
         lights,
-        // a near-black room and a strong lantern: the light is what you see
-        ambient: torchOn ? 0.001 : 0,
-        gain: torchOn ? 7 : 0,
+        // Dark: a near-black room and a strong lantern; Bright: more of the room
+        ambient: torchOn ? LIGHT[light].ambient : 0,
+        gain: torchOn ? LIGHT[light].gain : 0,
+        halo: LIGHT[light].halo,
       },
       roomCv.width / W
     );
