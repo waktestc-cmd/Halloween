@@ -62,7 +62,8 @@ ROOMS = [
                C('Look under the side table', 'under the side table', 0.2, 0.53, 0.29, 0.65),
                C('Search the sofa', 'in the sofa', 0.0, 0.52, 0.16, 0.72),
                C('Look under the stairs', 'under the stairs', 0.4, 0.4, 0.6, 0.66)],
-         spots={'phone': [0.845, 0.5, 0.04, 0.065]}),
+         # the telephone, and where Ghostface stands while it rings
+         spots={'phone': [0.845, 0.5, 0.04, 0.065], 'stand': [0.3, 0.71]}),
     dict(id='drawing', wall=STD, door=D((0.165, 0.3, 0.66), (0.115, 0.27, 0.69)),
          hide=[C('Search the bookcase', 'in the bookcase', 0.2, 0.2, 0.35, 0.66),
                C('Look in the fireplace', 'in the fireplace', 0.4, 0.43, 0.6, 0.66),
