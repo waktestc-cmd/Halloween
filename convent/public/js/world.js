@@ -112,8 +112,13 @@ export function buildWorld(renderer) {
       const knob2 = knob.clone();
       knob2.position.z = -0.08;
       pivot.add(knob2);
-      leaf.userData.act = { kind: d.front ? 'front' : 'door', id: d.id };
-      targets.push(leaf);
+      // one mesh per material for the whole leaf
+      const act = { kind: d.front ? 'front' : 'door', id: d.id };
+      for (const m of mergeLocal(pivot)) {
+        m.castShadow = m.receiveShadow = true;
+        m.userData.act = act;
+        targets.push(m);
+      }
       leaves.push({ pivot, side });
     }
     // the front door carries a chain and three padlocks
@@ -142,26 +147,40 @@ export function buildWorld(renderer) {
     doors.set(d.id, { d, leaves, open: 0, want: 0, solid, locks, axis });
   }
 
-  /* ---------- furniture ---------- */
+  /* ---------- furniture ----------
+     Furniture never moves, so it is drawn as a few merged meshes per room rather than hundreds of
+     small ones. What you can use (search, hide, the fuse box) gets a plain invisible box to point at.
+     A model from /assets/models replaces the simple built shape when one is listed for that type. */
   const props = new Map();
+  const propRoot = new THREE.Group();
+  scene.add(propRoot);
+  const hitMat = new THREE.MeshBasicMaterial();
   for (const p of L.PROPS) {
-    const g = makeProp(p, M);
-    g.position.set(p.x, p.wallH || 0, p.z);
-    g.rotation.y = p.rot;
-    g.traverse((o) => {
-      if (o.isMesh) {
-        o.castShadow = p.type !== 'painting' && p.type !== 'chalkboard';
-        o.receiveShadow = true;
-        if (p.box || p.hide || p.special) {
-          o.userData.act = { kind: p.special || (p.box ? 'search' : 'hide'), prop: p.id };
-          targets.push(o);
-        }
-      }
-    });
-    scene.add(g);
-    props.set(p.id, g);
     if (p.solid) solids.push({ x0: p.x - p.hw, x1: p.x + p.hw, z0: p.z - p.hd, z1: p.z + p.hd, prop: p.id, low: p.h < 0.7 });
+    if (!p.box && !p.hide && !p.special) continue;
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(p.w, p.h, p.d), hitMat);
+    hit.position.set(p.x, (p.wallH || 0) + p.h / 2, p.z);
+    hit.rotation.y = p.rot;
+    hit.visible = false;
+    hit.updateMatrixWorld();
+    hit.userData.act = { kind: p.special || (p.box ? 'search' : 'hide'), prop: p.id };
+    targets.push(hit);
   }
+  function placeProps(model) {
+    propRoot.clear();
+    const groups = [];
+    for (const p of L.PROPS) {
+      const g = (model && model(p)) || makeProp(p, M);
+      g.position.set(p.x, p.wallH || 0, p.z);
+      g.rotation.y = p.rot;
+      g.userData.room = p.room;
+      g.userData.shadow = p.type !== 'painting' && p.type !== 'chalkboard';
+      groups.push(g);
+      props.set(p.id, g);
+    }
+    for (const m of bake(groups)) propRoot.add(m);
+  }
+  placeProps(null);
 
   /* ---------- light ---------- */
   const hemi = new THREE.HemisphereLight(0x6a6a88, 0x1a120a, 0.03);
@@ -177,10 +196,13 @@ export function buildWorld(renderer) {
   moonGlow.position.set((yard.x0 + yard.x1) / 2, 7, (yard.z0 + yard.z1) / 2);
   scene.add(moonGlow);
 
+  // Every lamp and candle in the house is a light source, but only the few nearest you really shine:
+  // a small pool of lights moves to them. Many lights at once is what makes laptops slow.
+  const sources = [];
   // lamps along the cloister: dark until the fuse is fixed
-  const lamps = [];
   const lampSpots = [[8, 6.5], [18, 6.5], [26.5, 9.5], [24, 16.5], [14, 16.5], [5.5, 13.5]];
   const bulbMat = new THREE.MeshStandardMaterial({ color: 0x302820, emissive: 0xffb060, emissiveIntensity: 0 });
+  const fixtures = [];
   for (const [c, r] of lampSpots) {
     const [x, z] = [(c + 0.5) * TILE, (r + 0.5) * TILE];
     const fixture = new THREE.Group();
@@ -192,24 +214,57 @@ export function buildWorld(renderer) {
     bulb.position.y = WALL_H - 0.72;
     fixture.add(cord, shade, bulb);
     fixture.position.set(x, 0, z);
-    scene.add(fixture);
-    const light = new THREE.PointLight(0xffa860, 0, 11, 1.6);
-    light.position.set(x, WALL_H - 0.85, z);
-    scene.add(light);
-    lamps.push({ light, phase: Math.random() * 10 });
+    fixture.userData = { room: 'c', shadow: false };
+    fixtures.push(fixture);
+    sources.push({ x, y: WALL_H - 0.85, z, color: 0xffa860, base: 5.5, range: 11, decay: 1.6, power: true, phase: Math.random() * 10 });
   }
-  // candles in the chapel and the hall always burn, very dimly
-  const candles = [];
-  // one light for the chapel's candles and one for the hall's
-  for (const p of [L.PROPS.find((p) => p.type === 'altar'), L.PROPS.find((p) => p.type === 'candles' && p.room === 'e')]) {
-    const light = new THREE.PointLight(0xff9040, 0.0, 6, 1.8);
-    light.position.set(p.x, (p.wallH || 0) + 1.4, p.z);
+  for (const m of bake(fixtures)) scene.add(m);
+  // candles burn whatever happens to the power: the chapel, the hall, and a few left on furniture
+  const flames = [];
+  const candleAt = (x, y, z, base = 1.6, range = 6) => {
+    sources.push({ x, y, z, color: 0xff9040, base, range, decay: 1.8, candle: true, phase: Math.random() * 10 });
+    flames.push([x, y, z]);
+  };
+  for (const p of L.PROPS.filter((p) => p.type === 'altar' || p.type === 'candles')) candleAt(p.x, p.type === 'altar' ? 1.4 : 1.3, p.z, p.type === 'altar' ? 1.6 : 1.2);
+  const POOL = 4;
+  const pool = [];
+  for (let i = 0; i < POOL; i++) {
+    const light = new THREE.PointLight(0xffa860, 0, 10, 1.6);
     scene.add(light);
-    candles.push({ light, phase: Math.random() * 10 });
+    pool.push({ light, src: null, fade: 0 });
   }
+  // a soft glow around each flame you can see from afar
+  const glowTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(255,200,120,1)');
+    grd.addColorStop(0.25, 'rgba(255,150,60,0.35)');
+    grd.addColorStop(1, 'rgba(255,120,40,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const glowMat = new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.55 });
+  const glows = flames.map(([x, y, z]) => {
+    const s = new THREE.Sprite(glowMat);
+    s.position.set(x, y, z);
+    s.scale.setScalar(0.9);
+    scene.add(s);
+    return s;
+  });
+  const lampGlowMat = glowMat.clone();
+  const lampGlows = sources.filter((s) => s.power).map((s) => {
+    const g = new THREE.Sprite(lampGlowMat);
+    g.position.set(s.x, s.y + 0.12, s.z);
+    g.scale.setScalar(1.4);
+    scene.add(g);
+    return g;
+  });
 
   /* ---------- rain ---------- */
-  const drops = 1400;
+  let drops = 1400;
   const rainGeo = new THREE.BufferGeometry();
   const rp = new Float32Array(drops * 6);
   for (let i = 0; i < drops; i++) {
@@ -224,11 +279,13 @@ export function buildWorld(renderer) {
 
   let power = false;
   let flash = 0;
+  let dip = 0;
   let nextFlash = 6 + Math.random() * 10;
   const world = {
     scene,
     M,
     solids,
+    placeProps,
     targets,
     doors,
     props,
@@ -245,13 +302,21 @@ export function buildWorld(renderer) {
       dd.want = open ? 1 : 0;
       dd.solid.on = !open;
     },
+    lessRain() {
+      drops = Math.floor(drops / 3);
+      rainGeo.setDrawRange(0, drops * 2);
+    },
     setPadlocks(n) {
       const dd = doors.get('front');
       if (!dd) return;
       dd.locks.forEach((l, i) => (l.visible = i < 3 ? i >= n : n < 3));
     },
     onThunder: null,
-    update(dt, t, brightness) {
+    // a moment where the lamps stutter and nearly go out
+    dip(sec) {
+      dip = Math.max(dip, sec);
+    },
+    update(dt, t, brightness, eye) {
       // doors swing
       for (const dd of doors.values()) {
         dd.open += (dd.want - dd.open) * Math.min(1, dt * 5);
@@ -275,20 +340,114 @@ export function buildWorld(renderer) {
       }
       flash = Math.max(0, flash - dt * 2.8);
       const strobe = flash > 0 ? flash * (0.6 + 0.4 * Math.sin(t * 60)) : 0;
+      // the portraits change while the lightning lasts
+      const wrong = flash > 0.15 || dip > 0;
+      for (const pm of paintings) pm.map = wrong ? pm.userData.haunted : pm.userData.calm;
       moon.intensity = 0.05 * brightness + strobe * 2.2;
       moonGlow.intensity = 6 + 8 * brightness + strobe * 40;
       hemi.intensity = 0.05 + 0.3 * brightness + strobe * 0.2;
-      // lamps flicker
-      for (const l of lamps) {
-        const f = 0.85 + 0.15 * Math.sin(t * 13 + l.phase) * Math.sin(t * 3.1 + l.phase * 2);
-        const dip = Math.sin(t * 0.7 + l.phase) > 0.985 ? 0.2 : 1;
-        l.light.intensity = power ? 5.5 * f * dip : 0;
+      // lamps flicker, and now and then the power dips
+      dip = Math.max(0, dip - dt);
+      const dipK = dip > 0 ? (Math.sin(t * 37) * Math.sin(t * 11) > 0.3 ? 0.35 : 0.03) : 1;
+      for (const s of sources) {
+        if (s.power) {
+          const f = 0.85 + 0.15 * Math.sin(t * 13 + s.phase) * Math.sin(t * 3.1 + s.phase * 2);
+          const blink = Math.sin(t * 0.7 + s.phase) > 0.985 ? 0.2 : 1;
+          s.now = power ? s.base * f * blink * dipK : 0;
+        } else s.now = s.base * (0.8 + 0.2 * Math.sin(t * 9 + s.phase) * Math.sin(t * 5.3 + s.phase));
       }
-      bulbMat.emissiveIntensity = power ? 3 : 0;
-      for (const c of candles) c.light.intensity = 1.6 * (0.8 + 0.2 * Math.sin(t * 9 + c.phase) * Math.sin(t * 5.3 + c.phase));
+      bulbMat.emissiveIntensity = power ? 3 * dipK : 0;
+      lampGlowMat.opacity = power ? 0.5 * dipK : 0;
+      glowMat.opacity = 0.45 + 0.1 * Math.sin(t * 7.7);
+      // the nearest burning sources get the real lights
+      if (eye) {
+        const lit = sources.filter((s) => s.now > 0.01);
+        for (const s of lit) s.d = (s.x - eye.x) ** 2 + (s.z - eye.z) ** 2;
+        lit.sort((a, b) => a.d - b.d);
+        const want = lit.slice(0, POOL);
+        for (const slot of pool) if (slot.src && !want.includes(slot.src)) slot.src = null;
+        for (const s of want) {
+          if (pool.some((slot) => slot.src === s)) continue;
+          const slot = pool.find((q) => !q.src);
+          slot.src = s;
+          slot.fade = 0;
+          slot.light.position.set(s.x, s.y, s.z);
+          slot.light.color.setHex(s.color);
+          slot.light.distance = s.range;
+          slot.light.decay = s.decay;
+        }
+        for (const slot of pool) {
+          slot.fade = Math.min(1, slot.fade + dt * 3);
+          slot.light.intensity = slot.src ? slot.src.now * slot.fade : 0;
+        }
+      }
+      for (const [i, g] of glows.entries()) g.scale.setScalar(0.8 + 0.12 * Math.sin(t * 11 + i * 2.3));
     },
   };
   return world;
+}
+
+// merge a group's own child meshes by material, keeping them in the group (for things that move)
+function mergeLocal(group) {
+  const sets = new Map();
+  for (const o of [...group.children]) {
+    if (!o.isMesh) continue;
+    o.updateMatrix();
+    const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrix);
+    if (!sets.has(o.material)) sets.set(o.material, []);
+    sets.get(o.material).push(geo);
+    group.remove(o);
+  }
+  const out = [];
+  for (const [mat, geos] of sets) {
+    const m = new THREE.Mesh(mergeGeometries(geos), mat);
+    group.add(m);
+    out.push(m);
+  }
+  return out;
+}
+
+/* ---------- merging still things into a few meshes ----------
+   One mesh per room and material: far fewer draw calls, and rooms out of view are still skipped. */
+function bake(groups) {
+  const sets = new Map();
+  for (const g of groups) {
+    g.updateMatrixWorld(true);
+    g.traverse((o) => {
+      if (!o.isMesh || o.isSkinnedMesh || Array.isArray(o.material)) return;
+      let geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      const keep = ['position', 'normal', 'uv'];
+      if (o.material.vertexColors && geo.attributes.color) keep.push('color');
+      for (const n of Object.keys(geo.attributes)) if (!keep.includes(n)) geo.deleteAttribute(n);
+      if (!geo.attributes.normal) geo.computeVertexNormals();
+      if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+      // models can store their numbers packed; unpack so everything merges
+      for (const n of keep) {
+        const a = geo.attributes[n];
+        if (!(a.array instanceof Float32Array) || a.normalized || a.isInterleavedBufferAttribute) {
+          const f = new Float32Array(a.count * a.itemSize);
+          for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) f[i * a.itemSize + k] = a.getComponent(i, k);
+          geo.setAttribute(n, new THREE.BufferAttribute(f, a.itemSize));
+        }
+      }
+      geo.morphAttributes = {};
+      geo.applyMatrix4(o.matrixWorld);
+      const shadow = g.userData.shadow;
+      const k = g.userData.room + '|' + o.material.uuid + '|' + shadow + '|' + keep.length;
+      if (!sets.has(k)) sets.set(k, { mat: o.material, shadow, geos: [] });
+      sets.get(k).geos.push(geo);
+    });
+  }
+  const out = [];
+  for (const { mat, shadow, geos } of sets.values()) {
+    const m = new THREE.Mesh(mergeGeometries(geos), mat);
+    m.castShadow = shadow;
+    m.receiveShadow = true;
+    m.matrixAutoUpdate = false;
+    out.push(m);
+    for (const g of geos) g.dispose();
+  }
+  return out;
 }
 
 /* ---------- furniture made of boxes ----------
@@ -550,6 +709,25 @@ function makeProp(p, M) {
       pic.position.set(0, h / 2, d / 2 + 0.01);
       g.add(pic);
       g.add(box(w, h, 0.03, M.darkWood));
+      break;
+    }
+    case 'clock': {
+      // a tall case clock that ticks in the hall
+      g.add(box(w, 0.5, d, M.darkWood));
+      g.add(box(w * 0.8, h - 0.95, d * 0.85, M.darkWood, 0, 0.5, 0));
+      g.add(box(w, 0.45, d, M.darkWood, 0, h - 0.45, 0));
+      g.add(box(w * 0.5, h - 1.25, 0.02, M.chalk, 0, 0.65, d * 0.43));
+      const face = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), M.porcelain);
+      face.position.set(0, h - 0.23, d / 2 + 0.01);
+      g.add(face);
+      for (const [len, a] of [[0.15, 0.6], [0.11, 2.4]]) {
+        const hand = box(0.015, len, 0.01, M.iron, 0, 0, 0);
+        hand.geometry.translate(0, -len / 2, 0);
+        hand.position.set(0, h - 0.23, d / 2 + 0.02);
+        hand.rotation.z = a;
+        g.add(hand);
+      }
+      g.add(box(0.12, 0.12, 0.02, M.brass, 0, 0.9, d * 0.43 + 0.02));
       break;
     }
     default:

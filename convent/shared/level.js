@@ -112,6 +112,7 @@ export const PROP_TYPES = {
   officedesk: { w: 1.8, d: 0.9, h: 0.8, special: 'desk', solid: true },
   painting: { w: 1.2, d: 0.06, h: 0.9, wallH: 1.5, solid: false },
   candles: { w: 0.5, d: 0.5, h: 1.3, solid: false },
+  clock: { w: 0.6, d: 0.4, h: 2.15, solid: true },
 };
 
 const P = (type, room, opts) => ({ type, room, ...opts });
@@ -164,6 +165,10 @@ const PROP_LIST = [
   P('fusebox', 'c', { wall: 'N', u: 16, wallOf: 6 }),
   P('painting', 'c', { wall: 'N', u: 9, wallOf: 6 }), P('painting', 'c', { wall: 'S', u: 21, wallOf: 17 }),
   P('bench', 'c', { at: [12, 17.3], face: 'N' }),
+  // a few candles left burning around the house (added last so the ids above stay the same)
+  P('candles', 'd', { at: [7.2, 1.6] }), P('candles', 'n', { at: [3.2, 11.3] }), P('candles', 'l', { at: [23.2, 1.2] }),
+  P('candles', 'o', { at: [29.2, 11.2] }), P('candles', 'i', { at: [29.2, 8.2] }),
+  P('clock', 'e', { wall: 'N', u: 16.5 }),
 ];
 
 // resolve every prop to a centre (x, z), a facing angle and an axis-aligned footprint

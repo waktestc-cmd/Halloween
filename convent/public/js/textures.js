@@ -175,7 +175,7 @@ function clothCanvas(color) {
   });
 }
 // gloomy portraits in gilt frames: dark figures with pale faces, nothing recognisable
-export function portraitCanvas(i) {
+export function portraitCanvas(i, haunted = false) {
   seed = 99 + i * 31;
   return canvas(256, 192, (g, w, h) => {
     const bg = g.createLinearGradient(0, 0, 0, h);
@@ -200,6 +200,25 @@ export function portraitCanvas(i) {
       g.fillStyle = '#1b130b';
       g.fillRect(w / 2 - 14, h * 0.43, 9, 5);
       g.fillRect(w / 2 + 5, h * 0.43, 9, 5);
+      if (haunted) {
+        // in the lightning the face is not quite a face: hollow eyes that glint, a gaping mouth
+        g.fillStyle = '#7d7464';
+        g.beginPath();
+        g.ellipse(w / 2, h * 0.45, w * 0.1, h * 0.16, 0, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#050302';
+        for (const sx of [-1, 1]) {
+          g.beginPath();
+          g.ellipse(w / 2 + sx * 11, h * 0.42, 8, 10, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+        g.beginPath();
+        g.ellipse(w / 2, h * 0.58, 7, 13, 0, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#ffe6b0';
+        g.fillRect(w / 2 - 12, h * 0.42 - 1, 3, 3);
+        g.fillRect(w / 2 + 10, h * 0.42 - 1, 3, 3);
+      }
     } else {
       // a landscape with a lone house
       g.fillStyle = '#131813';
@@ -218,6 +237,16 @@ export function portraitCanvas(i) {
       g.fill();
       g.fillStyle = '#c9a24a';
       g.fillRect(w * 0.6 + 16, h * 0.5, 7, 9);
+      if (haunted) {
+        // someone stands in the field, looking out of the picture
+        g.fillStyle = '#d8d0bc';
+        g.fillRect(w * 0.28, h * 0.5, 9, 30);
+        g.beginPath();
+        g.arc(w * 0.28 + 4.5, h * 0.5 - 3, 6, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#d04020';
+        g.fillRect(w * 0.6 + 16, h * 0.5, 7, 9);
+      }
     }
     speckle(g, w, h, 2500, ['#000', '#7a6a50'], [1, 2], 0.15);
     g.strokeStyle = '#8a6a2a';
@@ -261,7 +290,10 @@ export function makeMaterials(maxAniso) {
   for (const v of Object.values(m)) for (const k of ['map', 'bumpMap']) if (v[k]) v[k].anisotropy = Math.min(8, maxAniso);
   return m;
 }
+// each painting has a second, wrong version that shows only while lightning flashes
 export const paintings = [0, 1, 2, 3, 4, 5].map((i) => {
-  const t = tex(portraitCanvas(i));
-  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 });
+  const calm = tex(portraitCanvas(i));
+  const m = new THREE.MeshStandardMaterial({ map: calm, roughness: 0.6 });
+  m.userData = { calm, haunted: tex(portraitCanvas(i, true)) };
+  return m;
 });

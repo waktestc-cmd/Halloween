@@ -3,10 +3,17 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { LOOKS } from '/shared/config.js';
+import { characters, findClip } from './models.js';
 
-/* ---------- players ---------- */
-let figure = null;
-const loading = new GLTFLoader().loadAsync('/assets/models/Soldier.glb').then((g) => (figure = g));
+/* ---------- players ----------
+   The figure comes from models.json ("player"), or the three.js Soldier when none is listed. With
+   several files listed, each player gets one of them. */
+let figures = [];
+const loading = characters('player')
+  .then((list) => list.length ? list : new GLTFLoader().loadAsync('/assets/models/Soldier.glb').then((g) => [{ scene: g.scene, animations: g.animations, scale: 1, spec: { turn: 180, tint: 'VanguardBodyMat', tintBoost: 2.2 } }]))
+  .then((list) => (figures = list))
+  .catch(() => []);
+const hash = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 function label(text) {
   const c = document.createElement('canvas');
@@ -54,26 +61,35 @@ export class Avatar {
     loading.then(() => this.dress());
   }
   dress() {
-    if (!figure || this.body) return;
-    this.body = SkeletonUtils.clone(figure.scene);
+    if (!figures.length || this.body) return;
+    const f = figures[hash(this.info.id || this.info.name) % figures.length];
+    const spec = f.spec;
+    this.body = SkeletonUtils.clone(f.scene);
     const tint = new THREE.Color(LOOKS[this.info.look || 0]);
+    const tintNames = [].concat(spec.tint || []);
     this.body.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true;
-        o.material = o.material.clone();
-        if (o.material.name === 'VanguardBodyMat') o.material.color.copy(tint).multiplyScalar(2.2);
+        if (tintNames.some((n) => (o.material.name || '').includes(n))) {
+          o.material = o.material.clone();
+          o.material.color.copy(tint).multiplyScalar(spec.tintBoost ?? 1);
+        }
       }
     });
-    this.body.rotation.y = Math.PI;
+    this.body.scale.setScalar(f.scale);
+    this.body.rotation.y = THREE.MathUtils.degToRad(spec.turn || 0);
     this.root.add(this.body);
     this.mixer = new THREE.AnimationMixer(this.body);
-    const clip = (n) => this.mixer.clipAction(figure.animations.find((a) => a.name === n));
-    this.actions = [clip('Idle'), clip('Walk'), clip('Run')];
+    const idle = findClip(f.animations, spec.idle || 'idle');
+    const walk = findClip(f.animations, spec.walk || 'walk') || idle;
+    const run = findClip(f.animations, spec.run || ['run', 'jog']) || walk;
+    this.actions = [idle, walk, run].map((c) => (c ? this.mixer.clipAction(c) : null));
     for (const a of this.actions) {
+      if (!a) continue;
       a.play();
       a.setEffectiveWeight(0);
     }
-    this.actions[0].setEffectiveWeight(1);
+    this.actions[0]?.setEffectiveWeight(1);
     this.weights = [1, 0, 0];
   }
   set(x, z, yaw, anim, light, state) {
@@ -82,9 +98,9 @@ export class Avatar {
     this.tyaw = yaw;
     this.anim = anim;
     this.beam.visible = this.bulb.visible = !!light && state === 1;
-    this.root.visible = state === 1;
+    this.present = state === 1;
   }
-  update(dt) {
+  update(dt, far = 0) {
     const k = Math.min(1, dt * 8);
     this.x += (this.tx - this.x) * k;
     this.z += (this.tz - this.z) * k;
@@ -95,12 +111,18 @@ export class Avatar {
     this.root.position.set(this.x, 0, this.z);
     // the figure faces where the player looks: yaw 0 looks toward -z
     this.root.rotation.y = this.yaw + Math.PI;
-    if (this.mixer) {
+    this.root.visible = this.present && this.inView !== false;
+    if (this.mixer && this.root.visible) {
       for (let i = 0; i < 3; i++) {
         this.weights[i] += ((i === this.anim ? 1 : 0) - this.weights[i]) * Math.min(1, dt * 6);
-        this.actions[i].setEffectiveWeight(this.weights[i]);
+        this.actions[i]?.setEffectiveWeight(this.weights[i]);
       }
-      this.mixer.update(dt);
+      // people far away move their legs less often: nobody can tell, and it saves time
+      this.skip = (this.skip || 0) + dt;
+      if (far < 12 || this.skip > 0.1) {
+        this.mixer.update(this.skip);
+        this.skip = 0;
+      }
     }
   }
   remove() {

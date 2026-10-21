@@ -490,6 +490,223 @@ export class Sound {
     s.start(now);
     s.stop(now + 0.7);
   }
+  /* ---------- the house acting up ---------- */
+  // something knocks three times behind a closed door
+  knock(x, z, muffled) {
+    [0, 0.42, 0.84].forEach((dt, i) =>
+      setTimeout(() => {
+        if (this.play('doorClose', { at: [x, z], vol: 0.9 - i * 0.1, rate: 0.75, muffled })) return;
+        this.thud(x, z, 0.5);
+      }, dt * 1000),
+    );
+  }
+  // a door slamming shut on its own: louder and deeper than a hand closing it
+  slam(x, z, muffled) {
+    if (!this.play('slam', { at: [x, z], vol: 1.1, muffled })) this.play('doorClose', { at: [x, z], vol: 1.3, rate: 0.55, muffled });
+    this.thud(x, z, 0.8);
+  }
+  thud(x, z, vol = 0.5) {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(95, now);
+    o.frequency.exponentialRampToValueAtTime(40, now + 0.25);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(vol, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 500;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(vol * 0.6, now);
+    ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    const out = this.panner(x, z, { ref: 2, max: 30, y: 0.3 });
+    o.connect(g).connect(out);
+    s.connect(lp).connect(ng).connect(out);
+    out.connect(this.sfxBus);
+    o.start(now);
+    o.stop(now + 0.4);
+    s.start(now, Math.random());
+    s.stop(now + 0.15);
+  }
+  // a floorboard giving under a weight that isn't yours
+  creak(x, z, vol = 0.35) {
+    if (this.play('doorCreak', { at: [x, z], vol, rate: 1.6 + Math.random() * 0.3 })) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70, now);
+    o.frequency.linearRampToValueAtTime(55, now + 0.6);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 14;
+    bp.frequency.setValueAtTime(700, now);
+    bp.frequency.linearRampToValueAtTime(1100, now + 0.6);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(vol, now + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.7);
+    o.connect(bp).connect(g).connect(this.panner(x, z, { ref: 1.5, max: 20, y: 0.2 })).connect(this.sfxBus);
+    o.start(now);
+    o.stop(now + 0.75);
+  }
+  // a long, sad voice far off in the house
+  wail(x, z) {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(420, now);
+    o.frequency.linearRampToValueAtTime(470, now + 0.8);
+    o.frequency.exponentialRampToValueAtTime(230, now + 3);
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 5.5;
+    const vg = ctx.createGain();
+    vg.gain.value = 9;
+    vib.connect(vg).connect(o.frequency);
+    const sum = ctx.createGain();
+    for (const [f, q, a] of [[700, 7, 1], [1150, 9, 0.5], [2600, 10, 0.15]]) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = f;
+      bp.Q.value = q;
+      const gg = ctx.createGain();
+      gg.gain.value = a;
+      o.connect(bp).connect(gg).connect(sum);
+    }
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.5, now + 0.6);
+    g.gain.setValueAtTime(0.5, now + 2.2);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 3.2);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1400;
+    sum.connect(lp).connect(g).connect(this.panner(x, z, { ref: 6, max: 60, roll: 0.8, y: 1.6 })).connect(this.sfxBus);
+    o.start(now);
+    vib.start(now);
+    o.stop(now + 3.3);
+    vib.stop(now + 3.3);
+  }
+  // a music box winding down in an empty room
+  musicBox(x, z) {
+    const ctx = this.ctx;
+    const out = this.panner(x, z, { ref: 2, max: 25, y: 1 });
+    out.connect(this.sfxBus);
+    const notes = [659.3, 587.3, 523.3, 493.9, 523.3, 440, 0, 493.9, 523.3, 587.3, 493.9, 440];
+    let t = ctx.currentTime + 0.1;
+    notes.forEach((f, i) => {
+      t += 0.42 + i * 0.03; // slowing as the spring runs down
+      if (!f) return;
+      for (const [m, a, len] of [[1, 0.16, 1.4], [3.01, 0.04, 0.5], [5.2, 0.015, 0.25]]) {
+        const o = ctx.createOscillator();
+        o.frequency.value = f * m * (1 - i * 0.002);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(a, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+        o.connect(g).connect(out);
+        o.start(t);
+        o.stop(t + len + 0.05);
+      }
+    });
+  }
+  // the hall clock
+  tick(x, z, tock) {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 8;
+    bp.frequency.value = tock ? 1500 : 2300;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.5, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+    s.connect(bp).connect(g).connect(this.panner(x, z, { ref: 1.2, max: 16, roll: 1.6, y: 1.9 })).connect(this.sfxBus);
+    s.start(now, Math.random());
+    s.stop(now + 0.05);
+  }
+  drip(x, z) {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const f = 900 + Math.random() * 500;
+    o.frequency.setValueAtTime(f, now);
+    o.frequency.exponentialRampToValueAtTime(f * 0.5, now + 0.06);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.12, now + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    o.connect(g).connect(this.panner(x, z, { ref: 1, max: 12, y: 0.8 })).connect(this.sfxBus);
+    o.start(now);
+    o.stop(now + 0.13);
+  }
+  // the boiler's low rumble, always running
+  rumble(x, z) {
+    const ctx = this.ctx;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    s.loop = true;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 110;
+    const g = ctx.createGain();
+    g.gain.value = 0.5;
+    const o = ctx.createOscillator();
+    o.frequency.value = 49;
+    const og = ctx.createGain();
+    og.gain.value = 0.12;
+    const out = this.panner(x, z, { ref: 2, max: 20, roll: 1.6, y: 1 });
+    s.connect(lp).connect(g).connect(out);
+    o.connect(og).connect(out);
+    out.connect(this.sfxBus);
+    s.start();
+    o.start();
+  }
+  // the lamps stuttering: an electric buzz from the fuse box
+  buzz(x, z, sec = 2.5) {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = 100;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    for (let k = 0; k < sec / 0.12; k++) g.gain.setValueAtTime(Math.random() < 0.6 ? 0.08 : 0.0001, now + k * 0.12);
+    g.gain.setValueAtTime(0.0001, now + sec);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 300;
+    o.connect(hp).connect(g).connect(this.panner(x, z, { ref: 4, max: 50, roll: 0.7 })).connect(this.sfxBus);
+    o.start(now);
+    o.stop(now + sec + 0.1);
+  }
+  // a cold breath of air as something vanishes
+  whoosh(vol = 0.3) {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 2;
+    bp.frequency.setValueAtTime(300, now);
+    bp.frequency.exponentialRampToValueAtTime(1800, now + 0.5);
+    bp.frequency.exponentialRampToValueAtTime(400, now + 1.3);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(vol, now + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
+    s.connect(bp).connect(g).connect(this.musicBus);
+    s.start(now, Math.random());
+    s.stop(now + 1.5);
+  }
   chime() {
     if (this.play('found', { vol: 0.5 })) return;
   }

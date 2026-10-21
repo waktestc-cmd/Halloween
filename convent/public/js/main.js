@@ -7,9 +7,12 @@ import * as C from '/shared/config.js';
 import { buildWorld } from './world.js';
 import { Avatar, Nun, Ghost, looseItem } from './actors.js';
 import { Sound } from './audio.js';
+import { Dust, Haunts, setDanger } from './atmosphere.js';
+import { propModels } from './models.js';
 import * as UI from './ui.js';
 
 const { $ } = UI;
+const dangerEl = $('danger');
 const DEBUG = new URLSearchParams(location.search).has('debug');
 const EYE = 1.62;
 const RADIUS = 0.3;
@@ -30,15 +33,20 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const world = buildWorld(renderer);
 const { scene } = world;
+// furniture models, when /assets/models/models.json lists them, replace the built shapes
+propModels().then((m) => m && world.placeProps(m));
 const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 80);
 camera.rotation.order = 'YXZ';
 scene.add(camera);
+const dust = new Dust(camera);
+scene.add(dust.points);
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  dust.resize(h);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -59,6 +67,7 @@ const near = new THREE.PointLight(0x9aa0b8, 0.25, 4, 2);
 camera.add(near);
 
 const sound = new Sound();
+const haunts = new Haunts(scene, sound);
 UI.bindSettings();
 UI.onSettings((s) => {
   sound.setVolume({ master: s.master, music: s.music, sfx: s.sfx });
@@ -99,6 +108,8 @@ const S = {
   stepAt: 0,
   sendAt: 0,
   shine: {},
+  dread: 0,
+  fovKick: 0,
 };
 const serverNow = () => S.t + (performance.now() - S.tAt) / 1000;
 
@@ -149,6 +160,7 @@ function clearHouse() {
 }
 socket.on('start', (m) => {
   clearHouse();
+  haunts.reset();
   applyState(m);
   Object.assign(S.me, { lives: C.LIVES, state: 'alive', hidden: null, carrying: null, pitch: 0 });
   UI.setLives(C.LIVES);
@@ -205,6 +217,7 @@ socket.on('found', (m) => {
 });
 socket.on('spotted', () => {
   S.chaseUntil = performance.now() + 6000;
+  S.fovKick = 1;
   UI.toast("She's seen you. RUN! (hold Shift)", 3500);
 });
 socket.on('sfx', (m) => onSfx(m));
@@ -532,7 +545,7 @@ function onTick(m) {
     let a = S.avatars.get(id);
     if (!a) {
       const info = S.roster.find((r) => r.id === id) || { name: '?', look: 0 };
-      a = new Avatar(scene, { ...info, x, z });
+      a = new Avatar(scene, { ...info, id, x, z });
       S.avatars.set(id, a);
     }
     a.set(x, z, yaw, anim, light, state);
@@ -584,6 +597,14 @@ function onSfx({ kind, x, z }) {
   if (kind === 'padlock' || kind === 'unlock') sound.clunk(x, z);
   if (kind === 'power') sound.clunk(x, z);
   if (kind === 'pull') sound.play('doorOpen', { at, vol: 1 });
+  // the house acting up on its own
+  if (kind === 'slam') sound.slam(x, z, muffled);
+  if (kind === 'knock') sound.knock(x, z, muffled);
+  if (kind === 'wail' && !UI.settings.gentle) sound.wail(x, z);
+  if (kind === 'flicker' && S.stage !== 'power') {
+    world.dip(2.6);
+    sound.buzz(x, z, 2.6);
+  }
 }
 
 /* ---------- being caught ---------- */
@@ -629,7 +650,7 @@ function updateScare(dt) {
 
 /* ---------- following someone once you are out ---------- */
 function nextWatch() {
-  const ids = [...S.avatars.keys()].filter((id) => S.avatars.get(id).root.visible);
+  const ids = [...S.avatars.keys()].filter((id) => S.avatars.get(id).present);
   if (!ids.length) return (S.watching = null);
   const i = ids.indexOf(S.watching);
   S.watching = ids[(i + 1) % ids.length];
@@ -659,7 +680,7 @@ function watchSpeed(now) {
   const fps = (perf.frames * 1000) / (now - perf.since);
   perf.frames = 0;
   perf.since = now;
-  if (fps > 26 || perf.level >= 2 || S.phase !== 'PLAYING') return;
+  if (fps > 26 || perf.level >= 3 || S.phase !== 'PLAYING' || document.hidden) return;
   perf.level++;
   if (perf.level === 1) renderer.setPixelRatio(1);
   if (perf.level === 2) {
@@ -668,6 +689,14 @@ function watchSpeed(now) {
     torch.shadow.mapSize.set(512, 512);
     torch.shadow.map?.dispose();
     torch.shadow.map = null;
+  }
+  if (perf.level === 3) {
+    // still slow: no shadows at all, less rain, no dust
+    renderer.setPixelRatio(0.6);
+    torch.castShadow = false;
+    world.lessRain();
+    dust.points.visible = false;
+    dust.off = true;
   }
   resize();
 }
@@ -710,11 +739,13 @@ function frame() {
     // a gentle head bob while walking
     S.bob = (S.bob || 0) + (moving ? dt * (run ? 13 : 8.5) : 0);
     const bob = moving ? Math.sin(S.bob) * (run ? 0.05 : 0.03) : 0;
-    camera.position.set(ex, ey + bob, ez);
+    // and a slow breath while standing still
+    const breath = moving ? 0 : Math.sin(t * 1.5) * 0.008;
+    camera.position.set(ex, ey + bob + breath, ez);
     camera.rotation.set(me.pitch, me.yaw, 0);
   } else {
     const w = S.watching && S.avatars.get(S.watching);
-    if (!w || !w.root.visible) nextWatch();
+    if (!w || !w.present) nextWatch();
     if (w) {
       camera.position.set(w.x + Math.sin(w.yaw) * 2.2, EYE + 0.5, w.z + Math.cos(w.yaw) * 2.2);
       camera.rotation.set(-0.15, w.yaw, 0);
@@ -727,7 +758,8 @@ function frame() {
     S.light = false;
     UI.toast('Your flashlight died. Find batteries in drawers and cupboards.');
   }
-  const flick = S.battery < 0.2 ? (Math.sin(t * 31) * Math.sin(t * 7.3) > 0.6 ? 0.25 : 1) : 1;
+  // the flashlight stutters when the battery is low, and when something is close
+  const flick = S.battery < 0.2 || S.dread > 0.35 ? (Math.sin(t * 31) * Math.sin(t * 7.3) > 1 - Math.max(S.dread * 0.5, S.battery < 0.2 ? 0.4 : 0) ? 0.25 : 1) : 1;
   torch.intensity = S.light && me.hidden == null ? 22 * (0.55 + 0.45 * Math.min(1, S.battery * 3)) * flick : 0;
   torch.visible = me.state === 'alive';
   UI.setBars(S.battery, S.stamina, S.light);
@@ -739,7 +771,13 @@ function frame() {
   }
 
   // everyone else
-  for (const a of S.avatars.values()) a.update(dt);
+  // other people: skip drawing the ones behind walls or lost in the dark (checked a few times a second)
+  const lookAgain = (S.frameN = (S.frameN || 0) + 1) % 6 === 0;
+  for (const a of S.avatars.values()) {
+    const d = Math.hypot(a.x - camera.position.x, a.z - camera.position.z);
+    if (lookAgain) a.inView = d < 6 || (d < 30 && L.clearLine(camera.position.x, camera.position.z, a.x, a.z, (id) => S.doors[id]));
+    a.update(dt, d);
+  }
   let nearestNun = Infinity;
   let hunted = false;
   for (const [id, n] of S.nuns) {
@@ -758,7 +796,24 @@ function frame() {
       }
     }
   }
-  for (const g of S.ghosts.values()) g.update(dt, camera.position.x, camera.position.z);
+  let nearestGhost = Infinity;
+  for (const g of S.ghosts.values()) {
+    g.update(dt, camera.position.x, camera.position.z);
+    if (g.alive) nearestGhost = Math.min(nearestGhost, Math.hypot(g.x - me.x, g.z - me.z));
+  }
+  // how close something is: makes the flashlight stutter and the edges of the screen darken
+  const alive = playing && me.state === 'alive';
+  S.dread = alive ? Math.max(0, 1 - nearestNun / 9, 0.7 * (1 - nearestGhost / 5)) : 0;
+  setDanger(dangerEl, alive ? Math.max(0, 1 - nearestNun / 14) : 0, alive && (hunted && nearestNun < 18 || now < S.chaseUntil), t, UI.settings.gentle);
+  haunts.update(dt, {
+    me,
+    eye: camera.position,
+    calm: alive && !hunted && now > S.chaseUntil && nearestNun > 10 && me.hidden == null && !S.scare,
+    gentle: UI.settings.gentle,
+    playing: alive,
+    lit: S.light && torch.intensity > 0,
+    open: (x0, z0, x1, z1) => L.clearLine(x0, z0, x1, z1, (id) => S.doors[id]),
+  });
   for (const o of S.previews || []) o.update(dt, camera.position.x, camera.position.z);
   for (const l of S.loose.values()) l.mesh.rotation.y += dt * 2;
 
@@ -825,7 +880,14 @@ function frame() {
     else $('grace').textContent = '';
   }
 
-  world.update(dt, t, UI.settings.brightness);
+  world.update(dt, t, UI.settings.brightness, camera.position);
+  if (!dust.off) dust.update(t, torch.visible ? torch.intensity / 22 : 0);
+  // the view widens for a moment when she sees you
+  if (S.fovKick > 0.001) {
+    S.fovKick = Math.max(0, S.fovKick - dt * 0.8);
+    camera.fov = 72 + (UI.settings.gentle ? 0 : Math.sin(Math.min(1, (1 - S.fovKick) * 3) * Math.PI * 0.5) * S.fovKick * 8);
+    camera.updateProjectionMatrix();
+  }
   renderer.render(scene, camera);
 
   if (S.mapOn) {
@@ -838,7 +900,7 @@ function frame() {
     if (Math.floor(t * 10) % 2 === 0)
       UI.drawMap(mc, {
         me: me.state === 'alive' ? me : null,
-        others: [...S.avatars.values()].map((a) => ({ x: a.x, z: a.z, visible: a.root.visible })),
+        others: [...S.avatars.values()].map((a) => ({ x: a.x, z: a.z, visible: a.present })),
         stage: S.stage,
         keyRooms: S.keyRooms,
         loose: [...S.loose.values()],
@@ -859,11 +921,14 @@ if (DEBUG) {
     S,
     world,
     camera,
+    renderer,
+    haunts,
     socket,
     L,
     get aim() {
       return aim;
     },
+    perf,
     tp(x, z, yaw) {
       S.me.x = x;
       S.me.z = z;
