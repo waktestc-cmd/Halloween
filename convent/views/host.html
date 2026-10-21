@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{TITLE}}: big screen</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%95%AF%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/host.css" />
+</head>
+<body class="host">
+  <header>
+    <h1>{{TITLE}}</h1>
+    <div id="h-timer"></div>
+  </header>
+  <main>
+    <section id="h-lobby">
+      <div class="join">
+        <p class="kicker">Join on your laptop</p>
+        <p id="h-url"></p>
+        <img id="h-qr" alt="QR code to join" />
+      </div>
+      <div class="who">
+        <h2 id="h-count">Nobody here yet</h2>
+        <ul id="h-roster"></ul>
+        <div id="h-level" role="group" aria-label="How hard">
+          <button type="button" data-level="easy">Easy</button>
+          <button type="button" data-level="normal" class="on">Normal</button>
+          <button type="button" data-level="scary">Scary</button>
+        </div>
+        <button id="h-start" class="big" type="button">Lock the doors and start</button>
+      </div>
+    </section>
+    <section id="h-game">
+      <div class="mapwrap"><canvas id="h-map"></canvas></div>
+      <aside>
+        <ol id="h-steps">
+          <li data-s="power">Fix the fuse box</li>
+          <li data-s="desk">Open Mother Superior's desk</li>
+          <li data-s="keys">Unlock the front door <span id="h-locks"></span></li>
+          <li data-s="escape">Escape!</li>
+        </ol>
+        <div id="h-feed"></div>
+        <ul id="h-players"></ul>
+      </aside>
+    </section>
+    <section id="h-results">
+      <h2 id="h-result-title"></h2>
+      <ul id="h-awards"></ul>
+      <ol id="h-scores"></ol>
+      <button id="h-again" class="big" type="button">Back to the lobby</button>
+    </section>
+  </main>
+  <script type="module" src="/js/host.js"></script>
+</body>
+</html>

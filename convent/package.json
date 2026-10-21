@@ -1,0 +1,27 @@
+{
+  "name": "escape-the-convent",
+  "version": "1.0.0",
+  "description": "Multiplayer first-person Halloween escape game: get out of the convent before the nuns and ghosts get you.",
+  "type": "module",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "DEV=1 node server.js",
+    "bots": "node tools/bots.js",
+    "test": "node test/rules.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.22.3",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.4",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
+  }
+}
