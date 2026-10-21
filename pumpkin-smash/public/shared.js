@@ -93,7 +93,7 @@
   ];
 
   // Recorded sounds need their authors in the end credits (CC BY). See ASSETS.md.
-  const SOUND_CREDITS = ['qubodup'];
+  const SOUND_CREDITS = ['qubodup', 'Kenney'];
 
   // The game's name, in one place.
   const TITLE = 'Pumpkin Smash';

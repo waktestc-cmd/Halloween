@@ -35,8 +35,8 @@ get a fright and drop a soul, never a death:
 
 * Node.js + Express + Socket.io, all state in memory, single process, single room.
 * Plain HTML/CSS/JS. The hunt is a WebGL torch lighting twelve painted rooms (with a Canvas 2D fallback);
-  everything else is drawn in code. Sound is synthesised with Web Audio, plus a few CC BY recordings
-  credited in `ASSETS.md` and the end credits.
+  everything else is drawn in code. Sound is recorded effects (Kenney, CC0), character voices and a few
+  CC BY recordings, all listed in `ASSETS.md`, with Web Audio synthesis for the rest and as a fallback.
 * Full spec: [SPEC.md](SPEC.md). Visual direction: [ART_DIRECTION.md](ART_DIRECTION.md) ("light is the only colour").
 * Every asset, its source and licence: [ASSETS.md](ASSETS.md).
 

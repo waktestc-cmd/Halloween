@@ -42,6 +42,8 @@ Each author listed here also appears under "Sounds" in the end credits (`SOUND_C
 | Jason: "ki ki ki, ma ma ma" as he rises from the lake | `public/sounds/voice-jason.mp3` | Supplied by the team; trimmed and levelled | From the *Friday the 13th* films | **Team's responsibility**: internal use only |
 | Freddy: "One, two, Freddy's coming for you" when you stand still | `public/sounds/voice-freddy.mp3` | Supplied by the team; levelled | From *A Nightmare on Elm Street* | **Team's responsibility**: internal use only |
 | Pennywise: "They float" when your light finds him | `public/sounds/voice-pennywise.mp3` | Supplied by the team; levelled | From *It* | **Team's responsibility**: internal use only |
+| Footsteps, door creak, door opening, opening a hiding place, a hit, knocking, the hammer's impact | `public/sounds/sfx-step-1…4.mp3`, `sfx-door-creak`, `sfx-door-open`, `sfx-open-wood`, `sfx-hit`, `sfx-knock`, `sfx-smash` (`.mp3`) | Kenney's *RPG Audio* and *Impact Sounds* packs ([kenney.nl](https://kenney.nl)), supplied by the team; trimmed, levelled, mixed to mono | Kenney | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| A soul picked up, a pumpkin found, the win | `public/sounds/sfx-soul.mp3`, `sfx-pumpkin-found.mp3`, `sfx-win.mp3` | Kenney's *Music Jingles* pack, supplied by the team; trimmed, levelled | Kenney | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Zombie wind-up snarl (played at 0.74–0.84× speed) | `public/sounds/zombie-snarl.wav` | [Orc Grunt 3](https://freesound.org/people/qubodup/sounds/738439/) on Freesound | qubodup | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 Rebuild the rooms and sprites from the raw images with `python3 tools/build_rooms.py RAW_DIR`
