@@ -9,6 +9,12 @@
   const view = new PS.RoomView($('room'));
   const roomCv = view.canvas; // the renderer may swap in a fresh canvas for its 2D fallback
   let META = null;
+  // where each painted player figure holds its lantern (tools/build_rooms.py)
+  let LANTERNS = {};
+  fetch('/sprites/players.json')
+    .then((r) => r.json())
+    .then((m) => (LANTERNS = m))
+    .catch(() => {});
   fetch('/rooms/rooms.json')
     .then((r) => r.json())
     .then((m) => (META = m))
@@ -158,7 +164,7 @@
       const hero = $('j-hero');
       if (hero.dataset.id !== costume) {
         hero.dataset.id = costume;
-        hero.innerHTML = PS.silSVG(costume);
+        hero.innerHTML = `<img class="painted" alt="" src="/sprites/player-${costume}.webp">`;
         hero.classList.remove('pop');
         void hero.offsetWidth;
         hero.classList.add('pop');
@@ -742,7 +748,7 @@
     const F = view.toScreen(m.u, m.v);
     const bh = figH(m.v);
     if (!m.moving && Math.abs(Hunt.ptr.x - F.x) > bh * 0.1) m.f = Hunt.ptr.x < F.x ? -1 : 1;
-    const hand = { x: F.x + m.f * bh * 0.2, y: F.y - bh * 0.5 };
+    const hand = figureGeom(me.costume, F.x, F.y, m.v, m.f).hand;
     const reach = Math.max(R * 2.6, bh * 1.1);
     let dx = Hunt.ptr.x - hand.x;
     let dy = Hunt.ptr.y - hand.y;
@@ -924,8 +930,28 @@
     }
     for (const k of [...peers.keys()]) if (!seen.has(k)) peers.delete(k);
   });
-  // a player: their costume on a cut-paper figure in a long cloak, a lantern held out
+  // a player: the painted figure in their costume, lantern in hand (or, until it loads, a cut-paper one)
   const presenceSize = (R) => Math.max(28, R * 0.34);
+  function figureGeom(costume, x, y, v, f) {
+    const img = PS.sprite('player-' + costume);
+    if (!img) {
+      const h = figH(v);
+      return { img: null, h, hand: { x: x + f * h * 0.2, y: y - h * 0.47 } };
+    }
+    const h = figH(v) * 1.12;
+    const w = (h * img.naturalWidth) / img.naturalHeight;
+    const l = LANTERNS[costume] || { x: 0.86, y: 0.49 };
+    return { img, h, w, hand: { x: x + f * (l.x - 0.5) * w, y: y - (1 - l.y) * h } };
+  }
+  function drawPlayer(costume, x, y, v, f, step, moving, alpha, t) {
+    const g = figureGeom(costume, x, y, v, f);
+    if (!g.img) return drawFigure(costume, x, y, g.h, f, step, alpha, 0.8, t);
+    // a walking bob; standing still is still
+    const bob = moving ? Math.abs(Math.sin(step)) * g.h * 0.012 : 0;
+    PS.drawLitSprite(ctx, g.img, x, y - bob, g.h, { torch: g.hand, R: g.h * 0.75, facing: f, alpha, rot: moving ? Math.sin(step) * 0.012 : 0 });
+    // the lantern itself burns
+    PS.drawLantern(ctx, g.hand.x, g.hand.y - bob, g.h * 0.03, t, alpha * 0.9);
+  }
   function drawFigure(costume, x, y, h, f, step, alpha, lit, t) {
     const sway = Math.sin(step) * h * 0.025;
     // dark cloth, warm only on the side its own lantern lights
@@ -1626,14 +1652,15 @@
       if (c.self) {
         const invis = now < Hunt.invisUntil;
         const m = Hunt.me;
-        drawFigure(me.costume, Hunt.feet.x, Hunt.feet.y, Hunt.bh, m.f, m.step, invis ? 0.35 + 0.2 * Math.sin(t * 8) : 1, 0.85, t);
+        drawPlayer(me.costume, Hunt.feet.x, Hunt.feet.y, m.v, m.f, m.step, m.moving, invis ? 0.35 + 0.2 * Math.sin(t * 8) : 1, t);
         continue;
       }
       const q = c.q;
       const sp = view.toScreen(q.fu, q.fv);
       const h = figH(q.fv);
       const L = lightAt(sp.x, sp.y - h * 0.5, R);
-      drawFigure(q.c, sp.x, sp.y, h, q.f || 1, q.step || 0, 0.7 + 0.3 * L, 0.55 + 0.35 * L, t);
+      const moving = Math.hypot((q.tfu || q.fu) - q.fu, (q.tfv || q.fv) - q.fv) > 0.002;
+      drawPlayer(q.c, sp.x, sp.y, q.fv, q.f || 1, q.step || 0, moving, 0.75 + 0.25 * L, t);
       ctx.save();
       ctx.globalAlpha = 0.5 + 0.4 * L;
       ctx.fillStyle = T.ash;

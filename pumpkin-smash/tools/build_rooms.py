@@ -3,6 +3,7 @@
 
 usage: python3 tools/build_rooms.py RAW_DIR      (everything)
        python3 tools/build_rooms.py --meta       (only rooms.json, after editing ROOMS below)
+       python3 tools/build_rooms.py --sprites DIR (only sprites: char-*, zombie-*, player-*)
 
 RAW_DIR holds room-<name>.png (2560x1440, one-point perspective, evenly lit) and the
 char-*.png / zombie-*.png sprites (transparent). For each room this writes, under public/rooms/<id>/:
@@ -221,6 +222,7 @@ def build_room(r, raw):
 
 def build_sprites(raw):
     os.makedirs(SPRITES, exist_ok=True)
+    lanterns = {}
     for f in sorted(os.listdir(raw)):
         if not f.endswith('.png') or f.startswith('room-'):
             continue
@@ -237,12 +239,35 @@ def build_sprites(raw):
             im = im.resize((round(im.width * target / im.height), target), Image.LANCZOS)
         im.save(os.path.join(SPRITES, name + '.webp'), quality=82, method=6)
         print('sprite', name, im.size)
+        if name.startswith('player-'):
+            lanterns[name[7:]] = lantern_at(im)
+
+    if lanterns:
+        # where each player figure holds its lantern, as a fraction of the sprite: the light comes from there
+        path = os.path.join(SPRITES, 'players.json')
+        known = json.load(open(path)) if os.path.exists(path) else {}
+        known.update(lanterns)
+        with open(path, 'w') as fh:
+            json.dump(known, fh, indent=1, sort_keys=True)
+
+
+def lantern_at(im):
+    """The middle of the lantern's glow: warm, bright, opaque pixels."""
+    a = np.asarray(im, np.float32)
+    r, g, b, al = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
+    ys, xs = np.nonzero((al > 200) & (r > 200) & (g > 150) & (b < 150) & (r - b > 90))
+    if not len(xs):
+        return {'x': 0.85, 'y': 0.48}
+    return {'x': round(float(np.median(xs)) / im.width, 3), 'y': round(float(np.median(ys)) / im.height, 3)}
 
 
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     meta = {'width': W, 'height': H, 'rooms': []}
+    if sys.argv[1] == '--sprites':
+        # only sprites (residents, zombies, player figures) from the folder given
+        return build_sprites(sys.argv[2])
     if sys.argv[1] == '--meta':
         # only rooms.json: doors, hiding places, spots (no images needed)
         meta['rooms'] = [room_meta(r) for r in ROOMS]

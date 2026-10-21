@@ -8,7 +8,7 @@ to smash. One of the six secretly holds **Friday afternoon off**, an exact 1-in-
 Built to be easy for people who don't play games: everything is one click, the mouse says what a click
 will do ("Look under the stairs"), and nothing kills you without warning.
 
-**Walking**: you are a figure in a long cloak with your costume for a head, holding a lantern. Click the
+**Walking**: you are a painted figure in your costume, carrying a lantern (12 costumes, painted by the team). Click the
 floor to walk there; click a wardrobe, a door, a soul or the ringing telephone and you walk over and do it.
 The lantern points where your mouse is, but only so far: walk closer to see the far side of a room.
 Arrow keys and WASD walk too. Zombies, ghosts and the residents come for where you stand.
