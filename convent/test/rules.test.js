@@ -28,10 +28,10 @@ try {
   }
   const host = io(URL, { transports: ['websocket'], auth: { role: 'host', key: 'spooky' }, forceNew: true });
   await once(host, 'welcome');
+  // listen for both welcomes before waiting on either, or the second can arrive unheard
   const a = player('Alice');
   const b = player('Bob');
-  await once(a, 'welcome');
-  await once(b, 'welcome');
+  await Promise.all([once(a, 'welcome'), once(b, 'welcome')]);
   host.emit('start');
   await once(a, 'start');
   b.emit('dev:freeze', true);
