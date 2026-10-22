@@ -29,6 +29,10 @@ doctor; it turns slowly in the lantern light so you see it) and a colour for its
 3. Bring the **three iron keys** to the **front door**, one padlock each.
 4. The door opens and every monster comes for you. You have two minutes to get out.
 
+**How to win** (the lobby and the map card say the same): when chased, run with Shift, then hide in a
+wardrobe, under a bed or behind a curtain; when cornered, flash with Q; follow the clue messages and the
+map's "left to search"; work as a team; and press G to drop what you carry for someone else.
+
 **Lives:** you have three, shown as candles. A monster or a ghost catching you the first or second time
 sends you back to the guest bedrooms. The third time, you're out and can only watch the others. Whatever
 you were carrying drops where you were caught, and someone else can pick it up.

@@ -1070,6 +1070,7 @@ function frame() {
 world.onThunder = () => sound.ctx && sound.thunder(0.6 + Math.random() * 0.4);
 UI.setLives(C.LIVES);
 UI.setObjective('power', 0, []);
+$('tips').innerHTML = UI.tipsHTML();
 UI.show('panel-join');
 document.body.dataset.ready = '1';
 frame();

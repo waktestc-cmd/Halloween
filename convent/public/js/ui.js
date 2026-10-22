@@ -113,6 +113,16 @@ export function setCarry(item, candy = 0) {
   else el.innerHTML = `<span class="item-icon ${item}"></span><div><b>You carry: ${C.ITEMS[item].name}</b><small>${C.ITEMS[item].hint}. <kbd>G</kbd> to drop</small></div>${sweets}`;
 }
 
+/* ---------- how to win: the same few tips in the lobby and on the map card ---------- */
+export const TIPS = [
+  '<b>Chased?</b> Run with <kbd>Shift</kbd> (you have about ten seconds of breath), then hide in a wardrobe, under a bed or behind a curtain with <kbd>E</kbd>.',
+  '<b>Cornered?</b> Press <kbd>Q</kbd> to flash. Every monster in front of you is dazzled and loses you, and ghosts vanish.',
+  '<b>Follow the clues.</b> "Something rattles in the Kitchen" means what you need is there. The map (<kbd>M</kbd>) shows which rooms still have places to search.',
+  '<b>Work as a team.</b> Split up the rooms, tell each other what you found, and watch the news.',
+  '<b>Caught while carrying something?</b> It drops where you were. Press <kbd>G</kbd> to put it down yourself for someone else to take on.',
+];
+export const tipsHTML = () => `<h3>How to win</h3><ul class="tips">${TIPS.map((t) => `<li>${t}</li>`).join('')}</ul>`;
+
 /* ---------- the side card on the map: the goal, what you carry, the monsters, the news ---------- */
 const esc = (t) => String(t).replace(/[<>&]/g, '');
 const STEPS = [
@@ -141,6 +151,7 @@ export function mapSide({ stage, padlocks, keyRooms, carrying, candy = 0, lives,
       <li>🧟 <b>${zombies} ${zombies === 1 ? 'zombie' : 'zombies'}</b>: they groan, and shuffle around the graveyard.</li>
       <li>👻 <b>Ghosts</b>: they hum. Hold your flashlight on one until it vanishes, or flash it.</li>
     </ul>
+    ${tipsHTML()}
     <h3>What's happening</h3>
     <ul class="news">${news.length ? news.map((n) => `<li>${esc(n)}</li>`).join('') : '<li>All quiet, for now.</li>'}</ul>`;
 }

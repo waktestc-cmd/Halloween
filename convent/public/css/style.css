@@ -1118,6 +1118,19 @@ tr.me td {
   height: 28px;
   color: var(--bone);
 }
+.win {
+  margin: 18px 0 12px;
+  padding: 4px 20px 10px;
+  border-left: 4px solid #ff7a1a;
+  background: rgba(255, 122, 26, 0.07);
+}
+.tips {
+  padding-left: 1.1em;
+  margin: 4px 0;
+}
+.tips li {
+  margin-bottom: 0.45em;
+}
 .ps #roster em {
   color: var(--ash);
 }
