@@ -10,6 +10,8 @@ const GRACE = process.env.GRACE != null ? Number(process.env.GRACE) : C.DURATION
 // a player named "tester" never runs out of lives, for trying the game out; not at the real event
 // (Cloud Run runs with NODE_ENV=production) unless TESTERS=1 is set
 const TESTERS = process.env.NODE_ENV !== 'production' || process.env.TESTERS === '1';
+// tests can make the clue come sooner
+const HINT_AFTER = process.env.HINT != null ? Number(process.env.HINT) : C.HINT.after;
 const TICK = 1 / 20;
 const SEND_EVERY = 3; // ticks between snapshots (about 7 a second)
 const rint = (n) => crypto.randomInt(n);
@@ -99,6 +101,7 @@ export class Game {
     this.loose = []; // items dropped on the floor
     this.boxes = new Map(); // prop id -> item
     this.searched = new Set();
+    this.hintStage = null;
     this.hidden = new Map(); // prop id -> player id
     this.keyRooms = [];
     this.result = null;
@@ -207,12 +210,12 @@ export class Game {
       const item = this.boxes.get(p.id);
       if (!item) {
         socket.emit('found', { prop: p.id, item: null });
-        return;
+        return this.markSearched(p.id);
       }
       if (item === 'battery') {
         this.boxes.delete(p.id);
         socket.emit('found', { prop: p.id, item: 'battery' });
-        return;
+        return this.markSearched(p.id);
       }
       if (me.carrying) {
         socket.emit('found', { prop: p.id, item, full: me.carrying });
@@ -224,6 +227,7 @@ export class Game {
       socket.emit('found', { prop: p.id, item });
       socket.emit('me', this.mine(me));
       this.say(`${me.name} found the ${C.ITEMS[item].name.toLowerCase()}!`);
+      this.markSearched(p.id);
     });
     socket.on('pickup', (m = {}) => {
       const it = this.loose.find((l) => l.id === m.id);
@@ -823,10 +827,38 @@ export class Game {
       for (const n of this.monsters) this.monsterTick(n, TICK);
       for (const g of this.ghosts) this.ghostTick(g, TICK);
       if (this.t > this.hauntAt) this.haunt();
+      this.hint();
     }
     if (this.tickN % SEND_EVERY === 0) this.snapshot();
     if (this.stage === 'escape' && this.t - this.finaleAt > C.DURATION.finale) this.end();
     if (this.t > C.DURATION.night) this.end();
+  }
+
+  // an emptied hiding place: everyone's map marks it, so nobody searches it twice
+  markSearched(id) {
+    if (this.searched.has(id)) return;
+    this.searched.add(id);
+    this.io.to('players').to('hosts').emit('searched', [...this.searched]);
+    for (const p of this.players.values()) if (p.tester) p.socket.emit('me', this.mine(p));
+  }
+
+  // nobody has found what this step needs for a while: a clue to the room it is in
+  hint() {
+    if (this.stage !== this.hintStage) {
+      this.hintStage = this.stage;
+      this.hintAt = this.t + HINT_AFTER + (this.stage === 'power' ? GRACE : 0);
+    }
+    if (this.t < this.hintAt) return;
+    this.hintAt = this.t + HINT_AFTER;
+    const want = { power: 'fuse', desk: 'brass' }[this.stage];
+    if (!want || [...this.players.values()].some((p) => p.carrying === want)) return;
+    const box = [...this.boxes].find(([, it]) => it === want);
+    const spot = box ? L.PROPS[box[0]] : this.loose.find((l) => l.item === want);
+    const room = spot && L.roomAt(spot.x, spot.z);
+    if (!room) return;
+    const text = `Listen… something rattles in the ${L.ROOMS[room].name}. The ${C.ITEMS[want].name.toLowerCase()}?`;
+    this.say(text);
+    this.io.to('players').emit('toast', text);
   }
 
   /* ---------- telling everyone ---------- */
@@ -852,6 +884,7 @@ export class Game {
       padlocks: this.padlocks,
       doors: this.doors,
       keyRooms: this.stage === 'keys' || this.stage === 'escape' ? this.keyRooms : [],
+      searched: [...this.searched],
       roster: this.roster(),
       feed: this.feed.slice(-8),
       finaleAt: this.finaleAt,
@@ -864,7 +897,7 @@ export class Game {
     return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
   }
   mine(p) {
-    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester };
+    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };
   }
   broadcastLobby() {
     this.io.to('players').to('hosts').emit('roster', this.roster());

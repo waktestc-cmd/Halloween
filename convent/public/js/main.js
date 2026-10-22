@@ -83,6 +83,7 @@ const S = {
   stage: 'power',
   padlocks: 0,
   keyRooms: [],
+  searched: new Set(), // hiding places someone has emptied
   doors: {},
   me: { x: L.SPAWN.x, z: L.SPAWN.z, yaw: L.SPAWN.yaw, pitch: 0, lives: C.LIVES, state: 'alive', carrying: null, hidden: null, safeUntil: 0 },
   battery: 1,
@@ -199,6 +200,7 @@ socket.on('stage', (m) => {
   if (m.stage === 'escape' && was !== 'escape') UI.toast('The front door is open. RUN!', 5000);
 });
 socket.on('feed', (f) => UI.feed(f.text));
+socket.on('searched', (ids) => (S.searched = new Set(ids)));
 socket.on('toast', (t) => UI.toast(t));
 socket.on('note', (text) => {
   $('note-text').textContent = text;
@@ -238,6 +240,7 @@ function applyState(m) {
   if (m.stage) S.stage = m.stage;
   if (m.padlocks != null) S.padlocks = m.padlocks;
   if (m.keyRooms) S.keyRooms = m.keyRooms;
+  if (m.searched) S.searched = new Set(m.searched);
   if (m.finaleAt != null) S.finaleAt = m.finaleAt;
   if (m.grace != null) S.grace = m.grace;
   if (m.t != null) {
@@ -258,7 +261,7 @@ function applyState(m) {
 }
 function applyMe(m, jump) {
   const was = S.me.hidden;
-  Object.assign(S.me, { lives: m.lives, state: m.state, carrying: m.carrying, hidden: m.hidden, safeUntil: m.safeUntil, tester: m.tester });
+  Object.assign(S.me, { lives: m.lives, state: m.state, carrying: m.carrying, hidden: m.hidden, safeUntil: m.safeUntil, tester: m.tester, secrets: m.secrets });
   if (jump || (was != null && m.hidden == null)) {
     S.me.x = m.x;
     S.me.z = m.z;
@@ -531,7 +534,7 @@ function describe(a) {
       if (/^key/.test(carrying || '')) return 'Unlock a padlock with your iron key';
       return [`The front door: ${3 - S.padlocks} padlock${3 - S.padlocks === 1 ? '' : 's'} left`, ''];
     case 'search':
-      return L.PROPS[a.prop].box;
+      return S.searched.has(a.prop) ? `${L.PROPS[a.prop].box} (already searched)` : L.PROPS[a.prop].box;
     case 'hide':
       return L.PROPS[a.prop].hide;
     case 'fusebox':
@@ -957,6 +960,8 @@ function frame() {
         stage: S.stage,
         keyRooms: S.keyRooms,
         loose: [...S.loose.values()],
+        searched: [...S.searched].map((id) => L.PROPS[id]),
+        secrets: me.secrets && me.secrets.map(([id, item]) => ({ x: L.PROPS[id].x, z: L.PROPS[id].z, item })),
       });
     if (now - (S.sideAt || 0) > 500) {
       S.sideAt = now;

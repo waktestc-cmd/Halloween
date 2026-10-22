@@ -8,7 +8,7 @@ import { drawMap } from './ui.js';
 const $ = (id) => document.getElementById(id);
 const key = new URLSearchParams(location.search).get('key') || '';
 const socket = io({ auth: { role: 'host', key }, transports: ['websocket', 'polling'] });
-const S = { phase: 'LOBBY', roster: [], stage: 'power', padlocks: 0, keyRooms: [], t: 0, tAt: 0, finaleAt: 0, tick: null };
+const S = { phase: 'LOBBY', roster: [], stage: 'power', padlocks: 0, keyRooms: [], t: 0, tAt: 0, finaleAt: 0, tick: null, searched: [] };
 const esc = (s) => String(s).replace(/[<>&]/g, '');
 
 const joinUrl = `${location.protocol}//${location.host}/`;
@@ -19,7 +19,7 @@ function section(id) {
   for (const s of document.querySelectorAll('main > section')) s.classList.toggle('on', s.id === id);
 }
 function apply(m) {
-  for (const k of ['phase', 'stage', 'padlocks', 'keyRooms', 'finaleAt']) if (m[k] != null) S[k] = m[k];
+  for (const k of ['phase', 'stage', 'padlocks', 'keyRooms', 'finaleAt', 'searched']) if (m[k] != null) S[k] = m[k];
   if (m.t != null) {
     S.t = m.t;
     S.tAt = performance.now();
@@ -62,6 +62,7 @@ socket.on('start', (m) => {
 });
 socket.on('stage', (m) => apply(m));
 socket.on('feed', (f) => addFeed(f.text));
+socket.on('searched', (ids) => (S.searched = ids));
 socket.on('tick', (m) => {
   S.tick = m;
   S.t = m.t;
@@ -114,6 +115,7 @@ function frame() {
     loose: m.l.map(([id, item, x, z]) => ({ x, z })),
     stage: S.stage,
     keyRooms: S.keyRooms,
+    searched: S.searched.map((id) => L.PROPS[id]),
   });
 }
 frame();

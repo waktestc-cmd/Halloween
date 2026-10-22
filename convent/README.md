@@ -40,8 +40,11 @@ behind a curtain. If it saw you climb in, it pulls you out.
 **The ghosts** hum as they drift toward you, slower than you walk. Walk away, or hold your flashlight on
 one until it shrieks and vanishes.
 
-**Trying it out:** join with the name **tester** and you never run out of lives (the big screen still
-shows your catches). This only works on a test server: on Cloud Run (`NODE_ENV=production`) it is off
+**Help finding things:** every emptied hiding place gets a tick on everyone's map, and if nobody has found
+the fuse (or the brass key) for 3 minutes, a clue says which room it is in.
+
+**Trying it out:** join with the name **tester** and you never run out of lives, and your map shows where
+the fuse and keys are hidden (the big screen still shows your catches). This only works on a test server: on Cloud Run (`NODE_ENV=production`) it is off
 unless you set `TESTERS=1`.
 
 ## Running it

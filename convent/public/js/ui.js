@@ -164,7 +164,7 @@ export function setBars(battery, stamina, lightOn) {
 /* ---------- the map ---------- */
 export const MONSTER_SIGN = { vampire: '🧛', creature: '⚡', zombie: '🧟' };
 const ROOM_TINT = { c: '#3a352c', g: '#1f2a1c' };
-export function drawMap(canvas, { me, others = [], monsters = null, ghosts = null, stage, keyRooms = [], host = false, loose = [] }) {
+export function drawMap(canvas, { me, others = [], monsters = null, ghosts = null, stage, keyRooms = [], host = false, loose = [], searched = [], secrets = null }) {
   const g = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
@@ -231,6 +231,20 @@ export function drawMap(canvas, { me, others = [], monsters = null, ghosts = nul
   const [fx, fz] = L.centre(L.FRONT.c, L.FRONT.r);
   icon(fx, fz - 0.6, stage === 'keys' || stage === 'escape' ? '#ffcc33' : '#888', 'Front door');
   for (const l of loose) icon(l.x, l.z, '#ffd080', 'Dropped!');
+  // places already searched and empty: a small grey tick
+  g.font = `700 ${Math.max(10, s * 0.45)}px sans-serif`;
+  g.fillStyle = 'rgba(200,200,190,0.75)';
+  for (const p of searched) g.fillText('✓', X(p.x), Y(p.z));
+  // tester mode: where things are hidden
+  if (secrets)
+    for (const it of secrets) {
+      g.fillStyle = it.item === 'fuse' ? '#7fdfff' : it.item === 'brass' ? '#ffb347' : '#e0e0e0';
+      g.beginPath();
+      g.arc(X(it.x), Y(it.z), Math.max(4, s * 0.22), 0, Math.PI * 2);
+      g.fill();
+      g.font = `700 ${Math.max(9, s * 0.36)}px Georgia, serif`;
+      g.fillText({ fuse: 'FUSE', brass: 'BRASS KEY' }[it.item] || 'IRON KEY', X(it.x), Y(it.z) - Math.max(9, s * 0.45));
+    }
   // people
   for (const o of others) {
     if (!o.visible) continue;
