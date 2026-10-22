@@ -1,10 +1,12 @@
 // Fake players for testing: they join, wander the house along the corridors, open things, and
 // sometimes run. Usage: node tools/bots.js 20 --url http://localhost:3000
+// --testers names them all "tester", so they never run out of lives (for a long load test)
 import { io } from 'socket.io-client';
 import * as L from '../shared/level.js';
 
 const n = Number(process.argv[2]) || 10;
 const url = process.argv.includes('--url') ? process.argv[process.argv.indexOf('--url') + 1] : 'http://localhost:3000';
+const testers = process.argv.includes('--testers');
 const NAMES = ['Margaret', 'Raj', 'Linda', 'Tom', 'Priya', 'George', 'Helen', 'Sam', 'Ada', 'Frank', 'Joan', 'Ken', 'Rosa', 'Bill', 'Mei', 'Carl', 'Dot', 'Ivan', 'Nell', 'Omar', 'Pat', 'Ruth', 'Stan', 'Vera', 'Walt'];
 const tiles = [];
 for (let r = 0; r < L.H; r++) for (let c = 0; c < L.W; c++) if (L.floorTile(c, r) && L.at(c, r) !== '+' && !L.BLOCKED.has(c + ',' + r)) tiles.push([c, r]);
@@ -33,7 +35,7 @@ function route(from, to) {
 for (let i = 0; i < n; i++) {
   const s = io(url, { transports: ['websocket'] });
   const me = { x: L.SPAWN.x, z: L.SPAWN.z, yaw: 0, path: [], run: false, doors: {} };
-  s.on('connect', () => s.emit('join', { name: NAMES[i % NAMES.length] + (i >= NAMES.length ? ' ' + i : ''), look: i % 8 }));
+  s.on('connect', () => s.emit('join', { name: testers ? 'tester' : NAMES[i % NAMES.length] + (i >= NAMES.length ? ' ' + i : ''), look: i % 8 }));
   s.on('welcome', (m) => m.me && Object.assign(me, { x: m.me.x, z: m.me.z }));
   s.on('start', () => (me.path = []));
   s.on('me', (m) => {

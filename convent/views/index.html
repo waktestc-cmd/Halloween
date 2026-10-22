@@ -28,7 +28,7 @@
     <div id="feed"></div>
     <div id="carry"></div>
     <div id="bars">
-      <div id="battery" class="bar"><span>Flashlight <kbd>F</kbd></span><i><b id="battery-fill"></b></i></div>
+      <div id="battery" class="bar"><span id="battery-label">Flashlight <kbd>F</kbd></span><i><b id="battery-fill"></b></i></div>
       <div id="stamina" class="bar"><span>Breath</span><i><b id="stamina-fill"></b></i></div>
     </div>
     <div id="keys-hint"><button id="btn-map" type="button"><kbd>M</kbd> Map</button><span><kbd>Esc</kbd> Settings</span></div>
@@ -73,6 +73,7 @@
           <div><kbd>Shift</kbd><span>Run (they hear it)</span></div>
           <div><kbd>E</kbd> or click<span>Open, search, hide</span></div>
           <div><kbd>F</kbd><span>Flashlight on/off</span></div>
+          <div><kbd>G</kbd><span>Drop what you carry</span></div>
           <div><kbd>M</kbd><span>Map</span></div>
           <div><kbd>Esc</kbd><span>Settings</span></div>
         </div>
@@ -81,6 +82,7 @@
           <li><b>The ghosts</b> hum as they float slowly toward you. Walk away, or hold your flashlight on them until they vanish.</li>
           <li><b>Three lives.</b> Caught once or twice, you wake up back in the guest bedrooms. The third time, you're out.</li>
           <li><b>Escape together:</b> fix the fuse box, open the Count's desk, find the three iron keys, unlock the front door.</li>
+          <li><b>Trick or treat:</b> wrapped sweets lie all over the house. Just walk over them to collect them. Each one adds to your score.</li>
         </ol>
       </div>
       <button id="btn-settings-lobby" type="button" class="ghost">Settings</button>
@@ -134,7 +136,7 @@
       <p class="kicker">Dawn</p>
       <h2 id="result-title"></h2>
       <ul id="awards"></ul>
-      <table><thead><tr><th>Name</th><th></th><th>Score</th></tr></thead><tbody id="scores"></tbody></table>
+      <table><thead><tr><th>Name</th><th></th><th>Candy</th><th>Score</th></tr></thead><tbody id="scores"></tbody></table>
       <p class="lede">The host can start another night.</p>
     </div>
   </section>

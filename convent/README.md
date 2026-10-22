@@ -13,7 +13,8 @@ before dawn. (It began as *Escape the Convent*; the folder keeps that name.)
 | **Mouse** | Look around (click the screen once to start) |
 | **Shift** | Run. It's faster, but the monsters hear it, and you run out of breath after a few seconds |
 | **E**, **Space** or **click** | Open a door, search a drawer, hide, use the fuse box, the desk or the front door |
-| **F** | Flashlight on or off. It lights your way but lets the monsters see you from further off, and the battery runs down |
+| **F** | Flashlight on or off. It lights your way but lets the monsters see you from further off, and the battery runs down. Switch it off for a while and it slowly charges up again |
+| **G** | Drop what you carry, just in front of you. Anyone can pick it up with **E** |
 | **M** | Map: every room by name, you as an arrow, the others as dots, and a card with your goal, what you carry, who is in the house and the latest news |
 | **Esc** | Settings: volume, music, brightness, mouse speed, arrow-key turning, gentle mode, bigger text, full screen |
 
@@ -39,6 +40,11 @@ behind a curtain. If it saw you climb in, it pulls you out.
 
 **The ghosts** hum as they drift toward you, slower than you walk. Walk away, or hold your flashlight on
 one until it shrieks and vanishes.
+
+**Trick or treat:** wrapped sweets lie on the floors all over the house (about forty, and a new one turns up
+every 15 seconds). Just walk over one to pick it up, no key needed. Your count shows on the card at the bottom
+of the screen and on the map; each sweet is worth 2 points at dawn, and whoever collects the most gets the
+*Sweet tooth* award. The big screen shows them as small pink dots.
 
 **Help finding things:** every emptied hiding place gets a tick on everyone's map, and if nobody has found
 the fuse (or the brass key) for 3 minutes, a clue says which room it is in.
@@ -103,6 +109,7 @@ Don't redeploy during the party: a new version starts an empty game. Afterwards,
   - `ui.js` handles the map, settings and on-screen display.
   - `main.js` holds it all together.
   - `atmosphere.js` has the dust, the danger edge and each player's small events.
+  - `candy.js` draws the sweets (all of them in one instanced mesh).
   - `models.js` loads the models listed in `models.json`.
 - Furniture is merged into a few meshes per room and only the nearest four lamps or candles really shine,
   so ordinary laptops cope. If one still struggles, the game lowers its own resolution, then its shadow

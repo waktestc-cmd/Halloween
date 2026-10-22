@@ -72,7 +72,14 @@ export const HAUNT = { first: 25, every: [28, 55] };
 // when nobody has found the fuse (or the brass key) for this long, the house gives a clue to its room
 export const HINT = { after: 180 };
 
-export const BATTERY = { drainPerSec: 1 / 200, refill: 0.5, spares: 8 };
+// the flashlight: it runs down while on, and slowly charges up again while switched off
+// (from empty to full in a minute, starting a moment after you switch it off)
+export const BATTERY = { drainPerSec: 1 / 200, refill: 0.5, spares: 16, rechargeAfter: 2, rechargePerSec: 1 / 60 };
+
+// trick or treat: wrapped sweets lie on the floors all over the house (never in the guest bedrooms).
+// Walk over one to pick it up, no key needed. A new one turns up every so often, up to the most there
+// can be. points: what each adds to your score at dawn.
+export const CANDY = { start: 40, max: 40, every: 15, reach: 0.9, points: 2 };
 
 export const ITEMS = {
   fuse: { name: 'Fuse', hint: 'Bring it to the fuse box in the gallery' },

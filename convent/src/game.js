@@ -13,7 +13,7 @@ const TESTERS = process.env.NODE_ENV !== 'production' || process.env.TESTERS ===
 // tests can make the clue come sooner
 const HINT_AFTER = process.env.HINT != null ? Number(process.env.HINT) : C.HINT.after;
 const TICK = 1 / 20;
-const SEND_EVERY = 3; // ticks between snapshots (about 7 a second)
+const SEND_EVERY = 2; // ticks between snapshots (10 a second, for smooth movement)
 const rint = (n) => crypto.randomInt(n);
 const pick = (a) => a[rint(a.length)];
 const shuffle = (a) => {
@@ -74,6 +74,16 @@ function route(from, to, ghost) {
 }
 const WALK_TILES = [];
 for (let r = 0; r < L.H; r++) for (let c = 0; c < L.W; c++) if (walkable(c, r) && L.at(c, r) !== '+') WALK_TILES.push([c, r]);
+// where candy can lie: any floor tile but the guest bedrooms (where everyone wakes up)
+const CANDY_TILES = WALK_TILES.filter(([c, r]) => L.at(c, r) !== 'd');
+// a good spot to put something on the floor: on a floor tile, clear of the walls, doorways and furniture
+function clearSpot(x, z) {
+  for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) {
+    const [c, r] = L.tileOf(x + dx, z + dz);
+    if (!L.floorTile(c, r) || L.at(c, r) === '+') return false;
+  }
+  return !L.PROPS.some((p) => p.solid && Math.abs(p.x - x) < p.hw + 0.25 && Math.abs(p.z - z) < p.hd + 0.25);
+}
 const tilesIn = (room) => WALK_TILES.filter(([c, r]) => L.at(c, r) === room);
 // places the monsters like to walk to: mostly the gallery, sometimes into a room
 const PATROL = Object.keys(L.ROOMS).filter((k) => k !== 'd');
@@ -104,6 +114,9 @@ export class Game {
     this.hintStage = null;
     this.hidden = new Map(); // prop id -> player id
     this.keyRooms = [];
+    this.candy = new Map(); // id -> { id, x, z }: sweets on the floor
+    this.candyN = 0;
+    this.candyAt = 0;
     this.result = null;
     this.level = this.level || C.DIFFICULTY.normal;
     for (const p of this.players.values()) this.freshPlayer(p);
@@ -123,7 +136,8 @@ export class Game {
       wakeAt: null,
       hidden: null,
       carrying: null,
-      stats: { caught: 0, found: 0, placed: 0, escapedAt: 0, closest: 99 },
+      battery: 1, // the browser runs the flashlight; we keep its charge so a refresh doesn't refill it
+      stats: { caught: 0, found: 0, placed: 0, candy: 0, escapedAt: 0, closest: 99 },
     });
   }
 
@@ -168,6 +182,8 @@ export class Game {
       this.broadcastLobby();
     });
     socket.on('state', (m = {}) => {
+      const battery = Number(m.battery);
+      if (me && this.phase === 'PLAYING' && Number.isFinite(battery)) me.battery = Math.max(0, Math.min(1, battery));
       if (!me || this.phase !== 'PLAYING' || me.state !== 'alive' || me.hidden != null) return;
       const x = Number(m.x);
       const z = Number(m.z);
@@ -189,6 +205,7 @@ export class Game {
       me.moving = !!m.moving;
       me.light = !!m.light;
       if (me.moving) this.noise(me, me.run ? C.NOISE.run : C.NOISE.walk);
+      this.eatCandy(me);
       if (me.z > L.ESCAPE_Z && this.stage === 'escape') this.escape(me);
     });
     socket.on('door', (m = {}) => {
@@ -214,6 +231,7 @@ export class Game {
       }
       if (item === 'battery') {
         this.boxes.delete(p.id);
+        me.battery = Math.min(1, me.battery + C.BATTERY.refill);
         socket.emit('found', { prop: p.id, item: 'battery' });
         return this.markSearched(p.id);
       }
@@ -228,6 +246,12 @@ export class Game {
       socket.emit('me', this.mine(me));
       this.say(`${me.name} found the ${C.ITEMS[item].name.toLowerCase()}!`);
       this.markSearched(p.id);
+    });
+    // G: put down what you carry, just in front of you, for anyone to pick up
+    socket.on('drop', (m = {}) => {
+      if (!this.can(me) || !me.carrying || me.hidden != null) return;
+      this.drop(me, typeof m.yaw === 'number' && Number.isFinite(m.yaw) ? m.yaw : me.yaw);
+      socket.emit('me', this.mine(me));
     });
     socket.on('pickup', (m = {}) => {
       const it = this.loose.find((l) => l.id === m.id);
@@ -269,9 +293,22 @@ export class Game {
     });
     if (DEV) {
       // test hooks: where things are hidden, and stepping anywhere
-      socket.on('dev:where', () => socket.emit('dev:where', { boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
+      socket.on('dev:where', () => socket.emit('dev:where', { loose: this.loose, candy: [...this.candy.values()], boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
       socket.on('dev:tp', (m = {}) => me && Object.assign(me, { x: Number(m.x), z: Number(m.z) }));
       socket.on('dev:freeze', (on) => (this.frozen = !!on));
+      // jump the clock (seconds since the start); an open front door keeps the time it had left
+      socket.on('dev:time', (m = {}) => {
+        const t = Number(m.t);
+        if (!Number.isFinite(t)) return;
+        if (this.stage === 'escape') this.finaleAt += t - this.t;
+        this.t = t;
+      });
+      // put something in your hands (or empty them), to try a rule out of order
+      socket.on('dev:give', (m = {}) => {
+        if (!me) return;
+        me.carrying = C.ITEMS[m.item] ? m.item : null;
+        socket.emit('me', this.mine(me));
+      });
     }
     socket.on('disconnect', () => {
       if (!me) return;
@@ -317,6 +354,8 @@ export class Game {
     this.phase = 'PLAYING';
     this.t = 0;
     this.hideItems();
+    for (let i = 0; i < C.CANDY.start; i++) this.addCandy(false);
+    this.candyAt = C.CANDY.every;
     const n = [...this.players.values()].filter((p) => p.online).length || 1;
     // the Count, the Doctor's Monster and a zombie always, then more zombies as more people join
     const count = Math.min(C.MONSTER.max, Math.ceil(n / this.level.perPlayers) + 2);
@@ -337,7 +376,8 @@ export class Game {
   }
 
   hideItems() {
-    // one item per hiding place; the iron keys go to three different rooms away from the office
+    // one item per hiding place. The iron keys are not in the house yet: they turn up once the
+    // Count's desk is open (placeKeys), so nobody can unlock the front door out of order.
     const boxes = shuffle(L.BOXES.filter((b) => b.room !== 'd'));
     const used = new Set();
     const take = (pred) => {
@@ -347,19 +387,32 @@ export class Game {
     };
     this.boxes.set(take((b) => b.room !== 'c').id, 'fuse');
     this.boxes.set(take((b) => b.room !== 'o').id, 'brass');
-    const rooms = new Set();
-    for (const k of ['key1', 'key2', 'key3']) {
-      const b = take((b) => b.room !== 'o' && b.room !== 'e' && !rooms.has(b.room));
-      rooms.add(b.room);
-      this.boxes.set(b.id, k);
-      this.keyRooms.push(b.room);
-    }
     for (let i = 0; i < C.BATTERY.spares; i++) {
       const b = boxes.find((b) => !used.has(b.id));
       if (!b) break;
       used.add(b.id);
       this.boxes.set(b.id, 'battery');
     }
+  }
+
+  // the desk is open: the three iron keys go into three different rooms (never the study or the
+  // entrance hall), each in a hiding place nobody has emptied yet if there is one
+  placeKeys() {
+    const boxes = shuffle(L.BOXES.filter((b) => b.room !== 'd' && b.room !== 'o' && b.room !== 'e'));
+    // best: not searched and empty; then searched and empty; last, a box with batteries in it
+    const rank = (b) => (this.boxes.has(b.id) ? 2 : this.searched.has(b.id) ? 1 : 0);
+    boxes.sort((a, b) => rank(a) - rank(b));
+    this.keyRooms = [];
+    let reused = false;
+    for (const k of ['key1', 'key2', 'key3']) {
+      const b = boxes.find((b) => !this.keyRooms.includes(b.room) && this.boxes.get(b.id) !== 'fuse' && this.boxes.get(b.id) !== 'brass' && !/^key/.test(this.boxes.get(b.id) || ''));
+      this.boxes.set(b.id, k);
+      this.keyRooms.push(b.room);
+      // a place someone already emptied loses its tick on the map, so people look again
+      if (this.searched.delete(b.id)) reused = true;
+    }
+    if (reused) this.io.to('players').to('hosts').emit('searched', [...this.searched]);
+    for (const p of this.players.values()) if (p.tester) p.socket.emit('me', this.mine(p));
   }
 
   newGhost(id) {
@@ -396,6 +449,7 @@ export class Game {
     me.carrying = null;
     me.stats.placed++;
     this.stage = 'keys';
+    this.placeKeys();
     this.sfx('unlock', d.x, d.z);
     this.say(`${me.name} opened the desk and found a note: the iron keys are in the ${this.keyRooms.map((k) => L.ROOMS[k].name).join(', the ')}.`);
     this.emitStage();
@@ -411,6 +465,8 @@ export class Game {
     const [fx, fz] = L.centre(L.FRONT.c, L.FRONT.r);
     if (!this.within(me, { kind: 'front' })) return;
     if (this.stage === 'escape') return;
+    // the padlocks only give once the power is back and the desk is open
+    if (this.stage !== 'keys') return me.socket.emit('toast', "The padlocks won't budge yet. First the power, then the Count's desk.");
     if (!/^key\d$/.test(me.carrying || '')) {
       const left = 3 - this.padlocks;
       return me.socket.emit('toast', `The front door is locked with ${left} padlock${left === 1 ? '' : 's'}.`);
@@ -453,11 +509,38 @@ export class Game {
     me.z = p.z + f[1] * (p.hd + 0.7);
   }
 
-  drop(me) {
+  // what you carry falls to the floor. yaw: put down on purpose, about 0.8 m in front of you;
+  // otherwise (caught, or gone) it falls where you stood
+  drop(me, yaw) {
     if (!me.carrying) return;
-    this.loose.push({ id: crypto.randomBytes(3).toString('hex'), item: me.carrying, x: me.x, z: me.z });
-    this.say(`${me.name} dropped the ${C.ITEMS[me.carrying].name.toLowerCase()}!`);
+    const [x, z] = this.dropSpot(me.x, me.z, yaw ?? me.yaw, yaw != null ? [0.8, 0.55, 0.3, 0] : [0, 0.3, 0.6]);
+    const name = C.ITEMS[me.carrying].name.toLowerCase();
+    this.loose.push({ id: crypto.randomBytes(3).toString('hex'), item: me.carrying, x, z });
     me.carrying = null;
+    if (yaw != null) {
+      const room = L.roomAt(x, z);
+      this.sfx('drop', x, z);
+      this.say(`${me.name} dropped the ${name}${room ? ` in the ${L.ROOMS[room].name}` : ''}.`);
+    } else this.say(`${me.name} dropped the ${name}!`);
+  }
+  // the first clear spot this far ahead, never through a wall or a closed door; if none (standing
+  // in a doorway, say), the middle of the nearest clear tile
+  dropSpot(x, z, yaw, ahead) {
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    for (const d of ahead) {
+      const px = x + fx * d;
+      const pz = z + fz * d;
+      if (clearSpot(px, pz) && L.clearLine(x, z, px, pz, (id) => this.doors[id])) return [px, pz];
+    }
+    let best = [x, z];
+    let bd = Infinity;
+    for (const [c, r] of WALK_TILES) {
+      const [cx, cz] = L.centre(c, r);
+      const d = Math.hypot(cx - x, cz - z);
+      if (d < bd && clearSpot(cx, cz)) [best, bd] = [[cx, cz], d];
+    }
+    return best;
   }
 
   // caught by a monster or touched by a ghost
@@ -497,7 +580,7 @@ export class Game {
       name: p.name,
       state: p.state === 'alive' ? 'kept' : p.state,
       lives: p.lives,
-      score: Math.max(0, (p.state === 'escaped' ? 100 : 0) + p.stats.placed * 50 + p.stats.found * 10 - p.stats.caught * 10 + Math.max(0, p.lives) * 5),
+      score: Math.max(0, (p.state === 'escaped' ? 100 : 0) + p.stats.placed * 50 + p.stats.found * 10 + p.stats.candy * C.CANDY.points - p.stats.caught * 10 + Math.max(0, p.lives) * 5),
       ...p.stats,
     }));
     list.sort((a, b) => b.score - a.score);
@@ -510,6 +593,7 @@ export class Game {
     best((p) => p.caught === 0, (a, b) => b.score - a.score, 'Never caught', 'Slipped past every monster');
     best((p) => p.placed > 0, (a, b) => b.placed - a.placed, 'Locksmith', 'Fixed the most locks');
     best((p) => p.found > 0, (a, b) => b.found - a.found, 'Finder', 'Found the most hidden things');
+    best((p) => p.candy > 0, (a, b) => b.candy - a.candy, 'Sweet tooth', 'Collected the most candy');
     best((p) => p.caught > 0, (a, b) => b.caught - a.caught, 'Monster magnet', 'Caught the most times');
     best((p) => p.closest < 2.5, (a, b) => a.closest - b.closest, 'Closest call', 'Felt its breath');
     this.result = { escaped, total: list.length, list, awards, won: escaped > 0 };
@@ -829,9 +913,46 @@ export class Game {
       if (this.t > this.hauntAt) this.haunt();
       this.hint();
     }
+    // a new sweet turns up now and then, so there are always some to find
+    if (this.t >= this.candyAt) {
+      this.candyAt = this.t + C.CANDY.every;
+      if (this.candy.size < C.CANDY.max) this.addCandy(true);
+    }
     if (this.tickN % SEND_EVERY === 0) this.snapshot();
-    if (this.stage === 'escape' && this.t - this.finaleAt > C.DURATION.finale) this.end();
-    if (this.t > C.DURATION.night) this.end();
+    // once the front door is open the escape always gets its full time, even past dawn
+    if (this.stage === 'escape') {
+      if (this.t - this.finaleAt > C.DURATION.finale) this.end();
+    } else if (this.t > C.DURATION.night) this.end();
+  }
+
+  /* ---------- candy ---------- */
+  // a sweet on a clear bit of floor, apart from the others and not right under anyone's nose
+  addCandy(tell) {
+    const people = [...this.players.values()].filter((p) => p.state === 'alive');
+    for (let i = 0; i < 30; i++) {
+      const [c, r] = pick(CANDY_TILES);
+      const [cx, cz] = L.centre(c, r);
+      const x = cx + (Math.random() - 0.5) * 1.2;
+      const z = cz + (Math.random() - 0.5) * 1.2;
+      if (!clearSpot(x, z)) continue;
+      if ([...this.candy.values()].some((o) => Math.hypot(o.x - x, o.z - z) < 1.5)) continue;
+      if (tell && people.some((p) => Math.hypot(p.x - x, p.z - z) < 3)) continue;
+      const it = { id: ++this.candyN, x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
+      this.candy.set(it.id, it);
+      if (tell) this.io.to('players').to('hosts').emit('candy+', [it.id, it.x, it.z]);
+      return it;
+    }
+    return null;
+  }
+  // walking over a sweet picks it up
+  eatCandy(me) {
+    for (const it of this.candy.values()) {
+      if (Math.hypot(it.x - me.x, it.z - me.z) > C.CANDY.reach) continue;
+      this.candy.delete(it.id);
+      me.stats.candy++;
+      this.io.to('players').to('hosts').emit('candy-', it.id);
+      me.socket.emit('yum', { id: it.id, candy: me.stats.candy });
+    }
   }
 
   // an emptied hiding place: everyone's map marks it, so nobody searches it twice
@@ -885,6 +1006,7 @@ export class Game {
       doors: this.doors,
       keyRooms: this.stage === 'keys' || this.stage === 'escape' ? this.keyRooms : [],
       searched: [...this.searched],
+      candy: [...this.candy.values()].map((it) => [it.id, it.x, it.z]),
       roster: this.roster(),
       feed: this.feed.slice(-8),
       finaleAt: this.finaleAt,
@@ -897,7 +1019,7 @@ export class Game {
     return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
   }
   mine(p) {
-    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };
+    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, battery: Math.round(p.battery * 1000) / 1000, candy: p.stats.candy, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };
   }
   broadcastLobby() {
     this.io.to('players').to('hosts').emit('roster', this.roster());

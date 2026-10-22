@@ -99,6 +99,14 @@ body.host {
   font-size: 0.9em;
   margin: 10px 0;
 }
+.candy-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff7eb6;
+  vertical-align: middle;
+}
 #h-feed {
   flex: 1;
   overflow: hidden;
