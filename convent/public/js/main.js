@@ -829,11 +829,11 @@ function frame() {
       if (S.offFor > C.BATTERY.rechargeAfter) S.battery = Math.min(1, S.battery + dt * C.BATTERY.rechargePerSec);
     }
   }
-  if (S.battery <= 0 && S.light && !S.toldDead) {
-    S.toldDead = true;
-    UI.toast('Your flashlight died. Press F to switch it off and it slowly recharges. Batteries in drawers help too.', 7000);
+  // a dead flashlight switches itself off, so it starts recharging without anyone having to know how
+  if (S.battery <= 0 && S.light) {
+    S.light = false;
+    UI.toast('Your flashlight ran out. It recharges by itself while it is off: press F in a little while to switch it back on. Batteries in drawers help too.', 7000);
   }
-  if (S.battery > 0.05) S.toldDead = false;
   // the flashlight stutters when the battery is low, and when something is close
   const flick = S.battery < 0.2 || S.dread > 0.35 ? (Math.sin(t * 31) * Math.sin(t * 7.3) > 1 - Math.max(S.dread * 0.5, S.battery < 0.2 ? 0.4 : 0) ? 0.25 : 1) : 1;
   torch.intensity = S.light && S.battery > 0 && me.hidden == null ? 22 * (0.55 + 0.45 * Math.min(1, S.battery * 3)) * flick : 0;
