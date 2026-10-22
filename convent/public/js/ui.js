@@ -81,7 +81,11 @@ export function toast(text, ms = 3200) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('on'), ms);
 }
+// everything that has happened tonight, newest first, for the map's side card
+export const news = [];
 export function feed(text) {
+  news.unshift(text);
+  news.length = Math.min(news.length, 8);
   const el = $('feed');
   const row = document.createElement('div');
   row.textContent = text;
@@ -89,8 +93,8 @@ export function feed(text) {
   while (el.children.length > 5) el.lastChild.remove();
   setTimeout(() => row.classList.add('old'), 9000);
 }
-export function setLives(n) {
-  $('lives').innerHTML = Array.from({ length: C.LIVES }, (_, i) => `<span class="life ${i < n ? 'on' : ''}" title="life"></span>`).join('');
+export function setLives(n, tester) {
+  $('lives').innerHTML = Array.from({ length: C.LIVES }, (_, i) => `<span class="life ${i < n ? 'on' : ''}" title="life"></span>`).join('') + (tester ? '<span class="tester">Tester: lives never run out</span>' : '');
 }
 export function setPrompt(text, key = 'E') {
   const el = $('prompt');
@@ -98,11 +102,43 @@ export function setPrompt(text, key = 'E') {
   el.innerHTML = key ? `<kbd>${key}</kbd> ${text}` : text;
   el.classList.add('on');
 }
+// what you carry: always on show, so you know your hands are empty too (you carry one thing at a time)
 export function setCarry(item) {
   const el = $('carry');
-  if (!item) return el.classList.remove('on');
-  el.innerHTML = `<span class="item-icon ${item}"></span><div><b>${C.ITEMS[item].name}</b><small>${C.ITEMS[item].hint}</small></div>`;
   el.classList.add('on');
+  el.classList.toggle('empty', !item);
+  if (!item) el.innerHTML = `<span class="item-icon empty"></span><div><b>Your hands are empty</b><small>Search drawers and cupboards with <kbd>E</kbd></small></div>`;
+  else el.innerHTML = `<span class="item-icon ${item}"></span><div><b>You carry: ${C.ITEMS[item].name}</b><small>${C.ITEMS[item].hint}</small></div>`;
+}
+
+/* ---------- the side card on the map: the goal, what you carry, the monsters, the news ---------- */
+const esc = (t) => String(t).replace(/[<>&]/g, '');
+const STEPS = [
+  ['power', 'Fix the fuse box in the gallery'],
+  ['desk', "Open the Count's desk with the brass key"],
+  ['keys', 'Bring three iron keys to the front door'],
+  ['escape', 'Run out of the front door'],
+];
+export function mapSide({ stage, padlocks, keyRooms, carrying, lives, tester, monsters, dawn }) {
+  const at = STEPS.findIndex(([s]) => s === stage);
+  const steps = STEPS.map(([s, text], i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}">${i < at ? '✓ ' : ''}${text}${s === 'keys' && i === at ? ` (${padlocks} of 3)` : ''}</li>`).join('');
+  const rooms = keyRooms.length ? `<p><b>Iron keys are in:</b> ${keyRooms.map((k) => L.ROOMS[k].name).join(', ')}</p>` : '';
+  const hands = carrying ? `${C.ITEMS[carrying].name}: ${C.ITEMS[carrying].hint.toLowerCase()}` : 'Nothing yet';
+  const sleeping = monsters.some((m) => m.kind === 'creature' && m.state === 'asleep');
+  const zombies = monsters.filter((m) => m.kind === 'zombie').length;
+  return `
+    <h3>Your goal</h3><ol class="steps">${steps}</ol>${rooms}
+    <p><b>You carry:</b> ${hands}</p>
+    <p><b>Lives:</b> ${tester ? 'never run out (tester)' : `${lives} of ${C.LIVES}`} · <b>Dawn in</b> ${dawn}</p>
+    <h3>Who is in the house</h3>
+    <ul class="who">
+      <li>🧛 <b>The Count</b>: you hear him breathe. Shine your light in his face and he backs off.</li>
+      <li>⚡ <b>The Doctor's Monster</b>: ${sleeping ? 'asleep in the Laboratory until the power is fixed.' : 'awake! Heavy footsteps, slow but sees far.'}</li>
+      <li>🧟 <b>${zombies} ${zombies === 1 ? 'zombie' : 'zombies'}</b>: they groan, and shuffle around the graveyard.</li>
+      <li>👻 <b>Ghosts</b>: they hum. Hold your flashlight on one until it vanishes.</li>
+    </ul>
+    <h3>What's happening</h3>
+    <ul class="news">${news.length ? news.map((n) => `<li>${esc(n)}</li>`).join('') : '<li>All quiet, for now.</li>'}</ul>`;
 }
 export function setObjective(stage, padlocks, keyRooms) {
   let text = C.STAGES[stage];

@@ -41,7 +41,7 @@ export const FLINCH = { range: 7, cone: 0.35, stun: 1.4, again: 7 };
 // the host picks how hard the night is
 export const DIFFICULTY = {
   easy: { label: 'Easy', speed: 0.86, sight: 0.8, perPlayers: 12, ghosts: 0.6 },
-  normal: { label: 'Normal', speed: 1, sight: 1, perPlayers: 8, ghosts: 1 }, // perPlayers: players per monster, plus one
+  normal: { label: 'Normal', speed: 1, sight: 1, perPlayers: 8, ghosts: 1 }, // perPlayers: players per monster, plus two
   scary: { label: 'Scary', speed: 1.1, sight: 1.15, perPlayers: 6, ghosts: 1.4 },
 };
 

@@ -166,7 +166,7 @@ socket.on('start', (m) => {
   haunts.reset();
   applyState(m);
   Object.assign(S.me, { lives: C.LIVES, state: 'alive', hidden: null, carrying: null, pitch: 0 });
-  UI.setLives(C.LIVES);
+  UI.setLives(C.LIVES, S.me.tester);
   UI.setCarry(null);
   $('hiding').className = '';
   S.battery = 1;
@@ -258,13 +258,13 @@ function applyState(m) {
 }
 function applyMe(m, jump) {
   const was = S.me.hidden;
-  Object.assign(S.me, { lives: m.lives, state: m.state, carrying: m.carrying, hidden: m.hidden, safeUntil: m.safeUntil });
+  Object.assign(S.me, { lives: m.lives, state: m.state, carrying: m.carrying, hidden: m.hidden, safeUntil: m.safeUntil, tester: m.tester });
   if (jump || (was != null && m.hidden == null)) {
     S.me.x = m.x;
     S.me.z = m.z;
     if (jump) S.me.yaw = m.yaw;
   }
-  UI.setLives(S.me.lives);
+  UI.setLives(S.me.lives, S.me.tester);
   UI.setCarry(S.me.carrying);
   $('hiding').className = m.hidden != null ? `on ${L.PROPS[m.hidden].type}` : '';
   if (m.state === 'dead') {
@@ -336,8 +336,11 @@ function lock() {
   canvas.requestPointerLock?.();
   // some browsers refuse pointer lock (or the test harness has none): play on anyway
   setTimeout(() => {
-    if (!S.locked && S.phase === 'PLAYING' && S.me.state === 'alive') UI.show(null);
-  }, 300);
+    if (S.locked || S.phase !== 'PLAYING' || S.me.state !== 'alive') return;
+    UI.show(null);
+    // started with a key, or the browser said no: the mouse only looks around after a click
+    UI.toast('Click the screen once to look around with the mouse.', 4000);
+  }, 400);
 }
 for (const id of ['panel-begin', 'panel-paused']) $(id).addEventListener('click', (e) => {
   if (e.target.closest('.settings') || e.target.closest('button[data-noresume]')) return;
@@ -370,6 +373,12 @@ document.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   S.keys[e.code] = true;
   if (S.phase !== 'PLAYING') return;
+  // any key (but Esc) steps you inside, or back in after the settings
+  const panel = UI.shown();
+  if ((panel === 'panel-begin' || panel === 'panel-paused') && e.code !== 'Escape' && S.me.state === 'alive' && !S.scare) {
+    lock();
+    if (!['KeyM', 'Tab', 'KeyE', 'Space', 'KeyF'].includes(e.code)) return;
+  }
   if (e.code === 'KeyM' || e.code === 'Tab') toggleMap();
   if (S.me.state !== 'alive') {
     if (e.code === 'Space' || e.code === 'ArrowRight') nextWatch();
@@ -393,9 +402,10 @@ $('btn-map').addEventListener('click', toggleMap);
 $('map').addEventListener('click', toggleMap);
 
 /* ---------- moving ---------- */
-function blocked(x, z, r) {
+// skip: a solid you are already inside, so you can always walk out of it
+function blocked(x, z, r, skip) {
   for (const s of world.solids) {
-    if (s.door && !s.on) continue;
+    if ((s.door && !s.on) || s === skip) continue;
     if (x + r < s.x0 || x - r > s.x1 || z + r < s.z0 || z - r > s.z1) continue;
     const cx = Math.max(s.x0, Math.min(x, s.x1));
     const cz = Math.max(s.z0, Math.min(z, s.z1));
@@ -433,9 +443,10 @@ function move(dt) {
     dx = (-Math.sin(me.yaw) * f + Math.cos(me.yaw) * sd) * speed * dt;
     dz = (-Math.cos(me.yaw) * f - Math.sin(me.yaw) * sd) * speed * dt;
   }
-  // slide along walls: try each axis on its own
-  if (!blocked(me.x + dx, me.z, RADIUS)) me.x += dx;
-  if (!blocked(me.x, me.z + dz, RADIUS)) me.z += dz;
+  // slide along walls: try each axis on its own. If a door has shut on you, you can still walk out of it.
+  const stuckIn = world.solids.find((s) => s.door && s.on && blocked(me.x, me.z, RADIUS) && me.x + RADIUS > s.x0 && me.x - RADIUS < s.x1 && me.z + RADIUS > s.z0 && me.z - RADIUS < s.z1);
+  if (!blocked(me.x + dx, me.z, RADIUS, stuckIn)) me.x += dx;
+  if (!blocked(me.x, me.z + dz, RADIUS, stuckIn)) me.z += dz;
   me.moving = moving;
   me.run = run;
   // footsteps
@@ -642,7 +653,7 @@ function onHit(m) {
   S.scare = { t: 0, start: performance.now(), who, by: m.by, m };
   sound.sting(UI.settings.gentle);
   sound.play('hit', { vol: 0.8 });
-  UI.setLives(m.lives);
+  UI.setLives(m.lives, S.me.tester);
 }
 function updateScare(dt) {
   const sc = S.scare;
@@ -947,6 +958,20 @@ function frame() {
         keyRooms: S.keyRooms,
         loose: [...S.loose.values()],
       });
+    if (now - (S.sideAt || 0) > 500) {
+      S.sideAt = now;
+      const left = Math.max(0, Math.ceil(C.DURATION.night - serverNow()));
+      $('map-side').innerHTML = UI.mapSide({
+        stage: S.stage,
+        padlocks: S.padlocks,
+        keyRooms: S.keyRooms,
+        carrying: me.carrying,
+        lives: me.lives,
+        tester: me.tester,
+        monsters: [...S.monsters.values()],
+        dawn: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`,
+      });
+    }
     const room = L.roomAt(me.x, me.z);
     $('map-here').textContent = room ? `You are in the ${L.ROOMS[room].name}` : '';
   }

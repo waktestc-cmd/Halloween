@@ -7,6 +7,9 @@ import * as C from '../shared/config.js';
 const DEV = process.env.DEV === '1';
 // tests can shorten the quiet start
 const GRACE = process.env.GRACE != null ? Number(process.env.GRACE) : C.DURATION.grace;
+// a player named "tester" never runs out of lives, for trying the game out; not at the real event
+// (Cloud Run runs with NODE_ENV=production) unless TESTERS=1 is set
+const TESTERS = process.env.NODE_ENV !== 'production' || process.env.TESTERS === '1';
 const TICK = 1 / 20;
 const SEND_EVERY = 3; // ticks between snapshots (about 7 a second)
 const rint = (n) => crypto.randomInt(n);
@@ -156,6 +159,7 @@ export class Game {
         }
         this.players.set(me.id, me);
       }
+      me.tester = TESTERS && /^tester$/i.test(name);
       socket.join('players');
       socket.emit('welcome', { id: me.id, token: me.token, ...this.publicState(), me: this.mine(me) });
       this.broadcastLobby();
@@ -189,6 +193,8 @@ export class Game {
       if (!this.can(me) || !d || d.arch) return;
       if (d.front) return this.useFront(me);
       if (!this.within(me, { kind: 'door', id: d.id })) return;
+      // never shut a door on someone standing in the doorway: they would be stuck in it
+      if (this.doors[d.id] && this.inDoorway(d)) return socket.emit('toast', me.inDoorway ? 'Step out of the doorway first.' : 'Someone is standing in the doorway.');
       this.doors[d.id] = !this.doors[d.id];
       this.emitDoors();
       this.sfx(this.doors[d.id] ? 'door-open' : 'door-close', ...L.centre(d.c, d.r));
@@ -279,6 +285,18 @@ export class Game {
   near(me, [x, z], r) {
     return Math.hypot(me.x - x, me.z - z) <= r;
   }
+  // is anyone (player or monster) standing in this doorway? marks the players found there
+  inDoorway(d) {
+    const [x, z] = L.centre(d.c, d.r);
+    const axis = L.doorAxis(d);
+    const inside = (e) => (axis === 'x' ? Math.abs(e.x - x) < L.TILE / 2 + 0.3 && Math.abs(e.z - z) < 0.75 : Math.abs(e.z - z) < L.TILE / 2 + 0.3 && Math.abs(e.x - x) < 0.75);
+    let found = false;
+    for (const p of this.players.values()) {
+      p.inDoorway = p.state === 'alive' && inside(p);
+      found ||= p.inDoorway;
+    }
+    return found || this.monsters.some(inside);
+  }
   // close enough to use it, by the same rule the browser uses to show the hint; a little extra
   // allows for the position we have being a moment old
   within(me, act) {
@@ -296,8 +314,8 @@ export class Game {
     this.t = 0;
     this.hideItems();
     const n = [...this.players.values()].filter((p) => p.online).length || 1;
-    // the Count always, the Doctor's Monster from two players, then zombies as more join
-    const count = Math.min(C.MONSTER.max, Math.ceil(n / this.level.perPlayers) + 1);
+    // the Count, the Doctor's Monster and a zombie always, then more zombies as more people join
+    const count = Math.min(C.MONSTER.max, Math.ceil(n / this.level.perPlayers) + 2);
     this.monsters = C.LINEUP.slice(0, count).map((kind, i) => {
       const K = C.KINDS[kind];
       let [x, z] = L.centre(...pick(tilesIn(K.home)));
@@ -443,7 +461,7 @@ export class Game {
     if (me.state !== 'alive' || this.t < me.safeUntil) return;
     if (me.hidden != null) this.unhide(me);
     this.drop(me);
-    me.lives--;
+    if (!me.tester) me.lives--;
     me.stats.caught++;
     const who = by.name || 'a ghost';
     if (me.lives <= 0) {
@@ -846,7 +864,7 @@ export class Game {
     return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
   }
   mine(p) {
-    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw };
+    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester };
   }
   broadcastLobby() {
     this.io.to('players').to('hosts').emit('roster', this.roster());

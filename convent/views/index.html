@@ -37,7 +37,11 @@
   <div id="note"><p id="note-text"></p></div>
   <div id="blackout"></div>
   <div id="wake"></div>
-  <div id="map"><canvas id="map-canvas"></canvas><p id="map-here"></p><p class="map-close">Press <kbd>M</kbd> or click to close</p></div>
+  <div id="map">
+    <div class="map-body"><canvas id="map-canvas"></canvas><aside id="map-side"></aside></div>
+    <p id="map-here"></p>
+    <p class="map-close">Press <kbd>M</kbd> or click to close</p>
+  </div>
 
   <!-- 1. join -->
   <section class="panel" id="panel-join">
@@ -88,14 +92,14 @@
   <section class="panel" id="panel-begin">
     <div class="card center">
       <p class="kicker">The doors lock behind you</p>
-      <h2>Click anywhere to step inside</h2>
+      <h2>Press any key or click to step inside</h2>
       <p>Move with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, look with the mouse.<br />Press <kbd>Esc</kbd> any time for settings.</p>
     </div>
   </section>
   <section class="panel" id="panel-paused">
     <div class="card wide">
       <h2>Paused for you, but not for the monsters</h2>
-      <p class="lede">Click anywhere outside this box to go back in.</p>
+      <p class="lede">Press any key, or click outside this box, to go back in.</p>
       <div class="settings on" id="settings-main">
         <h3>Settings</h3>
         <label>Volume <input type="range" min="0" max="1" step="0.05" data-setting="master" /></label>

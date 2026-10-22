@@ -14,7 +14,7 @@ before dawn. (It began as *Escape the Convent*; the folder keeps that name.)
 | **Shift** | Run. It's faster, but the monsters hear it, and you run out of breath after a few seconds |
 | **E**, **Space** or **click** | Open a door, search a drawer, hide, use the fuse box, the desk or the front door |
 | **F** | Flashlight on or off. It lights your way but lets the monsters see you from further off, and the battery runs down |
-| **M** | Map: every room by name, you as an arrow, the others as dots |
+| **M** | Map: every room by name, you as an arrow, the others as dots, and a card with your goal, what you carry, who is in the house and the latest news |
 | **Esc** | Settings: volume, music, brightness, mouse speed, arrow-key turning, gentle mode, bigger text, full screen |
 
 **The goal, as a team:**
@@ -39,6 +39,10 @@ behind a curtain. If it saw you climb in, it pulls you out.
 
 **The ghosts** hum as they drift toward you, slower than you walk. Walk away, or hold your flashlight on
 one until it shrieks and vanishes.
+
+**Trying it out:** join with the name **tester** and you never run out of lives (the big screen still
+shows your catches). This only works on a test server: on Cloud Run (`NODE_ENV=production`) it is off
+unless you set `TESTERS=1`.
 
 ## Running it
 
