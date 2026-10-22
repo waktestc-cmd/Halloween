@@ -214,7 +214,11 @@ export class Game {
       if (d.front) return this.useFront(me);
       if (!this.within(me, { kind: 'door', id: d.id })) return;
       // never shut a door on someone standing in the doorway: they would be stuck in it
-      if (this.doors[d.id] && this.inDoorway(d)) return socket.emit('toast', me.inDoorway ? 'Step out of the doorway first.' : 'Someone is standing in the doorway.');
+      const blocker = this.doors[d.id] && this.inDoorway(d, me);
+      if (blocker) {
+        const who = blocker === me ? null : blocker.kind ? blocker.name[0].toUpperCase() + blocker.name.slice(1) : 'Someone';
+        return socket.emit('toast', who ? `${who} is standing in the doorway!` : 'Step out of the doorway first.');
+      }
       this.doors[d.id] = !this.doors[d.id];
       this.emitDoors();
       this.sfx(this.doors[d.id] ? 'door-open' : 'door-close', ...L.centre(d.c, d.r));
@@ -326,17 +330,14 @@ export class Game {
   near(me, [x, z], r) {
     return Math.hypot(me.x - x, me.z - z) <= r;
   }
-  // is anyone (player or monster) standing in this doorway? marks the players found there
-  inDoorway(d) {
+  // who is standing in this doorway (you first, then other players, then a monster), or null
+  inDoorway(d, me) {
     const [x, z] = L.centre(d.c, d.r);
     const axis = L.doorAxis(d);
     const inside = (e) => (axis === 'x' ? Math.abs(e.x - x) < L.TILE / 2 + 0.3 && Math.abs(e.z - z) < 0.75 : Math.abs(e.z - z) < L.TILE / 2 + 0.3 && Math.abs(e.x - x) < 0.75);
-    let found = false;
-    for (const p of this.players.values()) {
-      p.inDoorway = p.state === 'alive' && inside(p);
-      found ||= p.inDoorway;
-    }
-    return found || this.monsters.some(inside);
+    const people = [...this.players.values()].filter((p) => p.state === 'alive' && p.online && inside(p));
+    if (me && people.includes(me)) return me;
+    return people[0] || this.monsters.find(inside) || null;
   }
   // close enough to use it, by the same rule the browser uses to show the hint; a little extra
   // allows for the position we have being a moment old
