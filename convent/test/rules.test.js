@@ -20,7 +20,12 @@ function player(name) {
 }
 let failed = false;
 try {
-  await sleep(800);
+  // wait until the server answers (it can take a moment to start)
+  for (let i = 0; i < 50; i++) {
+    const up = await fetch(URL + '/healthz').then((r) => r.ok, () => false);
+    if (up) break;
+    await sleep(200);
+  }
   const host = io(URL, { transports: ['websocket'], auth: { role: 'host', key: 'spooky' }, forceNew: true });
   await once(host, 'welcome');
   const a = player('Alice');
