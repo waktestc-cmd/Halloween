@@ -30,6 +30,7 @@ function apply(m) {
 }
 function render() {
   section(S.phase === 'LOBBY' ? 'h-lobby' : S.phase === 'PLAYING' ? 'h-game' : 'h-results');
+  if (S.phase === 'LOBBY') $('h-timer').textContent = '';
   const n = S.roster.length;
   $('h-count').textContent = n ? `${n} ${n === 1 ? 'person' : 'people'} inside` : 'Nobody here yet';
   $('h-roster').innerHTML = S.roster.map((p) => `<li style="--c:${C.LOOKS[p.look] || '#666'}">${esc(p.name)}</li>`).join('');
@@ -89,6 +90,7 @@ function addFeed(text) {
 }
 function results(r) {
   S.phase = 'RESULTS';
+  $('h-timer').textContent = 'Dawn';
   $('h-result-title').textContent = r.escaped ? `${r.escaped} of ${r.total} escaped the manor!` : 'Nobody escaped. The manor keeps them all.';
   $('h-awards').innerHTML = r.awards.map((a) => `<li><b>${a.title}</b>${esc(a.name)}<br /><small>${a.why}</small></li>`).join('');
   $('h-scores').innerHTML = r.list.map((p) => `<li>${esc(p.name)}: ${p.score} ${{ escaped: '(escaped)', dead: '(taken)', kept: '' }[p.state]}${p.candy ? ` <small>· ${p.candy} candy</small>` : ''}</li>`).join('');
