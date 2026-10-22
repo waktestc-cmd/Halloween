@@ -160,6 +160,8 @@ export class Game {
     socket.on('join', (msg = {}) => {
       if (me) return;
       const name = clean(msg.name, 18) || 'Guest';
+      // the costume picked on the join screen: which of the player models you wear
+      const costume = Number.isInteger(msg.costume) && msg.costume >= 0 && msg.costume < C.COSTUMES.length ? msg.costume : null;
       // a returning player (same browser) gets their place back
       const token = clean(msg.token, 40);
       me = [...this.players.values()].find((p) => p.token && p.token === token) || null;
@@ -167,9 +169,10 @@ export class Game {
         me.socket = socket;
         me.name = name;
         me.online = true;
+        if (costume != null) me.costume = costume;
       } else {
         if (this.players.size >= 40) return socket.emit('full');
-        me = { id: crypto.randomBytes(4).toString('hex'), token: token || crypto.randomBytes(8).toString('hex'), name, look: Number(msg.look) % C.LOOKS.length || 0, socket, online: true };
+        me = { id: crypto.randomBytes(4).toString('hex'), token: token || crypto.randomBytes(8).toString('hex'), name, look: Number(msg.look) % C.LOOKS.length || 0, costume: costume ?? rint(C.COSTUMES.length), socket, online: true };
         this.freshPlayer(me);
         if (this.phase !== 'LOBBY') {
           // late arrivals join the game in progress
@@ -1072,7 +1075,7 @@ export class Game {
     };
   }
   roster() {
-    return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
+    return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, costume: p.costume, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
   }
   mine(p) {
     return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, battery: Math.round(p.battery * 1000) / 1000, candy: p.stats.candy, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };

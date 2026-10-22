@@ -20,9 +20,9 @@ const once = (s, ev, ms = 8000) => new Promise((res, rej) => {
   const t = setTimeout(() => rej(new Error('timeout waiting for ' + ev)), ms);
   s.once(ev, (m) => (clearTimeout(t), res(m)));
 });
-function player(name) {
+function player(name, costume) {
   const s = io(URL, { transports: ['websocket'], forceNew: true });
-  s.emit('join', { name, look: 1 });
+  s.emit('join', { name, look: 1, costume });
   return s;
 }
 let failed = false;
@@ -36,9 +36,15 @@ try {
   const host = io(URL, { transports: ['websocket'], auth: { role: 'host', key: 'spooky' }, forceNew: true });
   await once(host, 'welcome');
   // listen for both welcomes before waiting on either, or the second can arrive unheard
-  const a = player('Alice');
+  const both = until(host, 'roster', (r) => r.some((p) => p.name === 'Alice') && r.some((p) => p.name === 'Bob'));
+  const a = player('Alice', 7);
   const b = player('Bob');
   const [aWelcome] = await Promise.all([once(a, 'welcome'), once(b, 'welcome')]);
+  // the costume picked on the join screen reaches everyone, in the roster
+  const roster = await both;
+  assert.equal(roster.find((p) => p.name === 'Alice').costume, 7, 'Alice is the witch');
+  assert.ok(Number.isInteger(roster.find((p) => p.name === 'Bob').costume), 'Bob, who picked none, still gets a costume');
+  console.log('ok: the costume reaches the roster');
   host.emit('start');
   await once(a, 'start');
   b.emit('dev:freeze', true);

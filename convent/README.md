@@ -19,6 +19,10 @@ before dawn. (It began as *Escape the Convent*; the folder keeps that name.)
 | **M** | Map: every room by name, you as an arrow, the others as dots, and a card with your goal, what you carry, who is in the house and the latest news |
 | **Esc** | Settings: volume, music, brightness, mouse speed, arrow-key turning, gentle mode, bigger text, full screen |
 
+**Joining:** type your name, pick a costume (wizard, witch, pirates, ninja, viking, knight, cowgirl, chef or
+doctor; it turns slowly in the lantern light so you see it) and a colour for its clothes, and press
+**Enter the manor**. That is how the others see you in the house.
+
 **The goal, as a team:**
 1. Find the **fuse** (hidden in a drawer, cupboard or box somewhere) and put it in the **fuse box** in the gallery. The gallery lights come on, and something wakes up in the laboratory.
 2. Find the **brass key** and open **the Count's desk** in his study. The note inside says which three rooms hold the iron keys.
@@ -109,6 +113,7 @@ Don't redeploy during the party: a new version starts an empty game. Afterwards,
   - `audio.js` handles sound, placed in 3D.
   - `ui.js` handles the map, settings and on-screen display.
   - `main.js` holds it all together.
+  - `join.js` is the join screen (with the turning costume), `costumes.js` the costume silhouettes.
   - `atmosphere.js` has the dust, the danger edge and each player's small events.
   - `candy.js` draws the sweets (all of them in one instanced mesh).
   - `models.js` loads the models listed in `models.json`.

@@ -10,6 +10,8 @@ import { Sound } from './audio.js';
 import { Dust, Haunts, setDanger } from './atmosphere.js';
 import { propModels } from './models.js';
 import { Candy } from './candy.js';
+import { setupJoin } from './join.js';
+import { costumeSVG } from './costumes.js';
 import * as UI from './ui.js';
 
 const { $ } = UI;
@@ -128,7 +130,7 @@ try {
   /* ignore */
 }
 socket.on('connect', () => {
-  if (S.joinedName) socket.emit('join', { name: S.joinedName, look: S.look, token });
+  if (S.joinedName) socket.emit('join', { name: S.joinedName, look: S.look, costume: S.costume, token });
 });
 socket.on('full', () => UI.toast('The game is full, sorry.'));
 socket.on('welcome', (m) => {
@@ -139,6 +141,7 @@ socket.on('welcome', (m) => {
   } catch (e) {
     /* ignore */
   }
+  joinScreen.stop(); // the turning figure is not needed any more
   applyState(m);
   if (m.me) applyMe(m.me, true);
   if (m.phase === 'LOBBY') UI.show('panel-lobby');
@@ -316,46 +319,28 @@ function applyMe(m, jump) {
 }
 
 /* ---------- joining ---------- */
-const looks = $('looks');
-S.look = 0;
-C.LOOKS.forEach((c, i) => {
-  const b = document.createElement('button');
-  b.className = 'look' + (i === 0 ? ' on' : '');
-  b.style.background = c;
-  b.type = 'button';
-  b.setAttribute('aria-label', `Colour ${i + 1}`);
-  b.addEventListener('click', () => {
-    S.look = i;
-    for (const x of looks.children) x.classList.toggle('on', x === b);
-  });
-  looks.appendChild(b);
-});
-try {
-  $('name').value = localStorage.getItem('convent-name') || '';
-} catch (e) {
-  /* ignore */
-}
-$('join-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const name = $('name').value.trim();
-  if (!name) return $('name').focus();
-  try {
-    localStorage.setItem('convent-name', name);
-  } catch (err) {
-    /* ignore */
-  }
+// the join screen (join.js): your name, your costume and its colour
+const joinScreen = setupJoin(({ name, costume, look }) => {
   S.joinedName = name;
+  S.costume = costume;
+  S.look = look;
   fetch('/assets/sounds.json')
     .then((r) => r.json())
     .catch(() => [])
     .then((files) => sound.start(files));
-  socket.emit('join', { name, look: S.look, token });
+  socket.emit('join', { name, look, costume, token });
 });
+// who is inside, each in their costume
 function renderRoster() {
   const el = $('roster');
   if (!el) return;
-  el.innerHTML = S.roster.map((p) => `<li style="--c:${C.LOOKS[p.look] || '#666'}">${p.name.replace(/[<>&]/g, '')}${p.id === S.id ? ' <em>(you)</em>' : ''}</li>`).join('');
-  $('roster-count').textContent = `${S.roster.length} ${S.roster.length === 1 ? 'person' : 'people'} inside`;
+  el.innerHTML = S.roster.map((p) => `<li style="--c:${C.LOOKS[p.look] || '#666'}"><span class="silw">${costumeSVG(p.costume ?? 0)}</span>${p.name.replace(/[<>&]/g, '')}${p.id === S.id ? ' <em>(you)</em>' : ''}</li>`).join('');
+  $('roster-count').innerHTML = `<span class="num">${S.roster.length}</span> inside.`;
+  const mine = S.roster.find((p) => p.id === S.id);
+  if (mine && $('l-window').dataset.i !== String(mine.costume)) {
+    $('l-window').dataset.i = mine.costume;
+    $('l-window').innerHTML = costumeSVG(mine.costume ?? 0);
+  }
 }
 
 /* ---------- pointer lock: click to step in, Esc for settings ---------- */

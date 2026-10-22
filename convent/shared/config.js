@@ -102,4 +102,18 @@ export const STAGES = {
   escape: 'The front door is open. Get out!',
 };
 
+// the costumes you can pick when you join, in the order of the "player" models in models.json
+export const COSTUMES = [
+  { id: 'wizard', name: 'Wizard' },
+  { id: 'pirate-queen', name: 'Pirate queen' },
+  { id: 'pirate', name: 'Pirate' },
+  { id: 'ninja', name: 'Ninja' },
+  { id: 'viking', name: 'Viking' },
+  { id: 'knight', name: 'Knight' },
+  { id: 'cowgirl', name: 'Cowgirl' },
+  { id: 'witch', name: 'Witch' },
+  { id: 'chef', name: 'Chef' },
+  { id: 'doctor', name: 'Doctor' },
+];
+
 export const LOOKS = ['#6b4a3a', '#2f4a6b', '#4a6b3a', '#6b3a5a', '#7a6a3a', '#3a6b6b', '#5a3a6b', '#6b5a4a'];
