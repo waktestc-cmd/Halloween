@@ -10,6 +10,12 @@ const PORT = 3300 + Math.floor(Math.random() * 500);
 const URL = `http://localhost:${PORT}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const srv = spawn('node', ['server.js'], { env: { ...process.env, DEV: '1', GRACE: '0', PORT: String(PORT) }, stdio: 'ignore' });
+// the next ev whose message passes ok
+const until = (s, ev, ok, ms = 8000) => new Promise((res, rej) => {
+  const t = setTimeout(() => (s.off(ev, f), rej(new Error('timeout waiting for ' + ev))), ms);
+  const f = (m) => ok(m) && (clearTimeout(t), s.off(ev, f), res(m));
+  s.on(ev, f);
+});
 const once = (s, ev, ms = 8000) => new Promise((res, rej) => {
   const t = setTimeout(() => rej(new Error('timeout waiting for ' + ev)), ms);
   s.once(ev, (m) => (clearTimeout(t), res(m)));
@@ -117,6 +123,24 @@ try {
   };
   const stage = () => once(b, 'stage');
   await take('fuse');
+  // G: Bob puts the fuse down in front of him, on the floor, then picks it up again
+  const [bx0, bz0] = [box('fuse').x, box('fuse').z];
+  b.emit('dev:where');
+  const here = (await once(b, 'dev:where')).loose.length;
+  const dropped = until(b, 'feed', (f) => /^Bob dropped the fuse in the /.test(f.text));
+  const emptied = until(b, 'me', (m) => m.carrying === null);
+  b.emit('drop', { yaw: 0 });
+  await Promise.all([dropped, emptied]);
+  b.emit('dev:where');
+  const lying = (await once(b, 'dev:where')).loose;
+  assert.equal(lying.length, here + 1, 'the fuse lies on the floor');
+  const it = lying.find((l) => l.item === 'fuse');
+  const [ic, ir] = L.tileOf(it.x, it.z);
+  assert.ok(L.floorTile(ic, ir) && L.at(ic, ir) !== '+', 'it lies on a floor tile, not in a doorway');
+  assert.ok(Math.hypot(it.x - bx0, it.z - bz0) < 1.3, 'just in front of Bob');
+  b.emit('pickup', { id: it.id });
+  assert.equal((await until(b, 'me', (m) => m.carrying != null)).carrying, 'fuse', 'Bob picks the fuse up again');
+  console.log('ok: G drops what you carry, and it can be picked up');
   b.emit('dev:tp', { x: L.FUSEBOX.x, z: L.FUSEBOX.z + 0.8 });
   await sleep(60);
   b.emit('use', { what: 'fusebox' });

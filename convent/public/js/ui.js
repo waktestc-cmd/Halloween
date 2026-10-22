@@ -108,7 +108,7 @@ export function setCarry(item) {
   el.classList.add('on');
   el.classList.toggle('empty', !item);
   if (!item) el.innerHTML = `<span class="item-icon empty"></span><div><b>Your hands are empty</b><small>Search drawers and cupboards with <kbd>E</kbd></small></div>`;
-  else el.innerHTML = `<span class="item-icon ${item}"></span><div><b>You carry: ${C.ITEMS[item].name}</b><small>${C.ITEMS[item].hint}</small></div>`;
+  else el.innerHTML = `<span class="item-icon ${item}"></span><div><b>You carry: ${C.ITEMS[item].name}</b><small>${C.ITEMS[item].hint}. <kbd>G</kbd> to drop</small></div>`;
 }
 
 /* ---------- the side card on the map: the goal, what you carry, the monsters, the news ---------- */

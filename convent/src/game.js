@@ -74,6 +74,14 @@ function route(from, to, ghost) {
 }
 const WALK_TILES = [];
 for (let r = 0; r < L.H; r++) for (let c = 0; c < L.W; c++) if (walkable(c, r) && L.at(c, r) !== '+') WALK_TILES.push([c, r]);
+// a good spot to put something on the floor: on a floor tile, clear of the walls, doorways and furniture
+function clearSpot(x, z) {
+  for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) {
+    const [c, r] = L.tileOf(x + dx, z + dz);
+    if (!L.floorTile(c, r) || L.at(c, r) === '+') return false;
+  }
+  return !L.PROPS.some((p) => p.solid && Math.abs(p.x - x) < p.hw + 0.25 && Math.abs(p.z - z) < p.hd + 0.25);
+}
 const tilesIn = (room) => WALK_TILES.filter(([c, r]) => L.at(c, r) === room);
 // places the monsters like to walk to: mostly the gallery, sometimes into a room
 const PATROL = Object.keys(L.ROOMS).filter((k) => k !== 'd');
@@ -233,6 +241,12 @@ export class Game {
       this.say(`${me.name} found the ${C.ITEMS[item].name.toLowerCase()}!`);
       this.markSearched(p.id);
     });
+    // G: put down what you carry, just in front of you, for anyone to pick up
+    socket.on('drop', (m = {}) => {
+      if (!this.can(me) || !me.carrying || me.hidden != null) return;
+      this.drop(me, typeof m.yaw === 'number' && Number.isFinite(m.yaw) ? m.yaw : me.yaw);
+      socket.emit('me', this.mine(me));
+    });
     socket.on('pickup', (m = {}) => {
       const it = this.loose.find((l) => l.id === m.id);
       if (!this.can(me) || !it || me.carrying || !this.near(me, [it.x, it.z], C.REACH)) return;
@@ -273,7 +287,7 @@ export class Game {
     });
     if (DEV) {
       // test hooks: where things are hidden, and stepping anywhere
-      socket.on('dev:where', () => socket.emit('dev:where', { boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
+      socket.on('dev:where', () => socket.emit('dev:where', { loose: this.loose, boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
       socket.on('dev:tp', (m = {}) => me && Object.assign(me, { x: Number(m.x), z: Number(m.z) }));
       socket.on('dev:freeze', (on) => (this.frozen = !!on));
       // jump the clock (seconds since the start); an open front door keeps the time it had left
@@ -487,11 +501,38 @@ export class Game {
     me.z = p.z + f[1] * (p.hd + 0.7);
   }
 
-  drop(me) {
+  // what you carry falls to the floor. yaw: put down on purpose, about 0.8 m in front of you;
+  // otherwise (caught, or gone) it falls where you stood
+  drop(me, yaw) {
     if (!me.carrying) return;
-    this.loose.push({ id: crypto.randomBytes(3).toString('hex'), item: me.carrying, x: me.x, z: me.z });
-    this.say(`${me.name} dropped the ${C.ITEMS[me.carrying].name.toLowerCase()}!`);
+    const [x, z] = this.dropSpot(me.x, me.z, yaw ?? me.yaw, yaw != null ? [0.8, 0.55, 0.3, 0] : [0, 0.3, 0.6]);
+    const name = C.ITEMS[me.carrying].name.toLowerCase();
+    this.loose.push({ id: crypto.randomBytes(3).toString('hex'), item: me.carrying, x, z });
     me.carrying = null;
+    if (yaw != null) {
+      const room = L.roomAt(x, z);
+      this.sfx('drop', x, z);
+      this.say(`${me.name} dropped the ${name}${room ? ` in the ${L.ROOMS[room].name}` : ''}.`);
+    } else this.say(`${me.name} dropped the ${name}!`);
+  }
+  // the first clear spot this far ahead, never through a wall or a closed door; if none (standing
+  // in a doorway, say), the middle of the nearest clear tile
+  dropSpot(x, z, yaw, ahead) {
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    for (const d of ahead) {
+      const px = x + fx * d;
+      const pz = z + fz * d;
+      if (clearSpot(px, pz) && L.clearLine(x, z, px, pz, (id) => this.doors[id])) return [px, pz];
+    }
+    let best = [x, z];
+    let bd = Infinity;
+    for (const [c, r] of WALK_TILES) {
+      const [cx, cz] = L.centre(c, r);
+      const d = Math.hypot(cx - x, cz - z);
+      if (d < bd && clearSpot(cx, cz)) [best, bd] = [[cx, cz], d];
+    }
+    return best;
   }
 
   // caught by a monster or touched by a ghost

@@ -372,7 +372,7 @@ document.addEventListener('mousemove', (e) => {
   S.me.pitch -= e.movementY * k * (UI.settings.invert ? -1 : 1);
   S.me.pitch = Math.max(-1.35, Math.min(1.35, S.me.pitch));
 });
-const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyF', 'KeyM', 'Space', 'Tab']);
+const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyF', 'KeyG', 'KeyM', 'Space', 'Tab']);
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   if (GAME_KEYS.has(e.code) && S.phase === 'PLAYING') e.preventDefault();
@@ -392,6 +392,11 @@ document.addEventListener('keydown', (e) => {
   }
   if (S.me.hidden != null && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'KeyE', 'Space'].includes(e.code)) return socket.emit('unhide');
   if (e.code === 'KeyE' || e.code === 'Space') interact();
+  // G: put down what you carry, for someone else to pick up
+  if (e.code === 'KeyG' && S.me.hidden == null && !S.scare) {
+    if (!S.me.carrying) UI.toast('Your hands are empty. Nothing to drop.', 2000);
+    else socket.emit('drop', { yaw: +S.me.yaw.toFixed(2) });
+  }
   if (e.code === 'KeyF') {
     if (!S.light && S.battery < 0.02) return UI.toast('Your flashlight is still recharging. Leave it off a little longer, or find batteries in drawers.');
     S.light = !S.light;
@@ -641,6 +646,7 @@ function onSfx({ kind, x, z, who }) {
   if (kind === 'padlock' || kind === 'unlock') sound.clunk(x, z);
   if (kind === 'power') sound.clunk(x, z);
   if (kind === 'pull') sound.play('doorOpen', { at, vol: 1 });
+  if (kind === 'drop') sound.thud(x, z, 0.3);
   // the house acting up on its own
   if (kind === 'slam') sound.slam(x, z, muffled);
   if (kind === 'knock') sound.knock(x, z, muffled);
