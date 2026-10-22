@@ -51,7 +51,7 @@ every 15 seconds). Just walk over one to pick it up, no key needed. Your count s
 of the screen and on the map; each sweet is worth 2 points at dawn, and whoever collects the most gets the
 *Sweet tooth* award. The big screen shows them as small pink dots.
 
-**Help finding things:** every emptied hiding place gets a tick on everyone's map, and if nobody has found
+**Help finding things:** when you walk into a room, a short line says how many hiding places are left to search there ("2 places left to search in the Kitchen.", or "Everything in the Kitchen has been searched."); it only speaks up when that has changed since you were last there. The map shows the same under each room's name. Every emptied hiding place gets a tick on everyone's map, and if nobody has found
 the fuse (or the brass key) for 3 minutes, a clue says which room it is in.
 
 **Trying it out:** join with the name **tester** and you never run out of lives, and your map shows where

@@ -114,6 +114,7 @@ const S = {
   stepAt: 0,
   sendAt: 0,
   shine: {},
+  roomLeft: {}, // what we last said about each room: how many hiding places were left
   flashAt: -1e9, // when you last fired the flash (performance.now)
   flashReady: 0, // when it can fire again
   dread: 0,
@@ -990,6 +991,23 @@ function frame() {
     else UI.setPrompt(d);
   } else if (me.hidden != null) UI.setPrompt('Press E or a movement key to come out', '');
   else UI.setPrompt(null);
+
+  // walking into a room: how many hiding places are left in it, when that has changed
+  if (playing && me.state === 'alive' && !S.scare) {
+    const room = L.roomAt(me.x, me.z);
+    if (room !== S.roomIn) {
+      S.roomIn = room;
+      S.roomSince = now;
+      S.roomTold = false;
+    } else if (room && !S.roomTold && now - S.roomSince > 700) {
+      S.roomTold = true; // once per visit, and only after a moment inside (not just crossing a doorway)
+      const r = UI.searchLeft(S.searched)[room];
+      if (r && S.roomLeft[room] !== r.left) {
+        S.roomLeft[room] = r.left;
+        UI.roomNote(UI.searchNews(room, r.left));
+      }
+    }
+  }
 
   // the clock
   if (playing) {

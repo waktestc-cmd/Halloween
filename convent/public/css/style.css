@@ -225,6 +225,23 @@ body.playing #hud {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+/* "2 places left to search in the Kitchen." when you walk into a room */
+#roomnote {
+  top: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  border-radius: 10px;
+  background: rgba(10, 8, 6, 0.7);
+  color: #ffd98a;
+  font-size: 1em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+#roomnote.on {
+  opacity: 1;
+}
 #feed {
   top: 70px;
   right: 20px;
