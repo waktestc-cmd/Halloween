@@ -13,7 +13,7 @@ const TESTERS = process.env.NODE_ENV !== 'production' || process.env.TESTERS ===
 // tests can make the clue come sooner
 const HINT_AFTER = process.env.HINT != null ? Number(process.env.HINT) : C.HINT.after;
 const TICK = 1 / 20;
-const SEND_EVERY = 3; // ticks between snapshots (about 7 a second)
+const SEND_EVERY = 2; // ticks between snapshots (10 a second, for smooth movement)
 const rint = (n) => crypto.randomInt(n);
 const pick = (a) => a[rint(a.length)];
 const shuffle = (a) => {
