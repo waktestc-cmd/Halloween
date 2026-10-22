@@ -1,5 +1,5 @@
 // The house feeling alive around you: dust drifting in your flashlight beam, the edge of the screen
-// closing in when a nun is near, the hall clock and dripping taps, and now and then something small
+// closing in when a monster is near, the hall clock and dripping taps, and now and then something small
 // just for you: a creak behind you, steps that stop when you turn, a book falling, a music box, a pale
 // figure at the end of a corridor that is gone when you get close. None of it can hurt you.
 import * as THREE from 'three';

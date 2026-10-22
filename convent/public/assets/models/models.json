@@ -25,17 +25,24 @@
     "urn": { "file": "graveyard/urn-round.glb", "fit": "height", "tone": 0.55 },
     "shovel": { "file": "graveyard/shovel-dirt.glb", "fit": "contain", "tone": 0.5 },
     "fence": { "file": "graveyard/iron-fence.glb", "fit": "stretch", "tone": 0.8 },
-    "pumpkin": { "files": ["graveyard/pumpkin-carved.glb", "graveyard/pumpkin-tall-carved.glb"], "fit": "contain", "tone": 0.1 }
+    "pumpkin": { "files": ["graveyard/pumpkin-carved.glb", "graveyard/pumpkin-tall-carved.glb"], "fit": "contain", "tone": 0.1 },
+    "jack": { "files": ["graveyard/pumpkin-carved.glb", "graveyard/pumpkin-tall-carved.glb"], "fit": "contain", "tone": 0.1 },
+    "tablejack": { "files": ["graveyard/pumpkin-tall-carved.glb", "graveyard/pumpkin-carved.glb"], "fit": "contain", "tone": 0.1 }
   },
   "player": {
     "files": [
       "characters/Wizard.glb", "characters/Pirate_Female.glb", "characters/Pirate_Male.glb", "characters/Ninja_Female.glb",
-      "characters/Viking_Female.glb", "characters/Knight_Male.glb", "characters/Cowboy_Female.glb", "characters/Zombie_Male.glb",
+      "characters/Viking_Female.glb", "characters/Knight_Male.glb", "characters/Cowboy_Female.glb", "characters/Witch.glb",
       "characters/Chef_Male.glb", "characters/Doctor_Female_Old.glb"
     ],
     "height": 1.75,
     "tint": ["Clothes", "Main", "Jacket", "Shirt", "Band"],
     "tintBoost": 1.6,
     "tone": 0.15
+  },
+  "zombie": {
+    "files": ["characters/Zombie_Male.glb", "characters/Zombie_Female.glb"],
+    "height": 1.8,
+    "tone": 0.5
   }
 }

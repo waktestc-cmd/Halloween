@@ -4,7 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{TITLE}}</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%95%AF%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%A6%87%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,500..900,0..100,0..1;1,9..144,500..900,0..100,0..1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
   <script type="importmap">
     { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
@@ -25,40 +28,60 @@
     <div id="crosshair"></div>
     <div id="prompt"></div>
     <div id="toast"></div>
+    <div id="roomnote"></div>
     <div id="feed"></div>
     <div id="carry"></div>
     <div id="bars">
-      <div id="battery" class="bar"><span>Flashlight <kbd>F</kbd></span><i><b id="battery-fill"></b></i></div>
+      <div id="battery" class="bar"><span id="battery-label">Flashlight <kbd>F</kbd></span><i><b id="battery-fill"></b></i></div>
       <div id="stamina" class="bar"><span>Breath</span><i><b id="stamina-fill"></b></i></div>
+      <div id="flash-state"></div>
     </div>
     <div id="keys-hint"><button id="btn-map" type="button"><kbd>M</kbd> Map</button><span><kbd>Esc</kbd> Settings</span></div>
   </div>
   <div id="hiding"></div>
   <div id="note"><p id="note-text"></p></div>
+  <div id="flashfx"></div>
   <div id="blackout"></div>
   <div id="wake"></div>
-  <div id="map"><canvas id="map-canvas"></canvas><p id="map-here"></p><p class="map-close">Press <kbd>M</kbd> or click to close</p></div>
+  <div id="map">
+    <div class="map-body"><canvas id="map-canvas"></canvas><aside id="map-side"></aside></div>
+    <p id="map-here"></p>
+    <p class="map-close">Press <kbd>M</kbd> or click to close</p>
+  </div>
 
-  <!-- 1. join -->
-  <section class="panel" id="panel-join">
-    <div class="card">
-      <p class="kicker">St. Agnes Convent, 1962</p>
-      <h1>{{TITLE}}</h1>
-      <p class="lede">The sisters locked the doors at nightfall. Find a way out before dawn.</p>
-      <form id="join-form" autocomplete="off" onsubmit="return false">
-        <label for="name">Your name</label>
-        <input id="name" maxlength="18" placeholder="Type your name" autofocus />
-        <label>Pick a colour</label>
-        <div id="looks"></div>
-        <button class="big" type="submit">Join</button>
+  <!-- 1. join: standing in the hall with a torch, choosing who to be -->
+  <section class="panel ps" id="panel-join">
+    <div class="hall-bg" id="join-bg" aria-hidden="true"><i class="dim"></i><i class="lit"></i></div>
+    <div class="join">
+      <div class="j-intro">
+        <h1 class="title display">{{TITLE}}</h1>
+        <p class="lede">Blackwood Manor, Halloween night. The guests are locked in, and the house is waking up. Get out before dawn.</p>
+      </div>
+      <div class="j-who">
+        <div class="j-hero" id="j-hero"><canvas id="j-preview"></canvas><div id="j-sil"></div></div>
+        <div class="chosen" id="j-chosen"></div>
+        <div class="picker" id="j-pick" role="group" aria-label="Pick your costume"></div>
+        <div class="j-colour"><span>Colour</span><div id="looks"></div></div>
+      </div>
+      <form class="j-go" id="join-form" autocomplete="off" onsubmit="return false">
+        <input id="name" class="field" maxlength="18" placeholder="Your name" aria-label="Your name" spellcheck="false" autofocus />
+        <button class="cta" type="submit">Enter the manor</button>
+        <div class="err" id="j-err"></div>
       </form>
     </div>
   </section>
 
   <!-- 2. waiting for the host -->
-  <section class="panel" id="panel-lobby">
-    <div class="card wide">
-      <h2>You're in. Waiting for the host to start…</h2>
+  <section class="panel ps" id="panel-lobby">
+    <div class="hall-bg" aria-hidden="true"><i class="dim"></i></div>
+    <div class="card wide lobby">
+      <div class="l-top">
+        <div class="window" id="l-window"></div>
+        <div>
+          <h2 class="display">You're in.</h2>
+          <p class="quiet">The house opens when the host says so. Watch the big screen.</p>
+        </div>
+      </div>
       <p id="roster-count"></p>
       <ul id="roster"></ul>
       <div class="howto">
@@ -66,19 +89,23 @@
         <div class="keys">
           <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys<span>Walk</span></div>
           <div><kbd>Mouse</kbd><span>Look around</span></div>
-          <div><kbd>Shift</kbd><span>Run (she hears it)</span></div>
+          <div><kbd>Shift</kbd><span>Run (they hear it)</span></div>
           <div><kbd>E</kbd> or click<span>Open, search, hide</span></div>
           <div><kbd>F</kbd><span>Flashlight on/off</span></div>
+          <div><kbd>G</kbd><span>Drop what you carry</span></div>
+          <div><kbd>Q</kbd><span>Flash: dazzles monsters, ghosts vanish</span></div>
           <div><kbd>M</kbd><span>Map</span></div>
           <div><kbd>Esc</kbd><span>Settings</span></div>
         </div>
         <ol>
-          <li><b>The nuns</b> walk the halls. You'll hear them humming and their little bell. If one sees you, run or hide in a wardrobe or under a bed.</li>
-          <li><b>The ghosts</b> float slowly toward you. Walk away, or hold your flashlight on them until they vanish.</li>
-          <li><b>Three lives.</b> Caught once or twice, you wake up back in the dormitory. The third time, you're out.</li>
-          <li><b>Escape together:</b> fix the fuse box, open Mother Superior's desk, find the three iron keys, unlock the front door.</li>
+          <li><b>The monsters</b> walk the halls, and you hear them coming: <b>the Count</b> breathes (shine your flashlight in his face and he backs off for a moment), <b>the Doctor's Monster</b> stomps (he wakes when the power comes back), <b>the zombies</b> groan in the graveyard. If one sees you, run, or hide in a wardrobe or under a bed.</li>
+          <li><b>The ghosts</b> hum as they float slowly toward you. Walk away, or hold your flashlight on them until they vanish.</li>
+          <li><b>Three lives.</b> Caught once or twice, you wake up back in the guest bedrooms. The third time, you're out.</li>
+          <li><b>Escape together:</b> fix the fuse box, open the Count's desk, find the three iron keys, unlock the front door.</li>
+          <li><b>Trick or treat:</b> wrapped sweets lie all over the house. Just walk over them to collect them. Each one adds to your score.</li>
         </ol>
       </div>
+      <div class="win" id="tips"></div>
       <button id="btn-settings-lobby" type="button" class="ghost">Settings</button>
       <div class="settings" id="settings-lobby"></div>
     </div>
@@ -88,14 +115,14 @@
   <section class="panel" id="panel-begin">
     <div class="card center">
       <p class="kicker">The doors lock behind you</p>
-      <h2>Click anywhere to step inside</h2>
+      <h2>Press any key or click to step inside</h2>
       <p>Move with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys, look with the mouse.<br />Press <kbd>Esc</kbd> any time for settings.</p>
     </div>
   </section>
   <section class="panel" id="panel-paused">
     <div class="card wide">
-      <h2>Paused for you, but not for the nuns</h2>
-      <p class="lede">Click anywhere outside this box to go back in.</p>
+      <h2>Paused for you, but not for the monsters</h2>
+      <p class="lede">Press any key, or click outside this box, to go back in.</p>
       <div class="settings on" id="settings-main">
         <h3>Settings</h3>
         <label>Volume <input type="range" min="0" max="1" step="0.05" data-setting="master" /></label>
@@ -130,7 +157,7 @@
       <p class="kicker">Dawn</p>
       <h2 id="result-title"></h2>
       <ul id="awards"></ul>
-      <table><thead><tr><th>Name</th><th></th><th>Score</th></tr></thead><tbody id="scores"></tbody></table>
+      <table><thead><tr><th>Name</th><th></th><th>Candy</th><th>Score</th></tr></thead><tbody id="scores"></tbody></table>
       <p class="lede">The host can start another night.</p>
     </div>
   </section>

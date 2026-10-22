@@ -27,52 +27,103 @@ body.host {
   display: flex;
   gap: 28px;
 }
-#h-lobby {
-  align-items: center;
-  justify-content: center;
+/* the lobby, in the style of Pumpkin Smash: the dark house fills the screen, a window lights up
+   for each guest who comes in */
+body.host.lobby header {
+  display: none;
 }
-#h-lobby .join {
-  text-align: center;
-}
-#h-url {
-  font-size: 1.6em;
-  color: var(--gold);
-  margin: 6px 0 14px;
-}
-#h-qr {
-  width: 300px;
-  height: 300px;
-  border-radius: 12px;
-  background: #fff;
-}
-#h-lobby .who {
-  width: min(640px, 50vw);
-}
-#h-roster {
-  list-style: none;
+.host main > #h-lobby.on {
+  display: block;
+  position: fixed;
+  inset: 0;
+  height: auto;
   padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-height: 50vh;
-  overflow: auto;
+  background: #0a0908;
 }
-#h-roster li {
-  padding: 4px 14px 4px 10px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.06);
-  border-left: 6px solid var(--c);
+#h-house {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.htitle {
+  position: absolute;
+  left: 3vw;
+  top: 3.2vh;
+  font-size: clamp(34px, 3.4vw, 60px);
+}
+.hphase {
+  position: absolute;
+  left: 3vw;
+  top: calc(3.2vh + clamp(40px, 3.8vw, 66px));
+  color: var(--ash);
+}
+.invite {
+  position: absolute;
+  right: 3vw;
+  top: 4vh;
+  width: clamp(190px, 15vw, 260px);
+  background: var(--bone);
+  color: #0a0908;
+  border-radius: 2px;
+  padding: 14px 14px 12px;
+  text-align: center;
+  transform: rotate(2deg);
+}
+.invite img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 1;
+  image-rendering: pixelated;
+}
+.invite .display {
+  font-size: 30px;
+  margin: 10px 0 4px;
+}
+.invite .url {
+  font-size: 15px;
+  word-break: break-all;
+}
+.count-line {
+  position: absolute;
+  left: 3vw;
+  bottom: 4vh;
+  color: var(--ash);
+  font-size: 1.1em;
+}
+.hstart {
+  position: absolute;
+  right: 3vw;
+  bottom: 3.5vh;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.hstart .cta {
+  width: auto;
+  padding: 16px 30px;
+  font-size: 20px;
+}
+.hstart .cta:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .mapwrap {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 #h-map {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+.mapwrap .legend {
+  text-align: center;
 }
 #h-game aside {
-  width: 420px;
+  width: 520px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -80,48 +131,252 @@ body.host {
 }
 #h-steps {
   margin: 0;
-  padding: 0 0 0 1.3em;
-  font-size: 1.1em;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  font-size: 0.85em;
+  counter-reset: step;
 }
 #h-steps li {
   color: var(--dim);
-  margin: 4px 0;
+  border-top: 3px solid rgba(255, 255, 255, 0.12);
+  padding-top: 4px;
+  counter-increment: step;
+}
+#h-steps li::before {
+  content: counter(step) '. ';
+}
+#h-steps li.now {
+  border-color: var(--gold);
+  font-weight: 700;
+}
+#h-steps li.done {
+  border-color: #7fbf7f;
 }
 #h-steps li.now {
   color: var(--gold);
 }
 #h-steps li.done {
   color: #7fbf7f;
-  text-decoration: line-through;
+}
+.mapwrap .legend {
+  margin: 4px 0 0;
+}
+.legend {
+  color: var(--dim);
+  font-size: 0.9em;
+  margin: 10px 0;
+}
+.candy-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff7eb6;
+  vertical-align: middle;
 }
 #h-feed {
-  flex: 1;
+  flex: 0 0 auto;
+  height: 6.6em;
   overflow: hidden;
-  font-size: 0.95em;
+  font-size: 0.9em;
+  color: var(--dim);
+  margin-top: 8px;
 }
 #h-feed div {
-  padding: 5px 10px;
-  margin-bottom: 5px;
+  padding: 4px 10px;
+  margin-bottom: 4px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
 }
+#h-feed div:first-child {
+  color: var(--ink);
+}
+/* the host controls: quiet until needed, and the risky ones turn red and ask again */
+#h-controls {
+  display: flex;
+  gap: 10px;
+}
+#h-controls button {
+  background: transparent;
+  color: var(--ash);
+  border: 1px solid rgba(237, 227, 207, 0.25);
+  border-radius: 6px;
+  font: 700 16px var(--ui);
+  padding: 10px 16px;
+  cursor: pointer;
+}
+#h-controls button:hover {
+  color: var(--bone);
+  border-color: var(--bone);
+}
+#h-controls button.armed {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+#h-controls button[aria-pressed='true'] {
+  color: var(--ember);
+  border-color: var(--ember);
+}
+body:not([data-phase='PLAYING']) #h-hide,
+body:not([data-phase='PLAYING']) #h-finish {
+  display: none;
+}
+/* the tally: big numbers anyone on the call can read */
+#h-tally {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+#h-tally div {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 6px 4px 8px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 0.8em;
+}
+#h-tally b {
+  display: block;
+  font-size: 1.9em;
+  line-height: 1.1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+#h-tally .out b {
+  color: #7fbf7f;
+}
+#h-tally .gone b {
+  color: #d07a6a;
+}
+#h-tally .sweet b {
+  color: #ff9ac8;
+}
+/* everyone in the house: costume, name, lives, where they are */
 #h-players {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 12px;
-  font-size: 0.85em;
-  max-height: 34vh;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 4px;
+}
+#h-players li {
+  display: grid;
+  grid-template-columns: 1.6em 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+#h-players .who {
+  grid-row: span 2;
+  width: 1.6em;
+  height: 1.6em;
+  color: var(--ember);
+}
+#h-players .who svg {
+  width: 100%;
+  height: 100%;
+}
+#h-players .name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#h-players .lives {
+  color: #e0574a;
+  letter-spacing: 2px;
+  font-size: 0.8em;
+}
+#h-players .lives i {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.15);
+}
+#h-players .where {
+  grid-column: 2 / span 2;
+  color: var(--dim);
+  font-size: 0.8em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#h-players em {
+  font-style: normal;
+  color: var(--gold);
+}
+#h-players .c {
+  color: #ff9ac8;
+}
+#h-players .hiding .where {
+  color: #9fc3ff;
+}
+#h-players .out .where {
+  color: #7fbf7f;
+  font-weight: 700;
+}
+#h-players .out .who {
+  color: #7fbf7f;
 }
 #h-players .gone {
-  opacity: 0.4;
-  text-decoration: line-through;
+  opacity: 0.45;
 }
-#h-players .out {
-  color: #7fbf7f;
+#h-players .gone .who {
+  color: var(--dim);
+}
+#h-players .away {
+  opacity: 0.6;
+}
+/* a full house: two columns, a little tighter */
+#h-players.many {
+  grid-template-columns: 1fr 1fr;
+}
+/* a full house: two columns, one line each (costume, name, where, lives) */
+#h-players.many li {
+  display: flex;
+  gap: 6px;
+  padding: 3px 8px;
+}
+#h-players.many .who {
+  flex: none;
+  width: 1.3em;
+  height: 1.3em;
+}
+#h-players.many .name {
+  flex: none;
+  max-width: 55%;
+}
+#h-players.many .where {
+  flex: 1;
+  min-width: 0;
+}
+#h-players.many .lives {
+  flex: none;
+  order: 4;
+}
+#h-monsters {
+  font-size: 0.85em;
+  color: var(--dim);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+}
+#h-monsters .note {
+  font-style: italic;
+}
+.again-note {
+  color: var(--dim);
+  font-size: 0.9em;
 }
 #h-results {
   flex-direction: column;
@@ -148,20 +403,31 @@ body.host {
   font-weight: normal;
 }
 #h-scores {
-  columns: 2;
-  width: min(900px, 90vw);
+  columns: 3;
+  width: min(1100px, 92vw);
+  font-size: 0.9em;
+  margin: 8px 0;
+}
+.host main > #h-results.on {
+  overflow-y: auto;
+  gap: 6px;
+}
+#h-results h2 {
+  margin: 4px 0;
 }
 #h-level {
   display: flex;
-  gap: 8px;
-  margin-top: 18px;
+  gap: 6px;
 }
 #h-level button {
   background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--line);
+  color: var(--ash);
+  border: 1px solid rgba(237, 227, 207, 0.2);
+  border-radius: 2px;
+  font: 700 16px var(--ui);
+  padding: 10px 16px;
 }
 #h-level button.on {
-  background: var(--gold);
-  color: #160f08;
+  color: var(--bone);
+  border-color: var(--ember);
 }

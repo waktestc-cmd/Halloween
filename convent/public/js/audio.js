@@ -1,4 +1,4 @@
-// Sound: recorded effects from /assets/sounds, plus a few made here (rain, wind, the nun's hum,
+// Sound: recorded effects from /assets/sounds, plus a few made here (rain, wind, the ghosts' hum,
 // her bell, the ghosts, a heartbeat). Sounds in the house are placed in 3D around you.
 // Any recording dropped into /assets/sounds with a name from FILES replaces the made-up version.
 
@@ -11,10 +11,11 @@ const FILES = {
   found: ['sfx-pumpkin-found'],
   hit: ['sfx-hit'],
   win: ['sfx-win'],
+  laugh: ['evil-laugh'], // the house laughs as the night starts (from Pumpkin Smash)
   // optional recordings: drop these in to replace the made-up sounds
   ambience: ['ambience'],
   chase: ['chase'],
-  hum: ['nun-hum'],
+  hum: ['nun-hum'], // the ghosts' humming (named for the convent this game began as)
   bell: ['bell'],
   whisper: ['ghost-whisper'],
   boo: ['ghost-boo'],
@@ -22,6 +23,8 @@ const FILES = {
   thunder: ['thunder', 'thunder-2'],
   scare: ['jump-scare', 'jump-scare-2'],
   slam: ['door-slam'],
+  groan: ['zombie-groan'],
+  snarl: ['zombie-snarl'],
 };
 
 export class Sound {
@@ -279,7 +282,7 @@ export class Sound {
   }
 
   /* ---------- made-up voices ---------- */
-  // a nun's hum: a breathy voice with formants singing a slow tune, carried in 3D
+  // a ghostly woman's hum: a breathy voice with formants singing a slow tune, carried in 3D
   makeHum(seed = 0) {
     const ctx = this.ctx;
     const out = ctx.createGain();
@@ -350,9 +353,9 @@ export class Sound {
       },
     };
   }
-  // a small bell at the nun's belt, jingling as she moves
-  bell(x, z, muffled) {
-    if (this.play('bell', { at: [x, z], vol: 0.35, rate: 0.95 + Math.random() * 0.1, muffled, len: 0.6 })) return;
+  // a handbell somewhere in the house: a short jingle, or rung for a while
+  bell(x, z, muffled, long = false) {
+    if (this.play('bell', { at: [x, z], vol: long ? 0.6 : 0.35, rate: 0.95 + Math.random() * 0.1, muffled, len: long ? 3.5 : 0.6 })) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
     const pan = this.panner(x, z, { ref: 1.5, max: 25, roll: 1.5, y: 1 });
@@ -461,7 +464,7 @@ export class Sound {
     s.start(now);
     s.stop(now + 4.2);
   }
-  // when she sees you: a shriek; when you are caught: a sting
+  // when the Count sees you: a shriek; when you are caught: a sting
   shriek(x, z) {
     const ctx = this.ctx;
     const now = ctx.currentTime;
@@ -509,6 +512,83 @@ export class Sound {
     s.start(now);
     s.stop(now + 0.7);
   }
+  /* ---------- the monsters ---------- */
+  // the Count's slow, wet breathing, carried in 3D; set(level) turns it up when he hunts
+  makeBreath() {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    const pan = this.panner(0, 0, { ref: 1.5, max: 25, roll: 1.5, y: 1.8 });
+    const muffle = ctx.createBiquadFilter();
+    muffle.type = 'lowpass';
+    muffle.frequency.value = 6000;
+    out.connect(muffle).connect(pan).connect(this.sfxBus);
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    s.loop = true;
+    const breath = ctx.createGain();
+    breath.gain.value = 0.5;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.32;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.5;
+    lfo.connect(depth).connect(breath.gain);
+    for (const [f, q, a] of [[700, 1.5, 0.5], [260, 3, 0.7]]) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = f;
+      bp.Q.value = q;
+      const g = ctx.createGain();
+      g.gain.value = a;
+      s.connect(bp).connect(g).connect(breath);
+    }
+    breath.connect(out);
+    s.start(0, Math.random());
+    lfo.start();
+    return {
+      out,
+      set: (x, z, level, muffled) => {
+        this.movePanner(pan, x, z, 1.8);
+        out.gain.setTargetAtTime(level, ctx.currentTime, 0.3);
+        lfo.frequency.setTargetAtTime(level > 0.7 ? 0.7 : 0.32, ctx.currentTime, 0.5);
+        muffle.frequency.setTargetAtTime(muffled ? 650 : 6000, ctx.currentTime, 0.2);
+      },
+    };
+  }
+  // the Doctor's Monster's heavy footsteps
+  stomp(x, z, muffled) {
+    this.thud(x, z, muffled ? 0.45 : 0.9);
+  }
+  // his growl, and the roar when he wakes or sees you
+  roar(x, z, muffled, loud) {
+    if (this.play('snarl', { at: [x, z], vol: loud ? 1.3 : 0.6, rate: 0.5 + Math.random() * 0.08, muffled })) return;
+    this.wail(x, z);
+  }
+  // a zombie's groan; louder, with a snarl, when it has seen you
+  groan(x, z, muffled, loud) {
+    this.play('groan', { at: [x, z], vol: loud ? 1 : 0.5, rate: 0.85 + Math.random() * 0.2, muffled });
+    if (loud) this.play('snarl', { at: [x, z], vol: 0.7, rate: 0.8, muffled });
+  }
+  // the Count hissing as your light hits his face
+  hiss(x, z) {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.5;
+    bp.frequency.setValueAtTime(3500, now);
+    bp.frequency.linearRampToValueAtTime(2500, now + 0.8);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.8, now + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+    s.connect(bp).connect(g).connect(this.panner(x, z, { ref: 2, max: 25, y: 1.8 })).connect(this.sfxBus);
+    s.start(now, Math.random());
+    s.stop(now + 1);
+  }
+
   /* ---------- the house acting up ---------- */
   // something knocks three times behind a closed door
   knock(x, z, muffled) {
@@ -764,6 +844,66 @@ export class Sound {
     o.connect(lp).connect(g).connect(this.sfxBus);
     o.start(now);
     o.stop(now + 4);
+  }
+  // the flash (Q): a sharp pop and a fading whine, like an old flashgun; at (x, z) when it is someone else's
+  flashPop(x, z) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    let out = this.sfxBus;
+    if (x != null) {
+      out = this.panner(x, z, { ref: 3, max: 40 });
+      out.connect(this.sfxBus);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1800;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.45, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    src.connect(hp).connect(g).connect(out);
+    src.start(now, Math.random(), 0.15);
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(220, now);
+    o.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.5, now);
+    g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    o.connect(g2).connect(out);
+    o.start(now);
+    o.stop(now + 0.2);
+    const w = ctx.createOscillator();
+    w.type = 'triangle';
+    w.frequency.setValueAtTime(5200, now + 0.05);
+    w.frequency.exponentialRampToValueAtTime(2200, now + 0.9);
+    const g3 = ctx.createGain();
+    g3.gain.setValueAtTime(0.0001, now);
+    g3.gain.exponentialRampToValueAtTime(0.025, now + 0.1);
+    g3.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+    w.connect(g3).connect(out);
+    w.start(now);
+    w.stop(now + 0.95);
+  }
+  // a sweet picked up: two quick, soft, bright notes
+  sweet() {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [1046.5, 1568].forEach((f, i) => {
+      const t0 = now + i * 0.075;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.13, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+      o.connect(g).connect(this.sfxBus);
+      o.start(t0);
+      o.stop(t0 + 0.3);
+    });
   }
   click() {
     const ctx = this.ctx;

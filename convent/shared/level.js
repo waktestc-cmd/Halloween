@@ -1,4 +1,4 @@
-// The convent: one floor of rooms around a cloister corridor and an open courtyard.
+// Monster Manor: one floor of rooms around a gallery corridor and an open graveyard.
 // Shared by the server (AI, line of sight, item placement) and the browser (3D build, map).
 // The house is a grid of 2 m tiles. x grows east, z grows south; tile (c, r) has its centre at
 // ((c + 0.5) * TILE, (r + 0.5) * TILE).
@@ -9,19 +9,19 @@ export const W = 33;
 export const H = 25;
 
 export const ROOMS = {
-  d: { name: 'Dormitory', c0: 1, r0: 1, c1: 7, r1: 4 },
+  d: { name: 'Guest bedrooms', c0: 1, r0: 1, c1: 7, r1: 4 },
   w: { name: 'Laundry', c0: 9, r0: 1, c1: 13, r1: 4 },
-  s: { name: 'Classroom', c0: 15, r0: 1, c1: 21, r1: 4 },
+  s: { name: 'Schoolroom', c0: 15, r0: 1, c1: 21, r1: 4 },
   l: { name: 'Library', c0: 23, r0: 1, c1: 31, r1: 4 },
   k: { name: 'Kitchen', c0: 1, r0: 6, c1: 3, r1: 9 },
-  i: { name: 'Infirmary', c0: 29, r0: 6, c1: 31, r1: 9 },
+  i: { name: 'Surgery', c0: 29, r0: 6, c1: 31, r1: 9 },
   n: { name: 'Dining hall', c0: 1, r0: 11, c1: 3, r1: 17 },
-  o: { name: "Mother Superior's office", c0: 29, r0: 11, c1: 31, r1: 17 },
-  p: { name: 'Chapel', c0: 1, r0: 19, c1: 9, r1: 22 },
+  o: { name: "Count's study", c0: 29, r0: 11, c1: 31, r1: 17 },
+  p: { name: 'Crypt', c0: 1, r0: 19, c1: 9, r1: 22 },
   e: { name: 'Entrance hall', c0: 11, r0: 19, c1: 17, r1: 22 },
   t: { name: 'Storeroom', c0: 19, r0: 19, c1: 25, r1: 22 },
-  x: { name: 'Boiler room', c0: 27, r0: 19, c1: 31, r1: 22 },
-  g: { name: 'Courtyard', c0: 8, r0: 9, c1: 24, r1: 14, outdoor: true },
+  x: { name: 'Laboratory', c0: 27, r0: 19, c1: 31, r1: 22 },
+  g: { name: 'Graveyard', c0: 8, r0: 9, c1: 24, r1: 14, outdoor: true },
 };
 const CORRIDOR = [
   [5, 6, 27, 7],
@@ -29,7 +29,7 @@ const CORRIDOR = [
   [5, 8, 6, 15],
   [26, 8, 27, 15],
 ];
-ROOMS.c = { name: 'Cloister', c0: 5, r0: 6, c1: 27, r1: 17 };
+ROOMS.c = { name: 'Gallery', c0: 5, r0: 6, c1: 27, r1: 17 };
 
 // doors: tile, and which rooms they join. 'front' is the way out.
 export const DOORS = [
@@ -113,6 +113,8 @@ export const PROP_TYPES = {
   painting: { w: 1.2, d: 0.06, h: 0.9, wallH: 1.5, solid: false },
   candles: { w: 0.5, d: 0.5, h: 1.3, solid: false },
   clock: { w: 0.6, d: 0.4, h: 2.15, solid: true },
+  slab: { w: 1.0, d: 2.2, h: 0.85, solid: true },
+  coil: { w: 0.6, d: 0.6, h: 2.0, solid: true, spark: true },
   // decoration only
   coffin: { w: 0.8, d: 2.0, h: 0.55, solid: true },
   crypt: { w: 2.4, d: 1.6, h: 2.6, solid: true },
@@ -122,18 +124,23 @@ export const PROP_TYPES = {
   fence: { w: 1.2, d: 0.15, h: 1.1, solid: false },
   rug: { w: 1.8, d: 2.6, h: 0.02, solid: false },
   coatrack: { w: 0.5, d: 0.5, h: 1.8, solid: true },
+  // Halloween night: lanterns you can walk past, cobwebs high in the corners and over the arches
+  jack: { w: 0.5, d: 0.5, h: 0.45, solid: false, glow: true },
+  tablejack: { w: 0.38, d: 0.38, h: 0.34, wallH: 0.78, solid: false, glow: true },
+  cobweb: { w: 1.0, d: 1.0, h: 0.9, wallH: 2.5, solid: false },
+  archweb: { w: 2.0, d: 0.05, h: 0.7, wallH: 1.75, solid: false },
 };
 
 const P = (type, room, opts) => ({ type, room, ...opts });
 const PROP_LIST = [
-  // dormitory: where everyone wakes up
+  // the guest bedrooms: where everyone wakes up
   P('bed', 'd', { wall: 'N', u: 1 }), P('bed', 'd', { wall: 'N', u: 2.6 }), P('bed', 'd', { wall: 'N', u: 4.2 }), P('bed', 'd', { wall: 'N', u: 5.8 }),
   P('bed', 'd', { wall: 'S', u: 1 }), P('bed', 'd', { wall: 'S', u: 2.6 }), P('bed', 'd', { wall: 'S', u: 7 }),
   P('wardrobe', 'd', { wall: 'E', u: 2.5 }), P('dresser', 'd', { wall: 'W', u: 2.5 }), P('painting', 'd', { wall: 'N', u: 7 }),
   // laundry
   P('tub', 'w', { wall: 'N', u: 10 }), P('tub', 'w', { wall: 'N', u: 12.5 }), P('basket', 'w', { wall: 'S', u: 9.5 }), P('basket', 'w', { wall: 'S', u: 13 }),
   P('wardrobe', 'w', { wall: 'W', u: 2.5 }), P('cabinet', 'w', { wall: 'E', u: 2 }),
-  // classroom
+  // schoolroom
   P('chalkboard', 's', { wall: 'N', u: 18 }), P('desk', 's', { at: [18, 1.6], face: 'S' }),
   P('table', 's', { at: [16.5, 3] }), P('table', 's', { at: [19.5, 3] }), P('table', 's', { at: [16.5, 4.2] }), P('table', 's', { at: [19.5, 4.2] }),
   P('cabinet', 's', { wall: 'E', u: 3 }), P('shelf', 's', { wall: 'W', u: 3 }),
@@ -146,17 +153,17 @@ const PROP_LIST = [
   P('table', 'k', { at: [2, 8], face: 'E' }), P('barrel', 'k', { at: [3.2, 6.2] }),
   // dining hall
   P('longtable', 'n', { at: [2, 14] }), P('cabinet', 'n', { wall: 'W', u: 11.5 }), P('dresser', 'n', { wall: 'W', u: 16.5 }), P('painting', 'n', { wall: 'W', u: 14 }),
-  // infirmary
+  // surgery
   P('bed', 'i', { wall: 'E', u: 6.5 }), P('curtain', 'i', { wall: 'E', u: 8.5 }), P('cabinet', 'i', { wall: 'N', u: 29.5 }), P('cabinet', 'i', { wall: 'N', u: 31 }),
   P('desk', 'i', { wall: 'S', u: 30.5 }),
-  // Mother Superior's office
+  // the Count's study
   P('officedesk', 'o', { at: [30, 13.2], face: 'W' }), P('shelf', 'o', { wall: 'E', u: 11.8 }), P('cabinet', 'o', { wall: 'E', u: 16.5 }),
   P('wardrobe', 'o', { wall: 'S', u: 30 }), P('painting', 'o', { wall: 'E', u: 14 }),
-  // chapel: pews and candles, kept respectful
+  // the crypt, where the Count sleeps: a stone tomb, rows of coffins, candles
   P('altar', 'p', { at: [2.0, 20.75], face: 'E' }), P('candles', 'p', { at: [1.4, 19.5] }), P('candles', 'p', { at: [1.4, 22] }),
-  P('pew', 'p', { at: [4.2, 20], face: 'W' }), P('pew', 'p', { at: [4.2, 21.6], face: 'W' }),
-  P('pew', 'p', { at: [6.2, 20], face: 'W' }), P('pew', 'p', { at: [6.2, 21.6], face: 'W' }),
-  P('pew', 'p', { at: [8.2, 20], face: 'W' }), P('pew', 'p', { at: [8.2, 21.6], face: 'W' }),
+  P('coffin', 'p', { at: [4.4, 20], face: 'E' }), P('coffin', 'p', { at: [4.4, 21.6], face: 'E' }),
+  P('coffin', 'p', { at: [6.4, 20], face: 'E' }), P('coffin', 'p', { at: [6.4, 21.6], face: 'E' }),
+  P('coffin', 'p', { at: [8.4, 20], face: 'E' }), P('coffin', 'p', { at: [8.4, 21.6], face: 'E' }),
   P('cabinet', 'p', { wall: 'E', u: 19.3 }),
   // entrance hall
   P('bench', 'e', { wall: 'W', u: 20.5 }), P('bench', 'e', { wall: 'E', u: 20.5 }), P('painting', 'e', { wall: 'N', u: 11.5 }),
@@ -164,13 +171,14 @@ const PROP_LIST = [
   // storeroom
   P('crate', 't', { at: [19.3, 19.3] }), P('crate', 't', { at: [20.3, 19.3] }), P('crate', 't', { at: [19.3, 20.4] }), P('barrel', 't', { at: [25.15, 19.3] }),
   P('crate', 't', { at: [23.6, 22.2] }), P('crate', 't', { at: [24.7, 22.2] }), P('shelf', 't', { wall: 'S', u: 21 }), P('wardrobe', 't', { wall: 'E', u: 20.8 }),
-  // boiler room
-  P('boiler', 'x', { at: [30.3, 20.5] }), P('crate', 'x', { at: [27.4, 22.2] }), P('cabinet', 'x', { wall: 'N', u: 28 }), P('barrel', 'x', { at: [31.15, 22.2] }),
-  // courtyard: a small graveyard and a well in the rain
+  // the laboratory: the generator, the Doctor's slab, two crackling coils
+  P('boiler', 'x', { at: [30.3, 20.5] }), P('slab', 'x', { at: [28.6, 21] }),
+  P('coil', 'x', { at: [29.2, 19.4] }), P('coil', 'x', { at: [31.2, 19.4] }), P('crate', 'x', { at: [27.4, 22.2] }), P('cabinet', 'x', { wall: 'N', u: 28 }), P('barrel', 'x', { at: [31.15, 22.2] }),
+  // the graveyard: gravestones and a well in the rain
   P('well', 'g', { at: [16, 11.5] }), P('tree', 'g', { at: [10, 10] }), P('tree', 'g', { at: [22.5, 13.5] }),
   P('grave', 'g', { at: [11, 13.2] }), P('grave', 'g', { at: [12.2, 13.2] }), P('grave', 'g', { at: [13.4, 13.2] }),
   P('grave', 'g', { at: [19.5, 9.8] }), P('grave', 'g', { at: [20.7, 9.8] }), P('bench', 'g', { at: [16, 13.8] }),
-  // cloister
+  // the gallery around the graveyard
   P('fusebox', 'c', { wall: 'N', u: 16, wallOf: 6 }),
   P('painting', 'c', { wall: 'N', u: 9, wallOf: 6 }), P('painting', 'c', { wall: 'S', u: 21, wallOf: 17 }),
   P('bench', 'c', { at: [12, 17.3], face: 'N' }),
@@ -178,12 +186,31 @@ const PROP_LIST = [
   P('candles', 'd', { at: [7.2, 1.6] }), P('candles', 'n', { at: [3.2, 11.3] }), P('candles', 'l', { at: [23.2, 1.2] }),
   P('candles', 'o', { at: [29.2, 11.2] }), P('candles', 'i', { at: [29.2, 8.2] }),
   P('clock', 'e', { wall: 'N', u: 16.5 }),
-  // the courtyard's graveyard, and pumpkins someone carved for tonight
+  // more of the graveyard, and pumpkins someone carved for tonight
   P('coffin', 'g', { wall: 'S', u: 9.6 }), P('crypt', 'g', { wall: 'N', u: 23.5 }), P('urn', 'g', { at: [14.6, 13.2] }),
   P('shovel', 'g', { at: [18.4, 9.5] }), P('fence', 'g', { wall: 'N', u: 19.4 }), P('fence', 'g', { wall: 'N', u: 20.7 }),
   P('pumpkin', 'g', { at: [15, 13.9] }), P('pumpkin', 'g', { at: [17.1, 13.9] }),
   P('pumpkin', 'e', { at: [12.6, 22.3] }), P('pumpkin', 'e', { at: [15.4, 22.3] }),
   P('rug', 'd', { at: [4, 2.8] }), P('rug', 'o', { at: [29.6, 14.5] }), P('coatrack', 'e', { at: [11.3, 19.3] }),
+  // jack-o'-lanterns for tonight, against the walls beside the doors, by the arches, on the tables
+  P('jack', 'c', { at: [10.3, 5.7] }), P('jack', 'c', { at: [11.7, 5.7] }), P('jack', 'c', { at: [17.3, 5.7] }), P('jack', 'c', { at: [18.7, 5.7] }),
+  P('jack', 'c', { at: [24.3, 5.7] }), P('jack', 'c', { at: [25.7, 5.7] }), P('jack', 'c', { at: [13.5, 7.3] }),
+  P('jack', 'c', { at: [13.3, 17.3] }), P('jack', 'c', { at: [14.7, 17.3] }), P('jack', 'c', { at: [21.3, 17.3] }), P('jack', 'c', { at: [9.5, 15.7] }),
+  P('jack', 'c', { at: [4.7, 9.5] }), P('jack', 'c', { at: [27.3, 14.5] }),
+  P('jack', 'g', { at: [7.7, 11.2] }), P('jack', 'g', { at: [7.7, 12.8] }), P('jack', 'g', { at: [24.3, 11.2] }), P('jack', 'g', { at: [24.3, 12.8] }),
+  P('jack', 'g', { at: [10.4, 10.6] }), P('jack', 'g', { at: [12.8, 13.65] }), P('jack', 'g', { at: [22.65, 9.6] }), P('jack', 'g', { at: [20.1, 10.25] }),
+  P('tablejack', 'n', { at: [2, 13.16] }), P('tablejack', 'n', { at: [2, 14.84] }), P('tablejack', 'k', { at: [2, 8] }), P('jack', 'd', { at: [5.85, 4.325] }),
+  // cobwebs in the top corners of the rooms (face S: north-west corner, W: north-east, N: south-east, E: south-west)
+  P('cobweb', 'd', { at: [0.75, 0.75], face: 'S' }), P('cobweb', 'd', { at: [7.25, 4.25], face: 'N' }), P('cobweb', 'w', { at: [13.25, 0.75], face: 'W' }),
+  P('cobweb', 's', { at: [14.75, 0.75], face: 'S' }), P('cobweb', 's', { at: [21.25, 0.75], face: 'W' }), P('cobweb', 'l', { at: [22.75, 0.75], face: 'S' }),
+  P('cobweb', 'l', { at: [31.25, 4.25], face: 'N' }), P('cobweb', 'k', { at: [0.75, 5.75], face: 'S' }), P('cobweb', 'i', { at: [31.25, 5.75], face: 'W' }),
+  P('cobweb', 'n', { at: [0.75, 17.25], face: 'E' }), P('cobweb', 'o', { at: [31.25, 10.75], face: 'W' }),
+  P('cobweb', 'p', { at: [0.75, 18.75], face: 'S' }), P('cobweb', 'p', { at: [9.25, 18.75], face: 'W' }), P('cobweb', 'p', { at: [9.25, 22.25], face: 'N' }), P('cobweb', 'p', { at: [0.75, 22.25], face: 'E' }),
+  P('cobweb', 'e', { at: [10.75, 18.75], face: 'S' }), P('cobweb', 'e', { at: [17.25, 18.75], face: 'W' }), P('cobweb', 't', { at: [25.25, 18.75], face: 'W' }), P('cobweb', 't', { at: [18.75, 22.25], face: 'E' }),
+  P('cobweb', 'x', { at: [26.75, 18.75], face: 'S' }), P('cobweb', 'x', { at: [31.25, 22.25], face: 'N' }),
+  P('cobweb', 'c', { at: [4.75, 5.75], face: 'S' }), P('cobweb', 'c', { at: [27.25, 5.75], face: 'W' }), P('cobweb', 'c', { at: [4.75, 17.25], face: 'E' }), P('cobweb', 'c', { at: [27.25, 17.25], face: 'N' }),
+  // and over both sides of the two archways into the graveyard
+  P('archweb', 'c', { at: [6.515, 12], face: 'E' }), P('archweb', 'g', { at: [7.485, 12], face: 'E' }), P('archweb', 'g', { at: [24.515, 12], face: 'E' }), P('archweb', 'c', { at: [25.485, 12], face: 'E' }),
 ];
 
 // resolve every prop to a centre (x, z), a facing angle and an axis-aligned footprint
@@ -218,6 +245,22 @@ export const FRONT = DOORS.find((d) => d.front);
 // you are out once you are past the front door
 export const ESCAPE_Z = (FRONT.r + 0.9) * TILE;
 
+// What you use and where you have to stand to use it: its centre, and how much further than REACH
+// still counts. The server and the browser both go by this, so the "Press E" hint only shows when
+// pressing E will work.
+export function useSpot(act) {
+  if (act.kind === 'door' || act.kind === 'front') {
+    const d = DOORS.find((d) => d.id === act.id) || FRONT;
+    const [x, z] = centre(d.c, d.r);
+    return { x, z, extra: d.front ? 1 : 0.8 };
+  }
+  if (act.kind === 'fusebox') return { x: FUSEBOX.x, z: FUSEBOX.z, extra: 0.6 };
+  if (act.kind === 'desk') return { x: OFFICE_DESK.x, z: OFFICE_DESK.z, extra: 1 };
+  const p = PROPS[act.prop];
+  if (p) return { x: p.x, z: p.z, extra: Math.max(p.hw, p.hd) };
+  return null;
+}
+
 // where things can be hidden: every searchable prop
 export const BOXES = PROPS.filter((p) => p.box);
 export const HIDES = PROPS.filter((p) => p.hide);
@@ -228,7 +271,7 @@ export const floorTile = (c, r) => {
   const ch = at(c, r);
   return ch !== '#' && ch !== ' ';
 };
-// tiles blocked for the nuns' route finding because furniture fills them
+// tiles blocked for the monsters' route finding because furniture fills them
 export const BLOCKED = (() => {
   const b = new Set();
   for (const p of PROPS) {
