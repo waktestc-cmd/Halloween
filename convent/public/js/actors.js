@@ -384,10 +384,10 @@ function hand(rig, mat, region, sx, wr, fi, o) {
   rig.add(blob(prx, pry, prz), mat, wr, region, [wx, wy - pry * 0.8, wz]);
   const ky = wy - pry * 1.55;
   const c = -sx; // toward the palm
-  const r = (t) => o.r0 + (o.r1 - o.r0) * t + o.knob * (bell(t, 0.02, 0.07) + bell(t, 0.37, 0.05) + 0.8 * bell(t, 0.7, 0.045));
+  const r = (t) => o.r0 + (o.r1 - o.r0) * t + o.knob * (bell(t, 0.02, 0.08) + bell(t, 0.37, 0.07) + 0.8 * bell(t, 0.7, 0.065));
   const finger = (k, dirs, L, skin, root) => {
     const pts = [k, ...dirs.map(([dx, dy, dz]) => k.clone().add(V(c * dx * L, dy * L, dz * L)))];
-    rig.add(sweep(pts, (t) => r(t) * (root ?? 1), { seg: 9, rad: 6, flat: 0.85, up: [1, 0, 0], caps: [false, !o.claw] }), mat, skin, region);
+    rig.add(sweep(pts, (t) => r(t) * (root ?? 1), { seg: 7, rad: 6, flat: 0.85, up: [1, 0, 0], caps: [false, !o.claw] }), mat, skin, region);
     if (!o.claw) return;
     const tip = pts[pts.length - 1];
     const T = tip.clone().sub(pts[pts.length - 2]).normalize();
@@ -515,7 +515,7 @@ export class Vampire extends Monster {
       const front = Math.min(a, Math.PI * 2 - a);
       return 1 + 0.05 * Math.sin(a * 7 + 1.3) * smooth01(1.1, 0.2, y) + 0.025 * Math.sin(a * 13 + 0.4) * smooth01(0.8, 0.1, y) + 0.03 * bell(front, 0, 0.1) * smooth01(1.66, 1.5, y);
     };
-    rig.add(loft(coatLv, { rad: 40, bump: folds }), cloth, byY([[0.75, skirt], [1.0, spine], [1.3, spine], [1.45, chest]]), U.coat);
+    rig.add(loft(coatLv, { rad: 34, bump: folds }), cloth, byY([[0.75, skirt], [1.0, spine], [1.3, spine], [1.45, chest]]), U.coat);
     // two rows of buttons
     for (const a of [0.24, Math.PI * 2 - 0.24])
       for (let i = 0; i < 6; i++) {
@@ -532,7 +532,7 @@ export class Vampire extends Monster {
     // neck and head
     const C = V(0, 1.86, 0.065);
     rig.add(sweep([[0, 1.62, 0.0], [0, 1.72, 0.025], [0, 1.8, 0.05]], 0.036, { seg: 4, rad: 10, caps: [false, false] }), skin, byY([[1.69, chest], [1.75, head]]), U.skin);
-    rig.add(sculpt(countHead, { w: 34, h: 26 }), skin, head, U.head, C.toArray());
+    rig.add(sculpt(countHead, { w: 30, h: 22 }), skin, head, U.head, C.toArray());
     const at = (x, y, z) => countHead(dirOf(x, y, z)).add(C);
     for (const sx of [-1, 1]) {
       // eyes deep in their sockets
@@ -710,10 +710,10 @@ function stitchedBody() {
   rig.add(sweep([[0, 1.88, -0.01], [0, 2.0, 0.02], [0, 2.1, 0.05]], 0.098, { seg: 4, rad: 12, caps: [false, false] }), skin, byY([[1.97, B.chest], [2.04, B.head]]), U.neck);
   // the head, big and square-jawed, with long black matted hair
   const C = V(0, 2.17, 0.075);
-  rig.add(sculpt(bruteHead, { w: 32, h: 24 }), skin, B.head, U.head, C.toArray());
+  rig.add(sculpt(bruteHead, { w: 28, h: 20 }), skin, B.head, U.head, C.toArray());
   const at = (x, y, z) => bruteHead(dirOf(x, y, z)).add(C);
   const hairShape = (d) => bruteHead(d).multiplyScalar(1.07);
-  rig.add(sculpt(hairShape, { w: 28, h: 8, theta: [0, Math.PI * 0.36] }), cloth, B.head, U.hair, C.toArray());
+  rig.add(sculpt(hairShape, { w: 22, h: 6, theta: [0, Math.PI * 0.36] }), cloth, B.head, U.hair, C.toArray());
   rig.add(sculpt(hairShape, { w: 18, h: 8, phi: [Math.PI * 0.95, Math.PI * 1.1], theta: [Math.PI * 0.3, Math.PI * 0.45] }), cloth, B.head, U.hair, C.toArray());
   for (let i = 0; i < 11; i++) {
     // locks falling to the shoulders, round the sides and back
