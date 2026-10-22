@@ -103,12 +103,14 @@ export function setPrompt(text, key = 'E') {
   el.classList.add('on');
 }
 // what you carry: always on show, so you know your hands are empty too (you carry one thing at a time)
-export function setCarry(item) {
+// ...and how much candy you have collected
+export function setCarry(item, candy = 0) {
   const el = $('carry');
   el.classList.add('on');
   el.classList.toggle('empty', !item);
-  if (!item) el.innerHTML = `<span class="item-icon empty"></span><div><b>Your hands are empty</b><small>Search drawers and cupboards with <kbd>E</kbd></small></div>`;
-  else el.innerHTML = `<span class="item-icon ${item}"></span><div><b>You carry: ${C.ITEMS[item].name}</b><small>${C.ITEMS[item].hint}. <kbd>G</kbd> to drop</small></div>`;
+  const sweets = `<span class="candy-count" title="Walk over sweets to collect them">Candy: ${candy}</span>`;
+  if (!item) el.innerHTML = `<span class="item-icon empty"></span><div><b>Your hands are empty</b><small>Search drawers and cupboards with <kbd>E</kbd></small></div>${sweets}`;
+  else el.innerHTML = `<span class="item-icon ${item}"></span><div><b>You carry: ${C.ITEMS[item].name}</b><small>${C.ITEMS[item].hint}. <kbd>G</kbd> to drop</small></div>${sweets}`;
 }
 
 /* ---------- the side card on the map: the goal, what you carry, the monsters, the news ---------- */
@@ -119,7 +121,7 @@ const STEPS = [
   ['keys', 'Bring three iron keys to the front door'],
   ['escape', 'Run out of the front door'],
 ];
-export function mapSide({ stage, padlocks, keyRooms, carrying, lives, tester, monsters, dawn, clockLabel = 'Dawn in' }) {
+export function mapSide({ stage, padlocks, keyRooms, carrying, candy = 0, lives, tester, monsters, dawn, clockLabel = 'Dawn in' }) {
   const at = STEPS.findIndex(([s]) => s === stage);
   const steps = STEPS.map(([s, text], i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}">${i < at ? '✓ ' : ''}${text}${s === 'keys' && i === at ? ` (${padlocks} of 3)` : ''}</li>`).join('');
   const rooms = keyRooms.length ? `<p><b>Iron keys are in:</b> ${keyRooms.map((k) => L.ROOMS[k].name).join(', ')}</p>` : '';
@@ -129,6 +131,7 @@ export function mapSide({ stage, padlocks, keyRooms, carrying, lives, tester, mo
   return `
     <h3>Your goal</h3><ol class="steps">${steps}</ol>${rooms}
     <p><b>You carry:</b> ${hands}</p>
+    <p><b>Candy:</b> ${candy} <small>(walk over sweets to collect them)</small></p>
     <p><b>Lives:</b> ${tester ? 'never run out (tester)' : `${lives} of ${C.LIVES}`} · <b>${clockLabel}</b> ${dawn}</p>
     <h3>Who is in the house</h3>
     <ul class="who">
@@ -160,7 +163,7 @@ export function setBars(battery, stamina, lightOn, charging) {
   $('battery').classList.toggle('off', !lightOn && !charging);
   $('battery').classList.toggle('charging', !!charging);
   // say what the flashlight is doing, in words
-  const label = lightOn && battery <= 0 ? 'Flashlight dead: press <kbd>F</kbd> to recharge' : charging ? 'Flashlight off, recharging' : 'Flashlight <kbd>F</kbd>';
+  const label = lightOn && battery <= 0 ? 'Dead. Press <kbd>F</kbd> to recharge' : charging ? 'Flashlight off, recharging' : 'Flashlight <kbd>F</kbd>';
   if (label !== batteryLabel) $('battery-label').innerHTML = batteryLabel = label;
   $('stamina-fill').style.width = `${Math.round(stamina * 100)}%`;
   $('stamina').classList.toggle('show', stamina < 0.98);
@@ -169,7 +172,7 @@ export function setBars(battery, stamina, lightOn, charging) {
 /* ---------- the map ---------- */
 export const MONSTER_SIGN = { vampire: '🧛', creature: '⚡', zombie: '🧟' };
 const ROOM_TINT = { c: '#3a352c', g: '#1f2a1c' };
-export function drawMap(canvas, { me, others = [], monsters = null, ghosts = null, stage, keyRooms = [], host = false, loose = [], searched = [], secrets = null }) {
+export function drawMap(canvas, { me, others = [], monsters = null, ghosts = null, stage, keyRooms = [], host = false, loose = [], searched = [], secrets = null, candy = null }) {
   const g = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
@@ -250,6 +253,15 @@ export function drawMap(canvas, { me, others = [], monsters = null, ghosts = nul
       g.font = `700 ${Math.max(9, s * 0.36)}px Georgia, serif`;
       g.fillText({ fuse: 'FUSE', brass: 'BRASS KEY' }[it.item] || 'IRON KEY', X(it.x), Y(it.z) - Math.max(9, s * 0.45));
     }
+  // candy (big screen): tiny pink dots
+  if (candy) {
+    g.fillStyle = '#ff7eb6';
+    for (const c of candy) {
+      g.beginPath();
+      g.arc(X(c.x), Y(c.z), Math.max(2, s * 0.09), 0, Math.PI * 2);
+      g.fill();
+    }
+  }
   // people
   for (const o of others) {
     if (!o.visible) continue;

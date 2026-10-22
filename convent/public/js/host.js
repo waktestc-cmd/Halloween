@@ -8,7 +8,7 @@ import { drawMap } from './ui.js';
 const $ = (id) => document.getElementById(id);
 const key = new URLSearchParams(location.search).get('key') || '';
 const socket = io({ auth: { role: 'host', key }, transports: ['websocket', 'polling'] });
-const S = { phase: 'LOBBY', roster: [], stage: 'power', padlocks: 0, keyRooms: [], t: 0, tAt: 0, finaleAt: 0, tick: null, searched: [] };
+const S = { phase: 'LOBBY', roster: [], stage: 'power', padlocks: 0, keyRooms: [], t: 0, tAt: 0, finaleAt: 0, tick: null, searched: [], candy: new Map() };
 const esc = (s) => String(s).replace(/[<>&]/g, '');
 
 const joinUrl = `${location.protocol}//${location.host}/`;
@@ -25,6 +25,7 @@ function apply(m) {
     S.tAt = performance.now();
   }
   if (m.roster) S.roster = m.roster;
+  if (m.candy) S.candy = new Map(m.candy.map(([id, x, z]) => [id, { x, z }]));
   render();
 }
 function render() {
@@ -63,6 +64,8 @@ socket.on('start', (m) => {
 socket.on('stage', (m) => apply(m));
 socket.on('feed', (f) => addFeed(f.text));
 socket.on('searched', (ids) => (S.searched = ids));
+socket.on('candy+', ([id, x, z]) => S.candy.set(id, { x, z }));
+socket.on('candy-', (id) => S.candy.delete(id));
 socket.on('tick', (m) => {
   S.tick = m;
   S.t = m.t;
@@ -88,7 +91,7 @@ function results(r) {
   S.phase = 'RESULTS';
   $('h-result-title').textContent = r.escaped ? `${r.escaped} of ${r.total} escaped the manor!` : 'Nobody escaped. The manor keeps them all.';
   $('h-awards').innerHTML = r.awards.map((a) => `<li><b>${a.title}</b>${esc(a.name)}<br /><small>${a.why}</small></li>`).join('');
-  $('h-scores').innerHTML = r.list.map((p) => `<li>${esc(p.name)}: ${p.score} ${{ escaped: '(escaped)', dead: '(taken)', kept: '' }[p.state]}</li>`).join('');
+  $('h-scores').innerHTML = r.list.map((p) => `<li>${esc(p.name)}: ${p.score} ${{ escaped: '(escaped)', dead: '(taken)', kept: '' }[p.state]}${p.candy ? ` <small>· ${p.candy} candy</small>` : ''}</li>`).join('');
   render();
 }
 
@@ -116,6 +119,7 @@ function frame() {
     stage: S.stage,
     keyRooms: S.keyRooms,
     searched: S.searched.map((id) => L.PROPS[id]),
+    candy: S.candy.values(),
   });
 }
 frame();

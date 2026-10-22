@@ -844,6 +844,25 @@ export class Sound {
     o.start(now);
     o.stop(now + 4);
   }
+  // a sweet picked up: two quick, soft, bright notes
+  sweet() {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [1046.5, 1568].forEach((f, i) => {
+      const t0 = now + i * 0.075;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.13, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+      o.connect(g).connect(this.sfxBus);
+      o.start(t0);
+      o.stop(t0 + 0.3);
+    });
+  }
   click() {
     const ctx = this.ctx;
     if (!ctx) return;

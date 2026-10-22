@@ -9,6 +9,7 @@ import { Avatar, makeMonster, Ghost, looseItem } from './actors.js';
 import { Sound } from './audio.js';
 import { Dust, Haunts, setDanger } from './atmosphere.js';
 import { propModels } from './models.js';
+import { Candy } from './candy.js';
 import * as UI from './ui.js';
 
 const { $ } = UI;
@@ -68,6 +69,7 @@ camera.add(near);
 
 const sound = new Sound();
 const haunts = new Haunts(scene, sound);
+const candy = new Candy(scene);
 UI.bindSettings();
 UI.onSettings((s) => {
   sound.setVolume({ master: s.master, music: s.music, sfx: s.sfx });
@@ -85,7 +87,7 @@ const S = {
   keyRooms: [],
   searched: new Set(), // hiding places someone has emptied
   doors: {},
-  me: { x: L.SPAWN.x, z: L.SPAWN.z, yaw: L.SPAWN.yaw, pitch: 0, lives: C.LIVES, state: 'alive', carrying: null, hidden: null, safeUntil: 0 },
+  me: { x: L.SPAWN.x, z: L.SPAWN.z, yaw: L.SPAWN.yaw, pitch: 0, lives: C.LIVES, state: 'alive', carrying: null, hidden: null, safeUntil: 0, candy: 0 },
   battery: 1,
   offFor: 0, // seconds the flashlight has been switched off (it recharges after a moment)
   stamina: 1,
@@ -167,9 +169,9 @@ socket.on('start', (m) => {
   clearHouse();
   haunts.reset();
   applyState(m);
-  Object.assign(S.me, { lives: C.LIVES, state: 'alive', hidden: null, carrying: null, pitch: 0 });
+  Object.assign(S.me, { lives: C.LIVES, state: 'alive', hidden: null, carrying: null, pitch: 0, candy: 0 });
   UI.setLives(C.LIVES, S.me.tester);
-  UI.setCarry(null);
+  UI.setCarry(null, 0);
   $('hiding').className = '';
   S.battery = 1;
   S.stamina = 1;
@@ -201,6 +203,19 @@ socket.on('stage', (m) => {
   if (m.stage === 'escape' && was !== 'escape') UI.toast('The front door is open. RUN!', 5000);
 });
 socket.on('feed', (f) => UI.feed(f.text));
+// candy: one comes or goes; the whole list comes with welcome, start and lobby
+socket.on('candy+', (c) => candy.add(c));
+socket.on('candy-', (id) => candy.remove(id));
+socket.on('yum', (m) => {
+  candy.remove(m.id);
+  S.me.candy = m.candy;
+  sound.sweet();
+  UI.setCarry(S.me.carrying, S.me.candy);
+  if (!S.toldCandy) {
+    S.toldCandy = true;
+    UI.toast('Candy! Walk over sweets to collect them. Each one adds to your score.', 4500);
+  }
+});
 socket.on('searched', (ids) => (S.searched = new Set(ids)));
 socket.on('toast', (t) => UI.toast(t));
 socket.on('note', (text) => {
@@ -242,6 +257,7 @@ function applyState(m) {
   if (m.padlocks != null) S.padlocks = m.padlocks;
   if (m.keyRooms) S.keyRooms = m.keyRooms;
   if (m.searched) S.searched = new Set(m.searched);
+  if (m.candy) candy.set(m.candy);
   if (m.finaleAt != null) S.finaleAt = m.finaleAt;
   if (m.grace != null) S.grace = m.grace;
   if (m.t != null) {
@@ -262,7 +278,7 @@ function applyState(m) {
 }
 function applyMe(m, jump) {
   const was = S.me.hidden;
-  Object.assign(S.me, { lives: m.lives, state: m.state, carrying: m.carrying, hidden: m.hidden, safeUntil: m.safeUntil, tester: m.tester, secrets: m.secrets });
+  Object.assign(S.me, { lives: m.lives, state: m.state, carrying: m.carrying, candy: m.candy ?? S.me.candy, hidden: m.hidden, safeUntil: m.safeUntil, tester: m.tester, secrets: m.secrets });
   // a refresh or reconnect carries on with the battery you had
   if (jump && m.battery != null) S.battery = m.battery;
   if (jump || (was != null && m.hidden == null)) {
@@ -271,7 +287,7 @@ function applyMe(m, jump) {
     if (jump) S.me.yaw = m.yaw;
   }
   UI.setLives(S.me.lives, S.me.tester);
-  UI.setCarry(S.me.carrying);
+  UI.setCarry(S.me.carrying, S.me.candy);
   $('hiding').className = m.hidden != null ? `on ${L.PROPS[m.hidden].type}` : '';
   if (m.state === 'dead') {
     $('out-title').textContent = 'The manor keeps you.';
@@ -718,7 +734,7 @@ function showResults(r) {
   $('result-title').textContent = r.escaped ? `${r.escaped} of ${r.total} escaped the manor` : 'Nobody escaped. The manor keeps you all.';
   $('awards').innerHTML = r.awards.map((a) => `<li><b>${a.title}</b>${a.name.replace(/[<>&]/g, '')}<small>${a.why}</small></li>`).join('');
   $('scores').innerHTML = r.list
-    .map((p) => `<tr class="${p.id === S.id ? 'me' : ''}"><td>${p.name.replace(/[<>&]/g, '')}</td><td>${{ escaped: 'Escaped', dead: 'Taken', kept: 'Still inside' }[p.state]}</td><td>${p.score}</td></tr>`)
+    .map((p) => `<tr class="${p.id === S.id ? 'me' : ''}"><td>${p.name.replace(/[<>&]/g, '')}</td><td>${{ escaped: 'Escaped', dead: 'Taken', kept: 'Still inside' }[p.state]}</td><td>${p.candy || 0}</td><td>${p.score}</td></tr>`)
     .join('');
   UI.show('panel-results');
 }
@@ -889,6 +905,7 @@ function frame() {
   });
   for (const o of S.previews || []) o.update(dt, camera.position.x, camera.position.z);
   for (const l of S.loose.values()) l.mesh.rotation.y += dt * 2;
+  candy.update(dt, t);
 
   if (sound.ctx && playing) {
     sound.listen(camera.position.x, camera.position.z, camera.rotation.y);
@@ -991,6 +1008,7 @@ function frame() {
         padlocks: S.padlocks,
         keyRooms: S.keyRooms,
         carrying: me.carrying,
+        candy: me.candy,
         lives: me.lives,
         tester: me.tester,
         monsters: [...S.monsters.values()],
@@ -1016,6 +1034,7 @@ if (DEBUG) {
     camera,
     renderer,
     haunts,
+    candy,
     socket,
     L,
     get aim() {

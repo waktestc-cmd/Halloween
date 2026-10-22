@@ -74,6 +74,8 @@ function route(from, to, ghost) {
 }
 const WALK_TILES = [];
 for (let r = 0; r < L.H; r++) for (let c = 0; c < L.W; c++) if (walkable(c, r) && L.at(c, r) !== '+') WALK_TILES.push([c, r]);
+// where candy can lie: any floor tile but the guest bedrooms (where everyone wakes up)
+const CANDY_TILES = WALK_TILES.filter(([c, r]) => L.at(c, r) !== 'd');
 // a good spot to put something on the floor: on a floor tile, clear of the walls, doorways and furniture
 function clearSpot(x, z) {
   for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) {
@@ -112,6 +114,9 @@ export class Game {
     this.hintStage = null;
     this.hidden = new Map(); // prop id -> player id
     this.keyRooms = [];
+    this.candy = new Map(); // id -> { id, x, z }: sweets on the floor
+    this.candyN = 0;
+    this.candyAt = 0;
     this.result = null;
     this.level = this.level || C.DIFFICULTY.normal;
     for (const p of this.players.values()) this.freshPlayer(p);
@@ -132,7 +137,7 @@ export class Game {
       hidden: null,
       carrying: null,
       battery: 1, // the browser runs the flashlight; we keep its charge so a refresh doesn't refill it
-      stats: { caught: 0, found: 0, placed: 0, escapedAt: 0, closest: 99 },
+      stats: { caught: 0, found: 0, placed: 0, candy: 0, escapedAt: 0, closest: 99 },
     });
   }
 
@@ -200,6 +205,7 @@ export class Game {
       me.moving = !!m.moving;
       me.light = !!m.light;
       if (me.moving) this.noise(me, me.run ? C.NOISE.run : C.NOISE.walk);
+      this.eatCandy(me);
       if (me.z > L.ESCAPE_Z && this.stage === 'escape') this.escape(me);
     });
     socket.on('door', (m = {}) => {
@@ -287,7 +293,7 @@ export class Game {
     });
     if (DEV) {
       // test hooks: where things are hidden, and stepping anywhere
-      socket.on('dev:where', () => socket.emit('dev:where', { loose: this.loose, boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
+      socket.on('dev:where', () => socket.emit('dev:where', { loose: this.loose, candy: [...this.candy.values()], boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
       socket.on('dev:tp', (m = {}) => me && Object.assign(me, { x: Number(m.x), z: Number(m.z) }));
       socket.on('dev:freeze', (on) => (this.frozen = !!on));
       // jump the clock (seconds since the start); an open front door keeps the time it had left
@@ -348,6 +354,8 @@ export class Game {
     this.phase = 'PLAYING';
     this.t = 0;
     this.hideItems();
+    for (let i = 0; i < C.CANDY.start; i++) this.addCandy(false);
+    this.candyAt = C.CANDY.every;
     const n = [...this.players.values()].filter((p) => p.online).length || 1;
     // the Count, the Doctor's Monster and a zombie always, then more zombies as more people join
     const count = Math.min(C.MONSTER.max, Math.ceil(n / this.level.perPlayers) + 2);
@@ -572,7 +580,7 @@ export class Game {
       name: p.name,
       state: p.state === 'alive' ? 'kept' : p.state,
       lives: p.lives,
-      score: Math.max(0, (p.state === 'escaped' ? 100 : 0) + p.stats.placed * 50 + p.stats.found * 10 - p.stats.caught * 10 + Math.max(0, p.lives) * 5),
+      score: Math.max(0, (p.state === 'escaped' ? 100 : 0) + p.stats.placed * 50 + p.stats.found * 10 + p.stats.candy * C.CANDY.points - p.stats.caught * 10 + Math.max(0, p.lives) * 5),
       ...p.stats,
     }));
     list.sort((a, b) => b.score - a.score);
@@ -585,6 +593,7 @@ export class Game {
     best((p) => p.caught === 0, (a, b) => b.score - a.score, 'Never caught', 'Slipped past every monster');
     best((p) => p.placed > 0, (a, b) => b.placed - a.placed, 'Locksmith', 'Fixed the most locks');
     best((p) => p.found > 0, (a, b) => b.found - a.found, 'Finder', 'Found the most hidden things');
+    best((p) => p.candy > 0, (a, b) => b.candy - a.candy, 'Sweet tooth', 'Collected the most candy');
     best((p) => p.caught > 0, (a, b) => b.caught - a.caught, 'Monster magnet', 'Caught the most times');
     best((p) => p.closest < 2.5, (a, b) => a.closest - b.closest, 'Closest call', 'Felt its breath');
     this.result = { escaped, total: list.length, list, awards, won: escaped > 0 };
@@ -904,11 +913,46 @@ export class Game {
       if (this.t > this.hauntAt) this.haunt();
       this.hint();
     }
+    // a new sweet turns up now and then, so there are always some to find
+    if (this.t >= this.candyAt) {
+      this.candyAt = this.t + C.CANDY.every;
+      if (this.candy.size < C.CANDY.max) this.addCandy(true);
+    }
     if (this.tickN % SEND_EVERY === 0) this.snapshot();
     // once the front door is open the escape always gets its full time, even past dawn
     if (this.stage === 'escape') {
       if (this.t - this.finaleAt > C.DURATION.finale) this.end();
     } else if (this.t > C.DURATION.night) this.end();
+  }
+
+  /* ---------- candy ---------- */
+  // a sweet on a clear bit of floor, apart from the others and not right under anyone's nose
+  addCandy(tell) {
+    const people = [...this.players.values()].filter((p) => p.state === 'alive');
+    for (let i = 0; i < 30; i++) {
+      const [c, r] = pick(CANDY_TILES);
+      const [cx, cz] = L.centre(c, r);
+      const x = cx + (Math.random() - 0.5) * 1.2;
+      const z = cz + (Math.random() - 0.5) * 1.2;
+      if (!clearSpot(x, z)) continue;
+      if ([...this.candy.values()].some((o) => Math.hypot(o.x - x, o.z - z) < 1.5)) continue;
+      if (tell && people.some((p) => Math.hypot(p.x - x, p.z - z) < 3)) continue;
+      const it = { id: ++this.candyN, x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
+      this.candy.set(it.id, it);
+      if (tell) this.io.to('players').to('hosts').emit('candy+', [it.id, it.x, it.z]);
+      return it;
+    }
+    return null;
+  }
+  // walking over a sweet picks it up
+  eatCandy(me) {
+    for (const it of this.candy.values()) {
+      if (Math.hypot(it.x - me.x, it.z - me.z) > C.CANDY.reach) continue;
+      this.candy.delete(it.id);
+      me.stats.candy++;
+      this.io.to('players').to('hosts').emit('candy-', it.id);
+      me.socket.emit('yum', { id: it.id, candy: me.stats.candy });
+    }
   }
 
   // an emptied hiding place: everyone's map marks it, so nobody searches it twice
@@ -962,6 +1006,7 @@ export class Game {
       doors: this.doors,
       keyRooms: this.stage === 'keys' || this.stage === 'escape' ? this.keyRooms : [],
       searched: [...this.searched],
+      candy: [...this.candy.values()].map((it) => [it.id, it.x, it.z]),
       roster: this.roster(),
       feed: this.feed.slice(-8),
       finaleAt: this.finaleAt,
@@ -974,7 +1019,7 @@ export class Game {
     return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
   }
   mine(p) {
-    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, battery: Math.round(p.battery * 1000) / 1000, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };
+    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, battery: Math.round(p.battery * 1000) / 1000, candy: p.stats.candy, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };
   }
   broadcastLobby() {
     this.io.to('players').to('hosts').emit('roster', this.roster());

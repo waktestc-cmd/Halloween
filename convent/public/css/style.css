@@ -279,6 +279,26 @@ body.playing #hud {
   border-color: var(--line);
   opacity: 0.85;
 }
+/* the candy you have collected, at the right of the card */
+.candy-count {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 6px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+  color: #ffd2e6;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.candy-count::before {
+  content: '';
+  width: 16px;
+  height: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff 0, #ff7eb6 35%, #c0306a 100%);
+  box-shadow: -7px 0 0 -3px #ff7eb6, 7px 0 0 -3px #ff7eb6, 0 0 8px rgba(255, 126, 182, 0.7);
+}
 #lives .tester {
   margin-left: 10px;
   padding: 2px 8px;

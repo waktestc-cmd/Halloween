@@ -141,6 +141,27 @@ try {
   b.emit('pickup', { id: it.id });
   assert.equal((await until(b, 'me', (m) => m.carrying != null)).carrying, 'fuse', 'Bob picks the fuse up again');
   console.log('ok: G drops what you carry, and it can be picked up');
+
+  // candy: scattered on clear floor (never the guest bedrooms or a doorway); walking onto one picks it up
+  b.emit('dev:where');
+  const sweets = (await once(b, 'dev:where')).candy;
+  assert.ok(sweets.length >= 30, 'plenty of candy at the start');
+  for (const c of sweets) {
+    const [cc, cr] = L.tileOf(c.x, c.z);
+    assert.ok(L.floorTile(cc, cr) && !['d', '+'].includes(L.at(cc, cr)), 'candy lies on floor outside the bedrooms and doorways');
+  }
+  const sweet = sweets[0];
+  const gone = until(host, 'candy-', (id) => id === sweet.id);
+  const yum = until(b, 'yum', (m) => m.id === sweet.id);
+  b.emit('dev:tp', { x: sweet.x + 2, z: sweet.z });
+  await sleep(60);
+  b.emit('state', { x: sweet.x + 0.4, z: sweet.z, yaw: 0, moving: true });
+  const ate = await yum;
+  assert.ok(ate.candy >= 1, 'the candy count goes up');
+  await gone;
+  b.emit('dev:where');
+  assert.ok(!(await once(b, 'dev:where')).candy.some((c) => c.id === sweet.id), 'the candy is gone from the floor');
+  console.log('ok: walking onto candy picks it up');
   b.emit('dev:tp', { x: L.FUSEBOX.x, z: L.FUSEBOX.z + 0.8 });
   await sleep(60);
   b.emit('use', { what: 'fusebox' });
