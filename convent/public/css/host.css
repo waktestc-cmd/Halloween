@@ -111,13 +111,19 @@ body.host.lobby header {
 .mapwrap {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 #h-map {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+.mapwrap .legend {
+  text-align: center;
 }
 #h-game aside {
-  width: 420px;
+  width: 520px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -125,19 +131,38 @@ body.host.lobby header {
 }
 #h-steps {
   margin: 0;
-  padding: 0 0 0 1.3em;
-  font-size: 1.1em;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  font-size: 0.85em;
+  counter-reset: step;
 }
 #h-steps li {
   color: var(--dim);
-  margin: 4px 0;
+  border-top: 3px solid rgba(255, 255, 255, 0.12);
+  padding-top: 4px;
+  counter-increment: step;
+}
+#h-steps li::before {
+  content: counter(step) '. ';
+}
+#h-steps li.now {
+  border-color: var(--gold);
+  font-weight: 700;
+}
+#h-steps li.done {
+  border-color: #7fbf7f;
 }
 #h-steps li.now {
   color: var(--gold);
 }
 #h-steps li.done {
   color: #7fbf7f;
-  text-decoration: line-through;
+}
+.mapwrap .legend {
+  margin: 4px 0 0;
 }
 .legend {
   color: var(--dim);
@@ -153,33 +178,205 @@ body.host.lobby header {
   vertical-align: middle;
 }
 #h-feed {
-  flex: 1;
+  flex: 0 0 auto;
+  height: 6.6em;
   overflow: hidden;
-  font-size: 0.95em;
+  font-size: 0.9em;
+  color: var(--dim);
+  margin-top: 8px;
 }
 #h-feed div {
-  padding: 5px 10px;
-  margin-bottom: 5px;
+  padding: 4px 10px;
+  margin-bottom: 4px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
 }
+#h-feed div:first-child {
+  color: var(--ink);
+}
+/* the host controls: quiet until needed, and the risky ones turn red and ask again */
+#h-controls {
+  display: flex;
+  gap: 10px;
+}
+#h-controls button {
+  background: transparent;
+  color: var(--ash);
+  border: 1px solid rgba(237, 227, 207, 0.25);
+  border-radius: 6px;
+  font: 700 16px var(--ui);
+  padding: 10px 16px;
+  cursor: pointer;
+}
+#h-controls button:hover {
+  color: var(--bone);
+  border-color: var(--bone);
+}
+#h-controls button.armed {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+#h-controls button[aria-pressed='true'] {
+  color: var(--ember);
+  border-color: var(--ember);
+}
+body:not([data-phase='PLAYING']) #h-hide,
+body:not([data-phase='PLAYING']) #h-finish {
+  display: none;
+}
+/* the tally: big numbers anyone on the call can read */
+#h-tally {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+#h-tally div {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 6px 4px 8px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 0.8em;
+}
+#h-tally b {
+  display: block;
+  font-size: 1.9em;
+  line-height: 1.1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+#h-tally .out b {
+  color: #7fbf7f;
+}
+#h-tally .gone b {
+  color: #d07a6a;
+}
+#h-tally .sweet b {
+  color: #ff9ac8;
+}
+/* everyone in the house: costume, name, lives, where they are */
 #h-players {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 12px;
-  font-size: 0.85em;
-  max-height: 34vh;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 4px;
+}
+#h-players li {
+  display: grid;
+  grid-template-columns: 1.6em 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+#h-players .who {
+  grid-row: span 2;
+  width: 1.6em;
+  height: 1.6em;
+  color: var(--ember);
+}
+#h-players .who svg {
+  width: 100%;
+  height: 100%;
+}
+#h-players .name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#h-players .lives {
+  color: #e0574a;
+  letter-spacing: 2px;
+  font-size: 0.8em;
+}
+#h-players .lives i {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.15);
+}
+#h-players .where {
+  grid-column: 2 / span 2;
+  color: var(--dim);
+  font-size: 0.8em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#h-players em {
+  font-style: normal;
+  color: var(--gold);
+}
+#h-players .c {
+  color: #ff9ac8;
+}
+#h-players .hiding .where {
+  color: #9fc3ff;
+}
+#h-players .out .where {
+  color: #7fbf7f;
+  font-weight: 700;
+}
+#h-players .out .who {
+  color: #7fbf7f;
 }
 #h-players .gone {
-  opacity: 0.4;
-  text-decoration: line-through;
+  opacity: 0.45;
 }
-#h-players .out {
-  color: #7fbf7f;
+#h-players .gone .who {
+  color: var(--dim);
+}
+#h-players .away {
+  opacity: 0.6;
+}
+/* a full house: two columns, a little tighter */
+#h-players.many {
+  grid-template-columns: 1fr 1fr;
+}
+/* a full house: two columns, one line each (costume, name, where, lives) */
+#h-players.many li {
+  display: flex;
+  gap: 6px;
+  padding: 3px 8px;
+}
+#h-players.many .who {
+  flex: none;
+  width: 1.3em;
+  height: 1.3em;
+}
+#h-players.many .name {
+  flex: none;
+  max-width: 55%;
+}
+#h-players.many .where {
+  flex: 1;
+  min-width: 0;
+}
+#h-players.many .lives {
+  flex: none;
+  order: 4;
+}
+#h-monsters {
+  font-size: 0.85em;
+  color: var(--dim);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+}
+#h-monsters .note {
+  font-style: italic;
+}
+.again-note {
+  color: var(--dim);
+  font-size: 0.9em;
 }
 #h-results {
   flex-direction: column;
@@ -206,8 +403,17 @@ body.host.lobby header {
   font-weight: normal;
 }
 #h-scores {
-  columns: 2;
-  width: min(900px, 90vw);
+  columns: 3;
+  width: min(1100px, 92vw);
+  font-size: 0.9em;
+  margin: 8px 0;
+}
+.host main > #h-results.on {
+  overflow-y: auto;
+  gap: 6px;
+}
+#h-results h2 {
+  margin: 4px 0;
 }
 #h-level {
   display: flex;

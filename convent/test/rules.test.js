@@ -47,6 +47,25 @@ try {
   console.log('ok: the costume reaches the roster');
   host.emit('start');
   await once(a, 'start');
+  // the big screen hears where everyone is once a second
+  const stats = await once(host, 'stats', 3000);
+  assert.deepEqual(stats.players.map((p) => p.id).sort(), roster.map((p) => p.id).sort(), 'every player is on the big screen');
+  assert.ok(stats.players.every((p) => L.ROOMS[p.room]), 'and each is in a named room');
+  assert.ok(stats.monsters.length >= 3, 'with the monsters');
+  // the host can reset in the middle of a night, and end one early
+  const lobby = once(a, 'lobby');
+  host.emit('reset');
+  assert.equal((await lobby).phase, 'LOBBY', 'reset mid-game sends everyone to the lobby');
+  host.emit('start');
+  await once(a, 'start');
+  const early = once(a, 'end');
+  host.emit('finish');
+  assert.equal((await early).total, 2, 'ending the night early gives everyone the results');
+  host.emit('reset');
+  await once(a, 'lobby');
+  console.log('ok: the host sees everyone, resets mid-game and ends the night early');
+  host.emit('start');
+  await once(a, 'start');
   b.emit('dev:freeze', true);
 
   // 1. caught three times

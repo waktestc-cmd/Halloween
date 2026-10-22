@@ -38,6 +38,8 @@ const clean = (s, n) =>
 
 /* ---------- route finding on the tile grid ---------- */
 const key = (c, r) => c + ',' + r;
+// the score shown live on the big screen and in the results
+const score = (p) => Math.max(0, (p.state === 'escaped' ? 100 : 0) + p.stats.placed * 50 + p.stats.found * 10 + p.stats.candy * C.CANDY.points - p.stats.caught * 10 + Math.max(0, p.lives) * 5);
 function walkable(c, r, ghost) {
   if (!L.floorTile(c, r)) return false;
   if (!ghost && L.BLOCKED.has(key(c, r))) return false;
@@ -152,6 +154,9 @@ export class Game {
       this.reset();
       this.io.to('players').to('hosts').emit('lobby', this.publicState());
     });
+    // the host can call dawn early: everyone gets the results as they stand
+    socket.on('finish', () => this.end());
+    if (this.phase === 'PLAYING') socket.emit('stats', this.hostStats());
     socket.on('disconnect', () => this.hosts.delete(socket));
   }
 
@@ -601,7 +606,7 @@ export class Game {
       name: p.name,
       state: p.state === 'alive' ? 'kept' : p.state,
       lives: p.lives,
-      score: Math.max(0, (p.state === 'escaped' ? 100 : 0) + p.stats.placed * 50 + p.stats.found * 10 + p.stats.candy * C.CANDY.points - p.stats.caught * 10 + Math.max(0, p.lives) * 5),
+      score: score(p),
       ...p.stats,
     }));
     list.sort((a, b) => b.score - a.score);
@@ -978,6 +983,7 @@ export class Game {
       if (this.candy.size < C.CANDY.max) this.addCandy(true);
     }
     if (this.tickN % SEND_EVERY === 0) this.snapshot();
+    if (this.tickN % 20 === 0) this.io.to('hosts').emit('stats', this.hostStats());
     // once the front door is open the escape always gets its full time, even past dawn
     if (this.stage === 'escape') {
       if (this.t - this.finaleAt > C.DURATION.finale) this.end();
@@ -1072,6 +1078,15 @@ export class Game {
       result: this.result,
       grace: GRACE,
       dev: DEV,
+    };
+  }
+  // for the big screen only: where everyone is and how they are doing, once a second
+  hostStats() {
+    return {
+      players: [...this.players.values()].map((p) => ({ id: p.id, room: L.roomAt(p.x, p.z), hidden: p.hidden != null, candy: p.stats.candy, found: p.stats.found, caught: p.stats.caught, score: score(p) })),
+      monsters: this.monsters.map((n) => ({ kind: n.kind, state: this.t < n.stunUntil ? 'flinch' : n.state, room: L.roomAt(n.x, n.z) })),
+      ghosts: this.ghosts.filter((g) => g.alive).length,
+      candy: this.candy.size,
     };
   }
   roster() {

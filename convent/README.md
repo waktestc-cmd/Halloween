@@ -76,6 +76,12 @@ node tools/bots.js 20 --url http://localhost:3000   # fake players for trying it
 - The big screen's lobby is a dark house: a window lights up, with their costume and name, for each guest who comes in.
 - The host picks Easy, Normal or Scary and presses **Open the house**. The house laughs, on the big screen and every laptop.
 - During the game the big screen shows the whole map, including where the monsters and ghosts are (the players can't see that), progress, and news as it happens.
+- It also lists everyone playing: costume, name, lives, the room they are in (or hiding, escaped, taken), what they carry and their candy, with totals along the top. This is the screen to share in Zoom.
+- Buttons along the top, during the game:
+  - **Hide monsters** takes the monsters and ghosts off the shared screen, so people watching on Zoom can't use it to cheat.
+  - **End the night** goes straight to the results.
+  - **Reset game** sends everyone back to the lobby.
+  - The last two ask "Sure?" first. Click again within 4 seconds to confirm.
 
 ## Putting it online (Google Cloud Run)
 

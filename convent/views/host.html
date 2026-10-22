@@ -15,6 +15,12 @@
   <header>
     <h1>{{TITLE}}</h1>
     <div id="h-timer"></div>
+    <!-- host controls: always there once the night has begun; the risky ones ask twice -->
+    <div id="h-controls">
+      <button id="h-hide" type="button" aria-pressed="false">Hide monsters</button>
+      <button id="h-finish" type="button" data-confirm="Sure? End now">End the night</button>
+      <button id="h-reset" type="button" data-confirm="Sure? Reset now">Reset game</button>
+    </div>
   </header>
   <main>
     <!-- the lobby, in the style of Pumpkin Smash: the dark house, a window lights up for each guest -->
@@ -34,23 +40,28 @@
       </div>
     </section>
     <section id="h-game">
-      <div class="mapwrap"><canvas id="h-map"></canvas></div>
+      <div class="mapwrap">
+        <canvas id="h-map"></canvas>
+        <div id="h-feed"></div>
+        <p class="legend">🧛 the Count · ⚡ the Doctor's Monster · 🧟 zombies · ⚪ ghosts · <span class="candy-dot"></span> candy</p>
+      </div>
       <aside>
         <ol id="h-steps">
-          <li data-s="power">Fix the fuse box</li>
-          <li data-s="desk">Open the Count's desk</li>
-          <li data-s="keys">Unlock the front door <span id="h-locks"></span></li>
+          <li data-s="power">Fix the fuse</li>
+          <li data-s="desk">Open the desk</li>
+          <li data-s="keys">Front door <span id="h-locks"></span></li>
           <li data-s="escape">Escape!</li>
         </ol>
-        <p class="legend">🧛 the Count · ⚡ the Doctor's Monster · 🧟 zombies · ⚪ ghosts · <span class="candy-dot"></span> candy</p>
-        <div id="h-feed"></div>
+        <div id="h-tally"></div>
         <ul id="h-players"></ul>
+        <div id="h-monsters"></div>
       </aside>
     </section>
     <section id="h-results">
       <h2 id="h-result-title"></h2>
       <ul id="h-awards"></ul>
       <ol id="h-scores"></ol>
+      <p class="again-note">Everyone stays connected: "Back to the lobby" gets the house ready for another round.</p>
       <button id="h-again" class="big" type="button">Back to the lobby</button>
     </section>
   </main>
