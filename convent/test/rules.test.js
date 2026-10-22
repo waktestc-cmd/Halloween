@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 import { io } from 'socket.io-client';
 import assert from 'assert';
 import * as L from '../shared/level.js';
+import * as C from '../shared/config.js';
 
 const PORT = 3300 + Math.floor(Math.random() * 500);
 const URL = `http://localhost:${PORT}`;
@@ -136,8 +137,15 @@ try {
     b.emit('use', { what: 'front' });
     await stage();
   }
+  // dawn comes while the door is open: the escape still gets its two minutes
+  let ended = false;
+  host.once('end', () => (ended = true));
+  b.emit('dev:time', { t: C.DURATION.night + 5 });
+  await sleep(400);
+  assert.ok(!ended, 'dawn does not end the game during the escape');
   b.emit('dev:where');
   await once(b, 'dev:where');
+  console.log('ok: dawn waits while the front door is open');
   // out through the door
   const end = once(host, 'end', 8000);
   b.emit('dev:tp', { x: fx, z: fz - 1 });

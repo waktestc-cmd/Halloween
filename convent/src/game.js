@@ -272,6 +272,13 @@ export class Game {
       socket.on('dev:where', () => socket.emit('dev:where', { boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
       socket.on('dev:tp', (m = {}) => me && Object.assign(me, { x: Number(m.x), z: Number(m.z) }));
       socket.on('dev:freeze', (on) => (this.frozen = !!on));
+      // jump the clock (seconds since the start); an open front door keeps the time it had left
+      socket.on('dev:time', (m = {}) => {
+        const t = Number(m.t);
+        if (!Number.isFinite(t)) return;
+        if (this.stage === 'escape') this.finaleAt += t - this.t;
+        this.t = t;
+      });
       // put something in your hands (or empty them), to try a rule out of order
       socket.on('dev:give', (m = {}) => {
         if (!me) return;
@@ -853,8 +860,10 @@ export class Game {
       this.hint();
     }
     if (this.tickN % SEND_EVERY === 0) this.snapshot();
-    if (this.stage === 'escape' && this.t - this.finaleAt > C.DURATION.finale) this.end();
-    if (this.t > C.DURATION.night) this.end();
+    // once the front door is open the escape always gets its full time, even past dawn
+    if (this.stage === 'escape') {
+      if (this.t - this.finaleAt > C.DURATION.finale) this.end();
+    } else if (this.t > C.DURATION.night) this.end();
   }
 
   // an emptied hiding place: everyone's map marks it, so nobody searches it twice

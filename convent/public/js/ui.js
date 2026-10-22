@@ -119,7 +119,7 @@ const STEPS = [
   ['keys', 'Bring three iron keys to the front door'],
   ['escape', 'Run out of the front door'],
 ];
-export function mapSide({ stage, padlocks, keyRooms, carrying, lives, tester, monsters, dawn }) {
+export function mapSide({ stage, padlocks, keyRooms, carrying, lives, tester, monsters, dawn, clockLabel = 'Dawn in' }) {
   const at = STEPS.findIndex(([s]) => s === stage);
   const steps = STEPS.map(([s, text], i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}">${i < at ? '✓ ' : ''}${text}${s === 'keys' && i === at ? ` (${padlocks} of 3)` : ''}</li>`).join('');
   const rooms = keyRooms.length ? `<p><b>Iron keys are in:</b> ${keyRooms.map((k) => L.ROOMS[k].name).join(', ')}</p>` : '';
@@ -129,7 +129,7 @@ export function mapSide({ stage, padlocks, keyRooms, carrying, lives, tester, mo
   return `
     <h3>Your goal</h3><ol class="steps">${steps}</ol>${rooms}
     <p><b>You carry:</b> ${hands}</p>
-    <p><b>Lives:</b> ${tester ? 'never run out (tester)' : `${lives} of ${C.LIVES}`} · <b>Dawn in</b> ${dawn}</p>
+    <p><b>Lives:</b> ${tester ? 'never run out (tester)' : `${lives} of ${C.LIVES}`} · <b>${clockLabel}</b> ${dawn}</p>
     <h3>Who is in the house</h3>
     <ul class="who">
       <li>🧛 <b>The Count</b>: you hear him breathe. Shine your light in his face and he backs off.</li>

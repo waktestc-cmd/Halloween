@@ -965,7 +965,9 @@ function frame() {
       });
     if (now - (S.sideAt || 0) > 500) {
       S.sideAt = now;
-      const left = Math.max(0, Math.ceil(C.DURATION.night - serverNow()));
+      // once the front door is open, the clock that matters is the door's, not dawn
+      const escaping = S.stage === 'escape';
+      const left = Math.max(0, Math.ceil(escaping ? C.DURATION.finale - (serverNow() - S.finaleAt) : C.DURATION.night - serverNow()));
       $('map-side').innerHTML = UI.mapSide({
         stage: S.stage,
         padlocks: S.padlocks,
@@ -975,6 +977,7 @@ function frame() {
         tester: me.tester,
         monsters: [...S.monsters.values()],
         dawn: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`,
+        clockLabel: escaping ? 'Door closes in' : 'Dawn in',
       });
     }
     const room = L.roomAt(me.x, me.z);
