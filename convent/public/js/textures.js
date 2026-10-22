@@ -174,6 +174,145 @@ function clothCanvas(color) {
     stains(g, w, h, 3, 'rgba(60,50,30,0.25)');
   });
 }
+// an old torn cobweb on a transparent sheet: the hub low in the middle, spokes out to every edge,
+// sagging spiral threads between them, dust caught near the hub
+function cobwebCanvas() {
+  seed = 31031;
+  return canvas(512, 512, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const spokes = [];
+    for (let a = 0; a < Math.PI * 2; a += 0.26 + rnd() * 0.22) spokes.push(a);
+    g.strokeStyle = 'rgba(235,235,230,0.85)';
+    g.lineWidth = 1.6;
+    for (const a of spokes) {
+      g.beginPath();
+      g.moveTo(cx, cy);
+      g.lineTo(cx + Math.cos(a) * w, cy + Math.sin(a) * h);
+      g.stroke();
+    }
+    // the spiral, sagging between spokes, torn here and there
+    g.lineWidth = 1.1;
+    for (let r = 14; r < w * 0.75; r *= 1.16 + rnd() * 0.05) {
+      for (let i = 0; i < spokes.length; i++) {
+        if (rnd() < 0.12) continue;
+        const a0 = spokes[i];
+        const a1 = spokes[(i + 1) % spokes.length] + (i === spokes.length - 1 ? Math.PI * 2 : 0);
+        const x0 = cx + Math.cos(a0) * r;
+        const y0 = cy + Math.sin(a0) * r;
+        const x1 = cx + Math.cos(a1) * r;
+        const y1 = cy + Math.sin(a1) * r;
+        const am = (a0 + a1) / 2;
+        const sag = r * 0.82;
+        g.strokeStyle = `rgba(230,230,225,${0.45 + rnd() * 0.35})`;
+        g.beginPath();
+        g.moveTo(x0, y0);
+        g.quadraticCurveTo(cx + Math.cos(am) * sag, cy + Math.sin(am) * sag + r * 0.04, x1, y1);
+        g.stroke();
+      }
+    }
+    // loose strands hanging down, and dust round the hub
+    for (let i = 0; i < 7; i++) {
+      const x = rnd() * w;
+      const y = rnd() * h * 0.6;
+      g.strokeStyle = 'rgba(220,220,215,0.5)';
+      g.beginPath();
+      g.moveTo(x, y);
+      g.quadraticCurveTo(x + (rnd() - 0.5) * 30, y + 60, x + (rnd() - 0.5) * 20, y + 90 + rnd() * 80);
+      g.stroke();
+    }
+    const dust = g.createRadialGradient(cx, cy, 0, cx, cy, w * 0.3);
+    dust.addColorStop(0, 'rgba(200,195,185,0.35)');
+    dust.addColorStop(1, 'rgba(200,195,185,0)');
+    g.fillStyle = dust;
+    g.fillRect(0, 0, w, h);
+  });
+}
+
+// the night sky over the graveyard: a dark violet dome with stars, the full moon and its halo
+let skySheets;
+export function skyTextures() {
+  if (skySheets) return skySheets;
+  seed = 3110;
+  const sky = canvas(2048, 512, (g, w, h) => {
+    const grd = g.createLinearGradient(0, 0, 0, h);
+    grd.addColorStop(0, '#020206');
+    grd.addColorStop(0.55, '#080612');
+    grd.addColorStop(0.85, '#120e22');
+    grd.addColorStop(1, '#181228');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, w, h);
+    // stars: the sheet is stretched round the dome, so each is a few pixels wide and one high
+    for (let i = 0; i < 220; i++) {
+      const y = rnd() * h * 0.75;
+      const b = 0.25 + rnd() * 0.6;
+      g.fillStyle = `rgba(220,215,255,${b})`;
+      g.fillRect(rnd() * w, y, 2, 1);
+    }
+    // thin clouds drifting low
+    for (let i = 0; i < 22; i++) {
+      const x = rnd() * w;
+      const y = h * (0.6 + rnd() * 0.32);
+      const c = g.createRadialGradient(x, y, 0, x, y, 120);
+      c.addColorStop(0, 'rgba(60,50,90,0.3)');
+      c.addColorStop(1, 'rgba(60,50,90,0)');
+      g.save();
+      g.translate(x, y);
+      g.scale(2.5, 0.3);
+      g.translate(-x, -y);
+      g.fillStyle = c;
+      g.fillRect(x - 120, y - 120, 240, 240);
+      g.restore();
+    }
+  });
+  const moon = canvas(256, 256, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    const r = w * 0.46;
+    const disc = g.createRadialGradient(w * 0.46, h * 0.44, r * 0.1, w / 2, h / 2, r);
+    disc.addColorStop(0, '#fffdf2');
+    disc.addColorStop(0.85, '#e6e2d6');
+    disc.addColorStop(1, '#c8c2c8');
+    g.fillStyle = disc;
+    g.beginPath();
+    g.arc(w / 2, h / 2, r, 0, Math.PI * 2);
+    g.fill();
+    g.save();
+    g.clip();
+    // the dark seas and a few craters
+    for (const [x, y, rr, a] of [[0.38, 0.36, 0.16, 0.28], [0.58, 0.32, 0.12, 0.22], [0.62, 0.55, 0.15, 0.25], [0.42, 0.6, 0.1, 0.2], [0.3, 0.52, 0.08, 0.18]]) {
+      const m = g.createRadialGradient(x * w, y * h, 0, x * w, y * h, rr * w);
+      m.addColorStop(0, `rgba(120,118,130,${a})`);
+      m.addColorStop(1, 'rgba(120,118,130,0)');
+      g.fillStyle = m;
+      g.fillRect(0, 0, w, h);
+    }
+    for (let i = 0; i < 26; i++) {
+      g.strokeStyle = 'rgba(130,125,135,0.25)';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.arc(w * (0.2 + rnd() * 0.6), h * (0.2 + rnd() * 0.6), 2 + rnd() * 7, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.restore();
+  });
+  const halo = canvas(128, 128, (g, w, h) => {
+    const grd = g.createRadialGradient(w / 2, h / 2, w * 0.12, w / 2, h / 2, w / 2);
+    grd.addColorStop(0, 'rgba(200,190,255,0.6)');
+    grd.addColorStop(0.35, 'rgba(140,120,220,0.18)');
+    grd.addColorStop(1, 'rgba(100,80,180,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, w, h);
+  });
+  const t = (c) => {
+    const x = new THREE.CanvasTexture(c);
+    x.colorSpace = THREE.SRGBColorSpace;
+    return x;
+  };
+  skySheets = { sky: t(sky), moon: t(moon), halo: t(halo) };
+  return skySheets;
+}
+
 // gloomy portraits in gilt frames: dark figures with pale faces, nothing recognisable
 export function portraitCanvas(i, haunted = false) {
   seed = 99 + i * 31;
@@ -289,6 +428,8 @@ export function makeMaterials(maxAniso) {
     copper: std({ color: 0xb06a3a, metalness: 0.6, roughness: 0.4 }),
     pumpkin: std({ color: 0xb05a18, roughness: 0.7, emissive: 0x401800, emissiveIntensity: 0.5 }),
     flame: new THREE.MeshBasicMaterial({ color: 0xffb04a }),
+    cobweb: std({ map: tex(cobwebCanvas()), color: 0xc8c4bc, roughness: 1, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }),
+    spider: std({ color: 0x0d0b0c, roughness: 0.45 }),
   };
   for (const v of Object.values(m)) for (const k of ['map', 'bumpMap']) if (v[k]) v[k].anisotropy = Math.min(8, maxAniso);
   return m;
