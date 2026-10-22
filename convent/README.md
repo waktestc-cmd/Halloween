@@ -11,18 +11,27 @@ before dawn. (It began as *Escape the Convent*; the folder keeps that name.)
 | --- | --- |
 | **W A S D** or **arrow keys** | Walk (left and right arrows turn you, unless you switch that off in Settings) |
 | **Mouse** | Look around (click the screen once to start) |
-| **Shift** | Run. It's faster, but the monsters hear it, and you run out of breath after a few seconds |
+| **Shift** | Run. It's faster, but the monsters hear it, and you run out of breath after about ten seconds. Running is how you get away from a monster |
 | **E**, **Space** or **click** | Open a door, search a drawer, hide, use the fuse box, the desk or the front door |
 | **F** | Flashlight on or off. It lights your way but lets the monsters see you from further off, and the battery runs down. Switch it off for a while and it slowly charges up again |
+| **Q** | Flash. Every monster in a wide cone in front of you is dazzled for 3 seconds and loses you, and ghosts vanish. No aiming needed. It uses a quarter of your battery (you need at least that much) and takes 10 seconds to charge again |
 | **G** | Drop what you carry, just in front of you. Anyone can pick it up with **E** |
 | **M** | Map: every room by name, you as an arrow, the others as dots, and a card with your goal, what you carry, who is in the house and the latest news |
 | **Esc** | Settings: volume, music, brightness, mouse speed, arrow-key turning, gentle mode, bigger text, full screen |
+
+**Joining:** type your name, pick a costume (wizard, witch, pirates, ninja, viking, knight, cowgirl, chef or
+doctor; it turns slowly in the lantern light so you see it) and a colour for its clothes, and press
+**Enter the manor**. That is how the others see you in the house.
 
 **The goal, as a team:**
 1. Find the **fuse** (hidden in a drawer, cupboard or box somewhere) and put it in the **fuse box** in the gallery. The gallery lights come on, and something wakes up in the laboratory.
 2. Find the **brass key** and open **the Count's desk** in his study. The note inside says which three rooms hold the iron keys.
 3. Bring the **three iron keys** to the **front door**, one padlock each.
 4. The door opens and every monster comes for you. You have two minutes to get out.
+
+**How to win** (the lobby and the map card say the same): when chased, run with Shift, then hide in a
+wardrobe, under a bed or behind a curtain; when cornered, flash with Q; follow the clue messages and the
+map's "left to search"; work as a team; and press G to drop what you carry for someone else.
 
 **Lives:** you have three, shown as candles. A monster or a ghost catching you the first or second time
 sends you back to the guest bedrooms. The third time, you're out and can only watch the others. Whatever
@@ -46,7 +55,7 @@ every 15 seconds). Just walk over one to pick it up, no key needed. Your count s
 of the screen and on the map; each sweet is worth 2 points at dawn, and whoever collects the most gets the
 *Sweet tooth* award. The big screen shows them as small pink dots.
 
-**Help finding things:** every emptied hiding place gets a tick on everyone's map, and if nobody has found
+**Help finding things:** when you walk into a room, a short line says how many hiding places are left to search there ("2 places left to search in the Kitchen.", or "Everything in the Kitchen has been searched."); it only speaks up when that has changed since you were last there. The map shows the same under each room's name. Every emptied hiding place gets a tick on everyone's map, and if nobody has found
 the fuse (or the brass key) for 3 minutes, a clue says which room it is in.
 
 **Trying it out:** join with the name **tester** and you never run out of lives, and your map shows where
@@ -64,7 +73,8 @@ node tools/bots.js 20 --url http://localhost:3000   # fake players for trying it
 ```
 
 - Open `/host?key=<HOST_KEY>` on the big screen. It shows a QR code and the join address.
-- The host picks Easy, Normal or Scary and starts the night.
+- The big screen's lobby is a dark house: a window lights up, with their costume and name, for each guest who comes in.
+- The host picks Easy, Normal or Scary and presses **Open the house**. The house laughs, on the big screen and every laptop.
 - During the game the big screen shows the whole map, including where the monsters and ghosts are (the players can't see that), progress, and news as it happens.
 
 ## Putting it online (Google Cloud Run)
@@ -108,6 +118,7 @@ Don't redeploy during the party: a new version starts an empty game. Afterwards,
   - `audio.js` handles sound, placed in 3D.
   - `ui.js` handles the map, settings and on-screen display.
   - `main.js` holds it all together.
+  - `join.js` is the join screen (with the turning costume), `costumes.js` the costume silhouettes.
   - `atmosphere.js` has the dust, the danger edge and each player's small events.
   - `candy.js` draws the sweets (all of them in one instanced mesh).
   - `models.js` loads the models listed in `models.json`.

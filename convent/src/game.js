@@ -137,6 +137,7 @@ export class Game {
       hidden: null,
       carrying: null,
       battery: 1, // the browser runs the flashlight; we keep its charge so a refresh doesn't refill it
+      flashAt: -99, // when you last used the flash (Q)
       stats: { caught: 0, found: 0, placed: 0, candy: 0, escapedAt: 0, closest: 99 },
     });
   }
@@ -159,6 +160,8 @@ export class Game {
     socket.on('join', (msg = {}) => {
       if (me) return;
       const name = clean(msg.name, 18) || 'Guest';
+      // the costume picked on the join screen: which of the player models you wear
+      const costume = Number.isInteger(msg.costume) && msg.costume >= 0 && msg.costume < C.COSTUMES.length ? msg.costume : null;
       // a returning player (same browser) gets their place back
       const token = clean(msg.token, 40);
       me = [...this.players.values()].find((p) => p.token && p.token === token) || null;
@@ -166,9 +169,10 @@ export class Game {
         me.socket = socket;
         me.name = name;
         me.online = true;
+        if (costume != null) me.costume = costume;
       } else {
         if (this.players.size >= 40) return socket.emit('full');
-        me = { id: crypto.randomBytes(4).toString('hex'), token: token || crypto.randomBytes(8).toString('hex'), name, look: Number(msg.look) % C.LOOKS.length || 0, socket, online: true };
+        me = { id: crypto.randomBytes(4).toString('hex'), token: token || crypto.randomBytes(8).toString('hex'), name, look: Number(msg.look) % C.LOOKS.length || 0, costume: costume ?? rint(C.COSTUMES.length), socket, online: true };
         this.freshPlayer(me);
         if (this.phase !== 'LOBBY') {
           // late arrivals join the game in progress
@@ -288,6 +292,15 @@ export class Game {
       if (m.what === 'desk') this.useDesk(me);
       if (m.what === 'front') this.useFront(me);
     });
+    // Q: a flash from your flashlight, in the direction you face
+    socket.on('flash', (m = {}) => {
+      if (!this.can(me) || me.hidden != null) return;
+      const wait = me.flashAt + C.FLASH.cooldown - this.t;
+      if (wait > 0.3 || me.battery < C.FLASH.cost - 0.01) return socket.emit('flash-no', { wait: Math.max(0, wait), battery: me.battery });
+      me.flashAt = this.t;
+      me.battery = Math.max(0, me.battery - C.FLASH.cost);
+      this.flash(me, typeof m.yaw === 'number' && Number.isFinite(m.yaw) ? m.yaw : me.yaw);
+    });
     socket.on('shine', (m = {}) => {
       if (!this.can(me)) return;
       const g = this.ghosts.find((g) => g.id === m.id && g.alive);
@@ -297,7 +310,14 @@ export class Game {
     });
     if (DEV) {
       // test hooks: where things are hidden, and stepping anywhere
-      socket.on('dev:where', () => socket.emit('dev:where', { loose: this.loose, candy: [...this.candy.values()], boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
+      socket.on('dev:where', () => socket.emit('dev:where', { t: this.t, loose: this.loose, candy: [...this.candy.values()], boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ id: n.id, kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ id: g.id, x: g.x, z: g.z, alive: g.alive })) }));
+      // put a monster or ghost exactly here (tests)
+      socket.on('dev:place', (m = {}) => {
+        const e = [...this.monsters, ...this.ghosts].find((e) => e.id === m.id);
+        if (!e || !Number.isFinite(Number(m.x)) || !Number.isFinite(Number(m.z))) return;
+        Object.assign(e, { x: Number(m.x), z: Number(m.z), path: [] });
+        if (e.ghost) Object.assign(e, { alive: true, back: 0 });
+      });
       socket.on('dev:tp', (m = {}) => me && Object.assign(me, { x: Number(m.x), z: Number(m.z) }));
       socket.on('dev:freeze', (on) => (this.frozen = !!on));
       // jump the clock (seconds since the start); an open front door keeps the time it had left
@@ -896,12 +916,50 @@ export class Game {
     }
   }
 
-  banishGhost(g, by) {
+  banishGhost(g, by, quiet) {
     g.alive = false;
     g.back = this.t + C.GHOST.back;
     g.burn = 0;
     this.sfx('banish', g.x, g.z);
-    this.say(`${by.name} chased off a ghost with their flashlight.`);
+    if (!quiet) this.say(`${by.name} chased off a ghost with their flashlight.`);
+  }
+
+  // the flash: whatever is in the cone in front of you, in reach and in plain sight
+  flash(me, yaw) {
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    const inCone = (e) => {
+      const d = dist(e, me);
+      if (d > C.FLASH.range) return false;
+      if (d > 0.4 && ((e.x - me.x) * fx + (e.z - me.z) * fz) / d < Math.cos(C.FLASH.cone)) return false;
+      return L.clearLine(me.x, me.z, e.x, e.z, (id) => this.doors[id]);
+    };
+    this.sfx('flash', me.x, me.z);
+    const dazzled = [];
+    for (const n of this.monsters) {
+      if (n.state === 'asleep' || !inCone(n)) continue;
+      // dazzled: it turns its face away, stands still, and has lost you when it can see again
+      n.stunUntil = this.t + C.FLASH.stun;
+      n.flinchAgain = this.t + C.FLASH.stun + C.FLINCH.again;
+      n.yaw = Math.atan2(n.x - me.x, n.z - me.z);
+      n.pullFrom = null;
+      n.target = null;
+      n.path = [];
+      if (n.state !== 'finale') {
+        n.state = 'search';
+        n.wait = C.MONSTER.search;
+        n.sawAt = -99;
+      }
+      this.sfx('flinch', n.x, n.z, n.kind);
+      dazzled.push(n);
+    }
+    let ghosts = 0;
+    for (const g of this.ghosts) if (g.alive && inCone(g)) (this.banishGhost(g, me, true), ghosts++);
+    if (dazzled.length) {
+      const names = [...new Set(dazzled.map((n) => (n.kind === 'zombie' ? (dazzled.filter((d) => d.kind === 'zombie').length > 1 ? 'the zombies' : 'a zombie') : n.name)))];
+      this.say(`${me.name} flashed ${names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0]}!`);
+    }
+    me.socket.emit('flashed', { monsters: dazzled.length, ghosts, battery: me.battery, ready: me.flashAt + C.FLASH.cooldown, t: this.t });
   }
 
   tick() {
@@ -1017,7 +1075,7 @@ export class Game {
     };
   }
   roster() {
-    return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
+    return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, costume: p.costume, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
   }
   mine(p) {
     return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, battery: Math.round(p.battery * 1000) / 1000, candy: p.stats.candy, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };

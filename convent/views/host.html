@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{TITLE}}: big screen</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%A6%87%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,500..900,0..100,0..1;1,9..144,500..900,0..100,0..1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="stylesheet" href="/css/host.css" />
 </head>
@@ -14,21 +17,20 @@
     <div id="h-timer"></div>
   </header>
   <main>
-    <section id="h-lobby">
-      <div class="join">
-        <p class="kicker">Join on your laptop</p>
-        <p id="h-url"></p>
-        <img id="h-qr" alt="QR code to join" />
-      </div>
-      <div class="who">
-        <h2 id="h-count">Nobody here yet</h2>
-        <ul id="h-roster"></ul>
+    <!-- the lobby, in the style of Pumpkin Smash: the dark house, a window lights up for each guest -->
+    <section id="h-lobby" class="ps">
+      <canvas id="h-house"></canvas>
+      <div class="htitle display">{{TITLE}}</div>
+      <div class="hphase">Blackwood Manor, Halloween night. Find the way out before dawn.</div>
+      <div class="invite"><img id="h-qr" alt="QR code to join" /><div class="display">Come in.</div><div class="url" id="h-url"></div></div>
+      <div class="count-line" id="h-count"></div>
+      <div class="hstart">
         <div id="h-level" role="group" aria-label="How hard">
           <button type="button" data-level="easy">Easy</button>
           <button type="button" data-level="normal" class="on">Normal</button>
           <button type="button" data-level="scary">Scary</button>
         </div>
-        <button id="h-start" class="big" type="button">Lock the doors and start</button>
+        <button id="h-start" class="cta" type="button">Open the house</button>
       </div>
     </section>
     <section id="h-game">

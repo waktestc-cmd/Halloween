@@ -11,6 +11,7 @@ const FILES = {
   found: ['sfx-pumpkin-found'],
   hit: ['sfx-hit'],
   win: ['sfx-win'],
+  laugh: ['evil-laugh'], // the house laughs as the night starts (from Pumpkin Smash)
   // optional recordings: drop these in to replace the made-up sounds
   ambience: ['ambience'],
   chase: ['chase'],
@@ -843,6 +844,47 @@ export class Sound {
     o.connect(lp).connect(g).connect(this.sfxBus);
     o.start(now);
     o.stop(now + 4);
+  }
+  // the flash (Q): a sharp pop and a fading whine, like an old flashgun; at (x, z) when it is someone else's
+  flashPop(x, z) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    let out = this.sfxBus;
+    if (x != null) {
+      out = this.panner(x, z, { ref: 3, max: 40 });
+      out.connect(this.sfxBus);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1800;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.45, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    src.connect(hp).connect(g).connect(out);
+    src.start(now, Math.random(), 0.15);
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(220, now);
+    o.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.5, now);
+    g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    o.connect(g2).connect(out);
+    o.start(now);
+    o.stop(now + 0.2);
+    const w = ctx.createOscillator();
+    w.type = 'triangle';
+    w.frequency.setValueAtTime(5200, now + 0.05);
+    w.frequency.exponentialRampToValueAtTime(2200, now + 0.9);
+    const g3 = ctx.createGain();
+    g3.gain.setValueAtTime(0.0001, now);
+    g3.gain.exponentialRampToValueAtTime(0.025, now + 0.1);
+    g3.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+    w.connect(g3).connect(out);
+    w.start(now);
+    w.stop(now + 0.95);
   }
   // a sweet picked up: two quick, soft, bright notes
   sweet() {

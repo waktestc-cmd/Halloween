@@ -20,9 +20,9 @@ const once = (s, ev, ms = 8000) => new Promise((res, rej) => {
   const t = setTimeout(() => rej(new Error('timeout waiting for ' + ev)), ms);
   s.once(ev, (m) => (clearTimeout(t), res(m)));
 });
-function player(name) {
+function player(name, costume) {
   const s = io(URL, { transports: ['websocket'], forceNew: true });
-  s.emit('join', { name, look: 1 });
+  s.emit('join', { name, look: 1, costume });
   return s;
 }
 let failed = false;
@@ -36,9 +36,15 @@ try {
   const host = io(URL, { transports: ['websocket'], auth: { role: 'host', key: 'spooky' }, forceNew: true });
   await once(host, 'welcome');
   // listen for both welcomes before waiting on either, or the second can arrive unheard
-  const a = player('Alice');
+  const both = until(host, 'roster', (r) => r.some((p) => p.name === 'Alice') && r.some((p) => p.name === 'Bob'));
+  const a = player('Alice', 7);
   const b = player('Bob');
   const [aWelcome] = await Promise.all([once(a, 'welcome'), once(b, 'welcome')]);
+  // the costume picked on the join screen reaches everyone, in the roster
+  const roster = await both;
+  assert.equal(roster.find((p) => p.name === 'Alice').costume, 7, 'Alice is the witch');
+  assert.ok(Number.isInteger(roster.find((p) => p.name === 'Bob').costume), 'Bob, who picked none, still gets a costume');
+  console.log('ok: the costume reaches the roster');
   host.emit('start');
   await once(a, 'start');
   b.emit('dev:freeze', true);
@@ -95,6 +101,42 @@ try {
   assert.ok((await once(b, 'dev:where')).monsters.find((m) => m.kind === 'vampire').stunned, 'the Count flinches from the light');
   console.log('ok: the Count flinches from a flashlight');
 
+  // Q: Bob's flash dazzles the zombie in front of him and vanishes the ghost there, not the Count behind
+  const fl = { x: 20, z: 14 }; // the north gallery corridor, facing east along it
+  const where = async () => (b.emit('dev:where'), once(b, 'dev:where'));
+  for (let i = 0; i < 30 && (await where()).monsters.find((m) => m.kind === 'vampire').stunned; i++) await sleep(150);
+  const ws = await where();
+  const zombie = ws.monsters.find((m) => m.kind === 'zombie');
+  const count = ws.monsters.find((m) => m.kind === 'vampire');
+  b.emit('dev:place', { id: zombie.id, x: fl.x + 3, z: fl.z });
+  b.emit('dev:place', { id: count.id, x: fl.x - 3, z: fl.z });
+  b.emit('dev:place', { id: ws.ghosts[0].id, x: fl.x + 4, z: fl.z + 0.5 });
+  for (const g of ws.ghosts.slice(1)) b.emit('dev:place', { id: g.id, x: 6, z: 42 }); // the others well away, in the crypt
+  b.emit('dev:tp', fl);
+  await sleep(60);
+  b.emit('state', { ...fl, yaw: -Math.PI / 2, battery: 1 });
+  b.emit('flash', { yaw: -Math.PI / 2 });
+  const flashed = await once(b, 'flashed');
+  assert.equal(flashed.monsters, 1, 'one monster dazzled');
+  assert.equal(flashed.ghosts, 1, 'one ghost vanished');
+  assert.ok(Math.abs(flashed.battery - 0.75) < 0.01, 'the flash costs a quarter of the battery');
+  const wf = await where();
+  assert.ok(wf.monsters.find((m) => m.id === zombie.id).stunned, 'the zombie in front is dazzled');
+  assert.ok(!wf.monsters.find((m) => m.id === count.id).stunned, 'the Count behind is not');
+  assert.ok(!wf.ghosts.find((g) => g.id === ws.ghosts[0].id).alive, 'the ghost in front vanishes');
+  // straight away again: not ready yet
+  b.emit('flash', { yaw: -Math.PI / 2 });
+  assert.ok((await once(b, 'flash-no')).wait > 5, 'the flash needs time to recharge');
+  // later, but with too little battery: no
+  b.emit('dev:time', { t: wf.t + 11 });
+  b.emit('state', { ...fl, yaw: -Math.PI / 2, battery: 0.1 });
+  b.emit('flash', { yaw: -Math.PI / 2 });
+  assert.ok((await once(b, 'flash-no')).battery < 0.25, 'the flash needs a quarter of the battery');
+  b.emit('state', { ...fl, yaw: -Math.PI / 2, battery: 1 });
+  b.emit('flash', { yaw: -Math.PI / 2 });
+  await once(b, 'flashed');
+  console.log('ok: the flash dazzles what is in front, banishes ghosts, costs battery and recharges');
+
   // 3. the puzzle chain, carried out by Bob
   b.emit('dev:freeze', true);
   b.emit('dev:where');
@@ -123,13 +165,15 @@ try {
   };
   const stage = () => once(b, 'stage');
   await take('fuse');
-  // G: Bob puts the fuse down in front of him, on the floor, then picks it up again
-  const [bx0, bz0] = [box('fuse').x, box('fuse').z];
+  // G: Bob, in the gallery facing east along it, puts the fuse down in front of him
+  const [bx0, bz0] = [12, 14];
+  b.emit('dev:tp', { x: bx0, z: bz0 });
+  await sleep(60);
   b.emit('dev:where');
   const here = (await once(b, 'dev:where')).loose.length;
   const dropped = until(b, 'feed', (f) => /^Bob dropped the fuse in the /.test(f.text));
   const emptied = until(b, 'me', (m) => m.carrying === null);
-  b.emit('drop', { yaw: 0 });
+  b.emit('drop', { yaw: -Math.PI / 2 });
   await Promise.all([dropped, emptied]);
   b.emit('dev:where');
   const lying = (await once(b, 'dev:where')).loose;
@@ -137,7 +181,7 @@ try {
   const it = lying.find((l) => l.item === 'fuse');
   const [ic, ir] = L.tileOf(it.x, it.z);
   assert.ok(L.floorTile(ic, ir) && L.at(ic, ir) !== '+', 'it lies on a floor tile, not in a doorway');
-  assert.ok(Math.hypot(it.x - bx0, it.z - bz0) < 1.3, 'just in front of Bob');
+  assert.ok(Math.abs(it.x - (bx0 + 0.8)) < 0.05 && Math.abs(it.z - bz0) < 0.05, 'about 0.8 m in front of Bob');
   // Carol arrives late and picks it up; when she leaves, it falls to the floor again for Bob
   const c = player('Carol');
   await once(c, 'welcome');

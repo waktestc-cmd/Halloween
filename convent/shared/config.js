@@ -6,8 +6,10 @@ export const RESPAWN_SAFE = 5; // seconds nothing can touch you after waking up 
 
 export const WALK = 3.0;
 export const RUN = 5.0;
-export const STAMINA = 6; // seconds of running before you are out of breath
-export const STAMINA_BACK = 0.6; // regained per second while not running
+// Running saves you: ten seconds of it outruns the Count (3.85 m/s on Normal, 4.2 on Scary, against
+// your 5) by about 8 to 11 m, enough to get round a corner and out of his sight.
+export const STAMINA = 10; // seconds of running before you are out of breath
+export const STAMINA_BACK = 1.2; // seconds of running regained per second while walking (more standing still)
 export const REACH = 2.2; // how far you can reach to open, search or hide
 
 // what every monster does; each kind below scales the speeds and how far it sees
@@ -37,6 +39,10 @@ export const KINDS = {
 export const LINEUP = ['vampire', 'creature', 'zombie', 'zombie', 'zombie', 'zombie'];
 // shine your flashlight at the Count and he shrinks back for a moment
 export const FLINCH = { range: 7, cone: 0.35, stun: 1.4, again: 7 };
+// Q: a bright flash from your flashlight. Everything in a wide cone in front of you (cone: half-angle
+// in radians, about 50 degrees) is hit: ghosts vanish, monsters are dazzled for a few seconds and lose
+// track of you. It costs a quarter of the battery and needs that much charge; then it recharges.
+export const FLASH = { range: 8, cone: 0.87, stun: 3, cost: 0.25, cooldown: 10 };
 
 // the host picks how hard the night is
 export const DIFFICULTY = {
@@ -95,5 +101,19 @@ export const STAGES = {
   keys: 'Find the three iron keys and bring them to the front door',
   escape: 'The front door is open. Get out!',
 };
+
+// the costumes you can pick when you join, in the order of the "player" models in models.json
+export const COSTUMES = [
+  { id: 'wizard', name: 'Wizard' },
+  { id: 'pirate-queen', name: 'Pirate queen' },
+  { id: 'pirate', name: 'Pirate' },
+  { id: 'ninja', name: 'Ninja' },
+  { id: 'viking', name: 'Viking' },
+  { id: 'knight', name: 'Knight' },
+  { id: 'cowgirl', name: 'Cowgirl' },
+  { id: 'witch', name: 'Witch' },
+  { id: 'chef', name: 'Chef' },
+  { id: 'doctor', name: 'Doctor' },
+];
 
 export const LOOKS = ['#6b4a3a', '#2f4a6b', '#4a6b3a', '#6b3a5a', '#7a6a3a', '#3a6b6b', '#5a3a6b', '#6b5a4a'];

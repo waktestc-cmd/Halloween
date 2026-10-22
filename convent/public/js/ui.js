@@ -113,6 +113,16 @@ export function setCarry(item, candy = 0) {
   else el.innerHTML = `<span class="item-icon ${item}"></span><div><b>You carry: ${C.ITEMS[item].name}</b><small>${C.ITEMS[item].hint}. <kbd>G</kbd> to drop</small></div>${sweets}`;
 }
 
+/* ---------- how to win: the same few tips in the lobby and on the map card ---------- */
+export const TIPS = [
+  '<b>Chased?</b> Run with <kbd>Shift</kbd> (you have about ten seconds of breath), then hide in a wardrobe, under a bed or behind a curtain with <kbd>E</kbd>.',
+  '<b>Cornered?</b> Press <kbd>Q</kbd> to flash. Every monster in front of you is dazzled and loses you, and ghosts vanish.',
+  '<b>Follow the clues.</b> "Something rattles in the Kitchen" means what you need is there. Press <kbd>M</kbd> for the map: it shows which rooms still have places to search.',
+  '<b>Work as a team.</b> Split up the rooms, tell each other what you found, and watch the news.',
+  '<b>Caught while carrying something?</b> It drops where you were. Press <kbd>G</kbd> to put it down yourself for someone else to take on.',
+];
+export const tipsHTML = () => `<h3>How to win</h3><ul class="tips">${TIPS.map((t) => `<li>${t}</li>`).join('')}</ul>`;
+
 /* ---------- the side card on the map: the goal, what you carry, the monsters, the news ---------- */
 const esc = (t) => String(t).replace(/[<>&]/g, '');
 const STEPS = [
@@ -135,11 +145,13 @@ export function mapSide({ stage, padlocks, keyRooms, carrying, candy = 0, lives,
     <p><b>Lives:</b> ${tester ? 'never run out (tester)' : `${lives} of ${C.LIVES}`} · <b>${clockLabel}</b> ${dawn}</p>
     <h3>Who is in the house</h3>
     <ul class="who">
-      <li>🧛 <b>The Count</b>: you hear him breathe. Shine your light in his face and he backs off.</li>
+      <li>📸 <b>Press <kbd>Q</kbd> to flash</b>: every monster in front of you is dazzled and loses you for a moment, and ghosts vanish. It uses a quarter of your battery.</li>
+      <li>🧛 <b>The Count</b>: you hear him breathe. Shine your light in his face and he backs off, or flash him.</li>
       <li>⚡ <b>The Doctor's Monster</b>: ${sleeping ? 'asleep in the Laboratory until the power is fixed.' : 'awake! Heavy footsteps, slow but sees far.'}</li>
       <li>🧟 <b>${zombies} ${zombies === 1 ? 'zombie' : 'zombies'}</b>: they groan, and shuffle around the graveyard.</li>
-      <li>👻 <b>Ghosts</b>: they hum. Hold your flashlight on one until it vanishes.</li>
+      <li>👻 <b>Ghosts</b>: they hum. Hold your flashlight on one until it vanishes, or flash it.</li>
     </ul>
+    ${tipsHTML()}
     <h3>What's happening</h3>
     <ul class="news">${news.length ? news.map((n) => `<li>${esc(n)}</li>`).join('') : '<li>All quiet, for now.</li>'}</ul>`;
 }
@@ -156,6 +168,14 @@ export function setTimer(sec, finale) {
   $('timer').innerHTML = `<small>${finale ? 'Door closes in' : 'Dawn in'}</small>${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   $('timer').classList.toggle('urgent', finale || s < 60);
 }
+// the flash (Q): ready, a countdown in seconds, or 'low' when the battery is under a quarter
+let flashLabel = '';
+export function setFlash(state) {
+  const label = state === 'ready' ? 'Flash ready <kbd>Q</kbd>' : state === 'low' ? 'Flash needs more battery' : `Flash ready in ${state} s`;
+  if (label === flashLabel) return;
+  $('flash-state').innerHTML = flashLabel = label;
+  $('flash-state').classList.toggle('ready', state === 'ready');
+}
 let batteryLabel = '';
 export function setBars(battery, stamina, lightOn, charging) {
   $('battery-fill').style.width = `${Math.round(battery * 100)}%`;
@@ -167,6 +187,34 @@ export function setBars(battery, stamina, lightOn, charging) {
   if (label !== batteryLabel) $('battery-label').innerHTML = batteryLabel = label;
   $('stamina-fill').style.width = `${Math.round(stamina * 100)}%`;
   $('stamina').classList.toggle('show', stamina < 0.98);
+}
+
+/* ---------- hiding places left to search, room by room ----------
+   searched: the ids of emptied hiding places. Nothing is ever hidden in the guest bedrooms, so they
+   are left out. { room letter: { total, left } } */
+export function searchLeft(searched) {
+  const done = new Set([...searched].map((p) => (typeof p === 'object' ? p.id : p)));
+  const rooms = {};
+  for (const b of L.BOXES) {
+    if (b.room === 'd') continue;
+    const r = (rooms[b.room] ||= { total: 0, left: 0 });
+    r.total++;
+    if (!done.has(b.id)) r.left++;
+  }
+  return rooms;
+}
+export function searchNews(room, left) {
+  const name = L.ROOMS[room].name;
+  if (!left) return `Everything in the ${name} has been searched.`;
+  return `${left} ${left === 1 ? 'place' : 'places'} left to search in the ${name}.`;
+}
+let roomNoteTimer = 0;
+export function roomNote(text) {
+  const el = $('roomnote');
+  el.textContent = text;
+  el.classList.add('on');
+  clearTimeout(roomNoteTimer);
+  roomNoteTimer = setTimeout(() => el.classList.remove('on'), 4500);
 }
 
 /* ---------- the map ---------- */
@@ -210,6 +258,7 @@ export function drawMap(canvas, { me, others = [], monsters = null, ghosts = nul
     }
   g.stroke();
   // names of rooms
+  const left = searchLeft(searched);
   g.fillStyle = '#e8dcc0';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -221,6 +270,15 @@ export function drawMap(canvas, { me, others = [], monsters = null, ghosts = nul
     const fs = Math.max(11, Math.min(s * 0.62, ((rm.c1 - rm.c0 + 1) * s) / Math.max(...words.map((w) => w.length)) * 1.7));
     g.font = `600 ${fs}px Georgia, serif`;
     words.forEach((w, i) => g.fillText(w, cx, cy + (i - (words.length - 1) / 2) * fs * 1.1));
+    // how many hiding places are left to search in it
+    const sr = left[k];
+    if (sr) {
+      const small = Math.max(10, Math.min(s * 0.42, fs * 0.72));
+      g.font = `700 ${small}px Georgia, serif`;
+      g.fillStyle = sr.left ? '#ffcc66' : '#a8e0a0';
+      g.fillText(sr.left ? `${sr.left} left` : '✓ searched', cx, cy + ((words.length + 1) / 2) * fs * 1.1 + small * 0.2);
+      g.fillStyle = '#e8dcc0';
+    }
   }
   g.font = `italic ${Math.max(11, s * 0.5)}px Georgia, serif`;
   g.fillText('Gallery', ox + 11 * s, oy + 7 * s);

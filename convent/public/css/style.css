@@ -225,6 +225,23 @@ body.playing #hud {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+/* "2 places left to search in the Kitchen." when you walk into a room */
+#roomnote {
+  top: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  border-radius: 10px;
+  background: rgba(10, 8, 6, 0.7);
+  color: #ffd98a;
+  font-size: 1em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+#roomnote.on {
+  opacity: 1;
+}
 #feed {
   top: 70px;
   right: 20px;
@@ -340,6 +357,37 @@ body.playing #hud {
 }
 #battery.off {
   opacity: 0.5;
+}
+#flash-state {
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: var(--dim);
+}
+#flash-state.ready {
+  color: var(--ink);
+}
+/* the flash (Q): the screen goes white for a blink */
+#flashfx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: #fffaf0;
+  opacity: 0;
+  z-index: 6;
+}
+#flashfx.on {
+  animation: flashBlink 0.5s ease-out;
+}
+#flashfx.on.soft {
+  animation-name: flashSoft;
+}
+@keyframes flashBlink {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+@keyframes flashSoft {
+  0% { opacity: 0.45; }
+  100% { opacity: 0; }
 }
 #battery.charging b {
   background: #8fd08a;
@@ -611,15 +659,6 @@ label {
   margin: 14px 0 6px;
   color: var(--dim);
 }
-input#name {
-  width: 100%;
-  padding: 12px 14px;
-  font: 1.2em var(--serif);
-  color: var(--ink);
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
 #looks {
   display: flex;
   gap: 10px;
@@ -731,4 +770,367 @@ th {
 }
 tr.me td {
   color: var(--gold);
+}
+
+/* ---------- the join screen and the lobby, in the style of Pumpkin Smash ----------
+   The painted hall, lit only where your torch points; Fraunces for the titles, Atkinson
+   Hyperlegible (made to be easy to read) for the rest; one big orange button. */
+.ps {
+  --bone: #ede3cf;
+  --ash: #8a8172;
+  --flame: #ff7a1a;
+  --ember: #ffc46b;
+  --display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --ui: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --settle: cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: var(--ui);
+  color: var(--bone);
+}
+#panel-join.ps,
+#panel-lobby.ps {
+  background: #0a0908;
+}
+.ps .display {
+  font-family: var(--display);
+  font-weight: 850;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 144;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+}
+.ps .quiet {
+  color: var(--ash);
+}
+.ps .num {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.5em;
+  margin-right: 0.2em;
+  color: var(--bone);
+}
+.sil {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.hall-bg {
+  --lx: 30vw;
+  --ly: 40vh;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hall-bg i {
+  position: absolute;
+  inset: 0;
+  background: url(/assets/join/hall.jpg) center / cover no-repeat;
+}
+.hall-bg .dim {
+  filter: brightness(0.09) saturate(0.4);
+}
+.hall-bg .lit {
+  filter: brightness(1.2) sepia(0.6) saturate(1.6);
+  -webkit-mask-image: radial-gradient(circle at var(--lx) var(--ly), #000 0, rgba(0, 0, 0, 0.55) 9vmax, transparent 26vmax);
+  mask-image: radial-gradient(circle at var(--lx) var(--ly), #000 0, rgba(0, 0, 0, 0.55) 9vmax, transparent 26vmax);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: joinFlicker 3.2s infinite;
+}
+.hall-bg::after {
+  /* a heavy vignette, so the words always read */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(10, 9, 8, 0.1), rgba(10, 9, 8, 0.8) 80%);
+}
+@keyframes joinFlicker {
+  0%, 100% { opacity: 1; }
+  37% { opacity: 0.94; }
+  41% { opacity: 1; }
+  68% { opacity: 0.97; }
+}
+.join {
+  position: relative;
+  margin: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas: 'intro' 'who' 'go';
+  justify-items: center;
+  text-align: center;
+  width: min(1080px, 100%);
+}
+.j-intro {
+  grid-area: intro;
+}
+.ps .title {
+  font-size: clamp(48px, 11vw, 72px);
+  margin: 0 0 12px;
+}
+.ps .lede {
+  color: var(--ash);
+  font-size: 18px;
+  margin: 0 auto 20px;
+  max-width: 34ch;
+}
+.j-who {
+  grid-area: who;
+  width: 100%;
+  max-width: 440px;
+}
+.j-go {
+  grid-area: go;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.j-hero {
+  position: relative;
+  width: clamp(150px, 26vw, 250px);
+  aspect-ratio: 0.8;
+  margin: 0 auto;
+  color: var(--bone);
+}
+.j-hero::before {
+  /* the chosen one stands in a pool of lantern light */
+  content: '';
+  position: absolute;
+  inset: -22%;
+  background: radial-gradient(circle at 50% 58%, rgba(255, 196, 107, 0.42), rgba(255, 122, 26, 0.14) 36%, transparent 64%);
+  animation: joinFlicker 2.3s infinite;
+}
+#j-preview {
+  position: absolute;
+  inset: -10% -20% 0;
+  width: 140%;
+  height: 110%;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+#j-sil {
+  position: absolute;
+  inset: 18% 8% 0;
+  transition: opacity 0.4s;
+}
+.j-hero.ready #j-preview {
+  opacity: 1;
+}
+.j-hero.ready #j-sil {
+  opacity: 0;
+}
+.j-hero.pop #j-sil {
+  animation: heroIn 0.45s var(--pop) both;
+}
+@keyframes heroIn {
+  0% { transform: translateY(8%) scale(0.88); }
+  100% { transform: none; }
+}
+.chosen {
+  min-height: 1.4em;
+  color: var(--bone);
+  font: italic 600 22px/1.3 var(--display);
+  margin: 8px 0 12px;
+}
+.picker {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin: 0 auto 10px;
+}
+.ps button.pick {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 6px;
+  color: #4a443a;
+  background: none;
+  border-radius: 4px;
+  transition: color 0.35s var(--settle);
+}
+.pick::before {
+  /* a small torch passing over */
+  content: '';
+  position: absolute;
+  inset: -10%;
+  background: radial-gradient(circle, rgba(255, 196, 107, 0.3), rgba(255, 122, 26, 0.08) 40%, transparent 68%);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.35s var(--settle), transform 0.5s var(--settle);
+  pointer-events: none;
+}
+.pick .sil {
+  position: relative;
+}
+.ps button.pick:hover,
+.ps button.pick:focus-visible {
+  color: var(--ash);
+  outline: none;
+}
+.pick:hover::before,
+.pick:focus-visible::before {
+  opacity: 0.6;
+  transform: scale(1);
+}
+.ps button.pick.on {
+  color: var(--bone);
+}
+.pick.on::before {
+  opacity: 1;
+  transform: scale(1);
+}
+.j-colour {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--ash);
+  font-size: 15px;
+  margin-bottom: 18px;
+}
+.j-colour #looks {
+  gap: 6px;
+}
+.j-colour .look {
+  width: 28px;
+  height: 28px;
+}
+.ps .field {
+  width: min(440px, 100%);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ash);
+  border-radius: 0;
+  color: var(--bone);
+  font: 800 clamp(28px, 3.4vw, 36px) / 1.1 var(--display);
+  font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 144;
+  text-align: center;
+  padding: 6px 0 10px;
+  margin-bottom: 18px;
+  outline: none;
+  transition: border-color 0.25s;
+}
+.ps .field::placeholder {
+  color: #5a5246;
+}
+.ps .field:focus {
+  border-bottom-color: var(--ember);
+}
+/* the one big call to action: a solid flame rectangle */
+.cta,
+.ps button.cta {
+  width: min(440px, 100%);
+  background: var(--flame, #ff7a1a);
+  color: #0a0908;
+  font: 700 21px/1 var(--ui, 'Atkinson Hyperlegible', system-ui, sans-serif);
+  padding: 20px 34px;
+  border-radius: 2px;
+  transition: transform 0.25s var(--pop, ease), background 0.2s;
+}
+.cta:hover {
+  background: var(--ember, #ffc46b);
+  transform: translateY(-2px);
+}
+.err {
+  min-height: 1.4em;
+  margin-top: 10px;
+  color: var(--ember);
+}
+/* wide screens: the house on the left, who you are on the right */
+@media (min-width: 900px) and (min-height: 560px) {
+  .join {
+    grid-template-columns: 1.1fr 1fr;
+    grid-template-areas: 'intro who' 'go who';
+    column-gap: 6vw;
+    align-items: center;
+    text-align: left;
+  }
+  .j-intro {
+    align-self: end;
+    justify-self: stretch;
+  }
+  .ps .title {
+    font-size: clamp(64px, 7.4vw, 112px);
+    margin-bottom: 18px;
+  }
+  .ps .lede {
+    font-size: 20px;
+    margin: 0 0 40px;
+  }
+  .j-go {
+    align-self: start;
+    align-items: flex-start;
+  }
+  .ps .field {
+    text-align: left;
+  }
+  .j-who {
+    text-align: center;
+  }
+}
+
+/* the lobby: you are in, and who else is */
+.ps .card.lobby {
+  position: relative;
+  background: rgba(10, 9, 8, 0.82);
+  border-color: rgba(237, 227, 207, 0.12);
+  border-radius: 4px;
+  font-size: 17px;
+}
+.ps .card h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--ember);
+}
+.l-top {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.l-top h2 {
+  font-size: 56px;
+  margin: 0 0 8px;
+}
+.window {
+  /* your costume in a lit window */
+  flex: none;
+  width: 110px;
+  height: 130px;
+  padding: 18px 10px 0;
+  color: #0a0908;
+  background: radial-gradient(ellipse at 50% 70%, #ffc46b 0%, #ff7a1a 40%, #6e2a06 80%, #1d0d04 100%);
+  border: 6px solid #15120e;
+  box-shadow: 0 0 40px rgba(255, 122, 26, 0.35);
+}
+.ps #roster-count {
+  color: var(--ash);
+  margin: 18px 0 6px;
+}
+.ps #roster li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 4px 6px;
+  border-radius: 4px;
+  background: rgba(237, 227, 207, 0.06);
+  border-left: 5px solid var(--c);
+}
+.ps #roster .silw {
+  width: 28px;
+  height: 28px;
+  color: var(--bone);
+}
+.win {
+  margin: 18px 0 12px;
+  padding: 4px 20px 10px;
+  border-left: 4px solid #ff7a1a;
+  background: rgba(255, 122, 26, 0.07);
+}
+.tips {
+  padding-left: 1.1em;
+  margin: 4px 0;
+}
+.tips li {
+  margin-bottom: 0.45em;
+}
+.ps #roster em {
+  color: var(--ash);
 }
