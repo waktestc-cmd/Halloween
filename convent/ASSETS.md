@@ -3,10 +3,10 @@
 | What | File | Source | Licence |
 | --- | --- | --- | --- |
 | Players' figures: 10 costumes (wizard, witch, pirates, ninja, viking, knight, cowgirl, chef, doctor), with idle/walk/run | `public/assets/models/characters/*.glb` | Quaternius *Ultimate Animated Character Pack* (Nov 2019), converted to .glb keeping only Idle, Walk and Run | CC0 |
-| Zombies (a man and a woman), with idle/walk/run | `public/assets/models/characters/Zombie_*.glb` | Quaternius *Ultimate Animated Character Pack* | CC0 |
+| Zombies (a man and a woman), with idle/walk/run | `public/assets/models/characters/Zombie_*.glb` | Quaternius *Ultimate Animated Character Pack*; greyed, grimed and given glowing eyes in code (`actors.js`) | CC0 |
 | Fallback player figure | `public/assets/models/Soldier.glb` | three.js examples, originally from Mixamo | Shipped with three.js (MIT repository); internal event use |
 | Beds, wardrobes, cabinets, tables, desks, stove, sink, boxes, bathtub, rugs, coat rack | `public/assets/models/furniture/*.glb` | Kenney *Furniture Kit* 2.0, recoloured in `models.json` | CC0 |
-| Gravestones (no crosses), benches, the stone tomb, coffins, crypt, urn, shovel, iron fence, carved pumpkins | `public/assets/models/graveyard/*.glb` and `Textures/colormap.png` | Kenney *Graveyard Kit* 5.0 | CC0 |
+| Gravestones (no crosses), benches, the stone tomb, coffins, crypt, urn, shovel, iron fence, carved pumpkins (also the jack-o'-lanterns round the house) | `public/assets/models/graveyard/*.glb` and `Textures/colormap.png` | Kenney *Graveyard Kit* 5.0 | CC0 |
 | Wooden floor, brick | `public/assets/textures/*.jpg` | three.js examples | Shipped with three.js (MIT repository) |
 | Footsteps, doors, searching, found, hit, win | `public/assets/sounds/sfx-*.mp3` | Kenney sound packs, from the Pumpkin Smash game in this repository | CC0 |
 | `ambience.mp3` | | Pikmin 2 soundtrack, "Submerged Castle" (supplied by the organiser) | Nintendo's music; organiser handles rights for this internal event |
@@ -21,7 +21,9 @@
 | `jump-scare.wav` | | Made by the organiser with Adobe Firefly | Organiser's |
 | Plaster walls, stone, tiles, wood, cloth, portraits | drawn in code (`public/js/textures.js`, `actors.js`) | Made for this game | Ours |
 | Rain, wind, drone, chase music, clock, drips, music box, wail, creaks, the Count's breathing and hiss, footsteps of the Doctor's Monster | made in code (`public/js/audio.js`) | Made for this game | Ours |
-| The Count, the Doctor's Monster (faces painted in code), the ghosts, shelves, dressers, the generator, the slab and coils, the well, candles, the clock | built from simple shapes in code (`world.js`, `actors.js`) | Made for this game | Ours |
+| The Count (after the 1922 *Nosferatu*, which is in the public domain) and the Doctor's Monster: sculpted heads, swept limbs and coats on a few bones, skin and clothes painted on canvases | built in code (`actors.js`, `textures.js`) | Made for this game | Ours |
+| The ghosts, shelves, dressers, the generator, the slab and coils, the well, candles, the clock | built from simple shapes in code (`world.js`, `actors.js`) | Made for this game | Ours |
+| The full moon, its halo and the night sky over the graveyard, the bats, cobwebs and spiders | built and painted in code (`world.js`, `textures.js`) | Made for this game | Ours |
 
 The organiser's original downloads were added in `convent/assets/` (commit b515f7d on main) and taken out
 again once the files above were copied from them; they are still in the git history.

@@ -124,6 +124,11 @@ export const PROP_TYPES = {
   fence: { w: 1.2, d: 0.15, h: 1.1, solid: false },
   rug: { w: 1.8, d: 2.6, h: 0.02, solid: false },
   coatrack: { w: 0.5, d: 0.5, h: 1.8, solid: true },
+  // Halloween night: lanterns you can walk past, cobwebs high in the corners and over the arches
+  jack: { w: 0.5, d: 0.5, h: 0.45, solid: false, glow: true },
+  tablejack: { w: 0.38, d: 0.38, h: 0.34, wallH: 0.78, solid: false, glow: true },
+  cobweb: { w: 1.0, d: 1.0, h: 0.9, wallH: 2.5, solid: false },
+  archweb: { w: 2.0, d: 0.05, h: 0.7, wallH: 1.75, solid: false },
 };
 
 const P = (type, room, opts) => ({ type, room, ...opts });
@@ -187,6 +192,25 @@ const PROP_LIST = [
   P('pumpkin', 'g', { at: [15, 13.9] }), P('pumpkin', 'g', { at: [17.1, 13.9] }),
   P('pumpkin', 'e', { at: [12.6, 22.3] }), P('pumpkin', 'e', { at: [15.4, 22.3] }),
   P('rug', 'd', { at: [4, 2.8] }), P('rug', 'o', { at: [29.6, 14.5] }), P('coatrack', 'e', { at: [11.3, 19.3] }),
+  // jack-o'-lanterns for tonight, against the walls beside the doors, by the arches, on the tables
+  P('jack', 'c', { at: [10.3, 5.7] }), P('jack', 'c', { at: [11.7, 5.7] }), P('jack', 'c', { at: [17.3, 5.7] }), P('jack', 'c', { at: [18.7, 5.7] }),
+  P('jack', 'c', { at: [24.3, 5.7] }), P('jack', 'c', { at: [25.7, 5.7] }), P('jack', 'c', { at: [13.5, 7.3] }),
+  P('jack', 'c', { at: [13.3, 17.3] }), P('jack', 'c', { at: [14.7, 17.3] }), P('jack', 'c', { at: [21.3, 17.3] }), P('jack', 'c', { at: [9.5, 15.7] }),
+  P('jack', 'c', { at: [4.7, 9.5] }), P('jack', 'c', { at: [27.3, 14.5] }),
+  P('jack', 'g', { at: [7.7, 11.2] }), P('jack', 'g', { at: [7.7, 12.8] }), P('jack', 'g', { at: [24.3, 11.2] }), P('jack', 'g', { at: [24.3, 12.8] }),
+  P('jack', 'g', { at: [10.4, 10.6] }), P('jack', 'g', { at: [12.8, 13.65] }), P('jack', 'g', { at: [22.65, 9.6] }), P('jack', 'g', { at: [20.1, 10.25] }),
+  P('tablejack', 'n', { at: [2, 13.16] }), P('tablejack', 'n', { at: [2, 14.84] }), P('tablejack', 'k', { at: [2, 8] }), P('jack', 'd', { at: [5.85, 4.325] }),
+  // cobwebs in the top corners of the rooms (face S: north-west corner, W: north-east, N: south-east, E: south-west)
+  P('cobweb', 'd', { at: [0.75, 0.75], face: 'S' }), P('cobweb', 'd', { at: [7.25, 4.25], face: 'N' }), P('cobweb', 'w', { at: [13.25, 0.75], face: 'W' }),
+  P('cobweb', 's', { at: [14.75, 0.75], face: 'S' }), P('cobweb', 's', { at: [21.25, 0.75], face: 'W' }), P('cobweb', 'l', { at: [22.75, 0.75], face: 'S' }),
+  P('cobweb', 'l', { at: [31.25, 4.25], face: 'N' }), P('cobweb', 'k', { at: [0.75, 5.75], face: 'S' }), P('cobweb', 'i', { at: [31.25, 5.75], face: 'W' }),
+  P('cobweb', 'n', { at: [0.75, 17.25], face: 'E' }), P('cobweb', 'o', { at: [31.25, 10.75], face: 'W' }),
+  P('cobweb', 'p', { at: [0.75, 18.75], face: 'S' }), P('cobweb', 'p', { at: [9.25, 18.75], face: 'W' }), P('cobweb', 'p', { at: [9.25, 22.25], face: 'N' }), P('cobweb', 'p', { at: [0.75, 22.25], face: 'E' }),
+  P('cobweb', 'e', { at: [10.75, 18.75], face: 'S' }), P('cobweb', 'e', { at: [17.25, 18.75], face: 'W' }), P('cobweb', 't', { at: [25.25, 18.75], face: 'W' }), P('cobweb', 't', { at: [18.75, 22.25], face: 'E' }),
+  P('cobweb', 'x', { at: [26.75, 18.75], face: 'S' }), P('cobweb', 'x', { at: [31.25, 22.25], face: 'N' }),
+  P('cobweb', 'c', { at: [4.75, 5.75], face: 'S' }), P('cobweb', 'c', { at: [27.25, 5.75], face: 'W' }), P('cobweb', 'c', { at: [4.75, 17.25], face: 'E' }), P('cobweb', 'c', { at: [27.25, 17.25], face: 'N' }),
+  // and over both sides of the two archways into the graveyard
+  P('archweb', 'c', { at: [6.515, 12], face: 'E' }), P('archweb', 'g', { at: [7.485, 12], face: 'E' }), P('archweb', 'g', { at: [24.515, 12], face: 'E' }), P('archweb', 'c', { at: [25.485, 12], face: 'E' }),
 ];
 
 // resolve every prop to a centre (x, z), a facing angle and an axis-aligned footprint
