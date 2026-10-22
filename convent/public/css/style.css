@@ -341,6 +341,37 @@ body.playing #hud {
 #battery.off {
   opacity: 0.5;
 }
+#flash-state {
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: var(--dim);
+}
+#flash-state.ready {
+  color: var(--ink);
+}
+/* the flash (Q): the screen goes white for a blink */
+#flashfx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: #fffaf0;
+  opacity: 0;
+  z-index: 6;
+}
+#flashfx.on {
+  animation: flashBlink 0.5s ease-out;
+}
+#flashfx.on.soft {
+  animation-name: flashSoft;
+}
+@keyframes flashBlink {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+@keyframes flashSoft {
+  0% { opacity: 0.45; }
+  100% { opacity: 0; }
+}
 #battery.charging b {
   background: #8fd08a;
 }

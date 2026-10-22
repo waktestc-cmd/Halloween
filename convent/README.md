@@ -14,6 +14,7 @@ before dawn. (It began as *Escape the Convent*; the folder keeps that name.)
 | **Shift** | Run. It's faster, but the monsters hear it, and you run out of breath after about ten seconds. Running is how you get away from a monster |
 | **E**, **Space** or **click** | Open a door, search a drawer, hide, use the fuse box, the desk or the front door |
 | **F** | Flashlight on or off. It lights your way but lets the monsters see you from further off, and the battery runs down. Switch it off for a while and it slowly charges up again |
+| **Q** | Flash. Every monster in a wide cone in front of you is dazzled for 3 seconds and loses you, and ghosts vanish. No aiming needed. It uses a quarter of your battery (you need at least that much) and takes 10 seconds to charge again |
 | **G** | Drop what you carry, just in front of you. Anyone can pick it up with **E** |
 | **M** | Map: every room by name, you as an arrow, the others as dots, and a card with your goal, what you carry, who is in the house and the latest news |
 | **Esc** | Settings: volume, music, brightness, mouse speed, arrow-key turning, gentle mode, bigger text, full screen |

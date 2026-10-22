@@ -39,6 +39,10 @@ export const KINDS = {
 export const LINEUP = ['vampire', 'creature', 'zombie', 'zombie', 'zombie', 'zombie'];
 // shine your flashlight at the Count and he shrinks back for a moment
 export const FLINCH = { range: 7, cone: 0.35, stun: 1.4, again: 7 };
+// Q: a bright flash from your flashlight. Everything in a wide cone in front of you (cone: half-angle
+// in radians, about 50 degrees) is hit: ghosts vanish, monsters are dazzled for a few seconds and lose
+// track of you. It costs a quarter of the battery and needs that much charge; then it recharges.
+export const FLASH = { range: 8, cone: 0.87, stun: 3, cost: 0.25, cooldown: 10 };
 
 // the host picks how hard the night is
 export const DIFFICULTY = {

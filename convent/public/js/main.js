@@ -112,6 +112,8 @@ const S = {
   stepAt: 0,
   sendAt: 0,
   shine: {},
+  flashAt: -1e9, // when you last fired the flash (performance.now)
+  flashReady: 0, // when it can fire again
   dread: 0,
   fovKick: 0,
 };
@@ -206,6 +208,15 @@ socket.on('feed', (f) => UI.feed(f.text));
 // candy: one comes or goes; the whole list comes with welcome, start and lobby
 socket.on('candy+', (c) => candy.add(c));
 socket.on('candy-', (id) => candy.remove(id));
+// the flash (Q): the server says what it hit, or why it would not fire
+socket.on('flashed', (m) => {
+  if (m.monsters) UI.toast(m.monsters > 1 ? "Dazzled! They can't see you for a moment. Get away!" : "Dazzled! It can't see you for a moment. Get away!", 3000);
+  else if (m.ghosts) UI.toast(m.ghosts > 1 ? 'The ghosts vanish in the flash.' : 'The ghost vanishes in the flash.', 2500);
+});
+socket.on('flash-no', (m) => {
+  S.battery = m.battery;
+  S.flashReady = performance.now() + m.wait * 1000;
+});
 socket.on('yum', (m) => {
   candy.remove(m.id);
   S.me.candy = m.candy;
@@ -388,7 +399,7 @@ document.addEventListener('mousemove', (e) => {
   S.me.pitch -= e.movementY * k * (UI.settings.invert ? -1 : 1);
   S.me.pitch = Math.max(-1.35, Math.min(1.35, S.me.pitch));
 });
-const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyF', 'KeyG', 'KeyM', 'Space', 'Tab']);
+const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyF', 'KeyG', 'KeyM', 'KeyQ', 'Space', 'Tab']);
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   if (GAME_KEYS.has(e.code) && S.phase === 'PLAYING') e.preventDefault();
@@ -399,7 +410,7 @@ document.addEventListener('keydown', (e) => {
   const panel = UI.shown();
   if ((panel === 'panel-begin' || panel === 'panel-paused') && e.code !== 'Escape' && S.me.state === 'alive' && !S.scare) {
     lock();
-    if (!['KeyM', 'Tab', 'KeyE', 'Space', 'KeyF'].includes(e.code)) return;
+    if (!['KeyM', 'Tab', 'KeyE', 'Space', 'KeyF', 'KeyQ'].includes(e.code)) return;
   }
   if (e.code === 'KeyM' || e.code === 'Tab') toggleMap();
   if (S.me.state !== 'alive') {
@@ -409,6 +420,7 @@ document.addEventListener('keydown', (e) => {
   if (S.me.hidden != null && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'KeyE', 'Space'].includes(e.code)) return socket.emit('unhide');
   if (e.code === 'KeyE' || e.code === 'Space') interact();
   // G: put down what you carry, for someone else to pick up
+  if (e.code === 'KeyQ') flash();
   if (e.code === 'KeyG' && S.me.hidden == null && !S.scare) {
     if (!S.me.carrying) UI.toast('Your hands are empty. Nothing to drop.', 2000);
     else socket.emit('drop', { yaw: +S.me.yaw.toFixed(2) });
@@ -573,6 +585,26 @@ function describe(a) {
   }
   return null;
 }
+/* ---------- the flash (Q) ----------
+   Everything in a wide cone in front of you: monsters are dazzled and lose you, ghosts vanish. No
+   aiming needed; the server decides what it hits. */
+function flash() {
+  if (S.phase !== 'PLAYING' || S.me.state !== 'alive' || S.me.hidden != null || S.scare) return;
+  const now = performance.now();
+  if (now < S.flashReady) return UI.toast(`The flash is charging. Ready in ${Math.ceil((S.flashReady - now) / 1000)} seconds.`, 1800);
+  if (S.battery < C.FLASH.cost) return UI.toast('The flash needs a quarter of your battery. Switch the light off (F) for a while to recharge.', 3500);
+  S.battery -= C.FLASH.cost;
+  S.flashAt = now;
+  S.flashReady = now + C.FLASH.cooldown * 1000;
+  socket.emit('flash', { yaw: +S.me.yaw.toFixed(2) });
+  sound.flashPop();
+  const fx = $('flashfx');
+  fx.classList.remove('on', 'soft');
+  void fx.offsetWidth;
+  fx.classList.add('on');
+  if (UI.settings.gentle) fx.classList.add('soft');
+}
+
 function interact() {
   if (S.me.state !== 'alive' || S.scare) return;
   const a = aim;
@@ -655,7 +687,13 @@ function onSfx({ kind, x, z, who }) {
     monsterCry('creature', x, z, muffled, true);
     UI.toast('Something wakes up in the laboratory…', 4000);
   }
-  if (kind === 'flinch') sound.hiss(x, z);
+  // dazzled: the Count hisses, the others cry out
+  if (kind === 'flinch') {
+    if (who === 'vampire' || !who) sound.hiss(x, z);
+    else monsterCry(who, x, z, muffled, false);
+  }
+  // someone else's flash
+  if (kind === 'flash' && Math.hypot(x - S.me.x, z - S.me.z) > 1.5) sound.flashPop(x, z);
   if (kind === 'bell') sound.bell(x, z, muffled, true);
   if (kind === 'boo') sound.boo(x, z);
   if (kind === 'banish') sound.shriek(x, z);
@@ -837,8 +875,12 @@ function frame() {
   // the flashlight stutters when the battery is low, and when something is close
   const flick = S.battery < 0.2 || S.dread > 0.35 ? (Math.sin(t * 31) * Math.sin(t * 7.3) > 1 - Math.max(S.dread * 0.5, S.battery < 0.2 ? 0.4 : 0) ? 0.25 : 1) : 1;
   torch.intensity = S.light && S.battery > 0 && me.hidden == null ? 22 * (0.55 + 0.45 * Math.min(1, S.battery * 3)) * flick : 0;
+  // the flash: a burst far brighter than the torch, for a moment
+  const burst = Math.max(0, 1 - (now - S.flashAt) / 300);
+  if (burst > 0) torch.intensity = Math.max(torch.intensity, 110 * burst);
   torch.visible = me.state === 'alive';
   UI.setBars(S.battery, S.stamina, S.light, !S.light && S.offFor > C.BATTERY.rechargeAfter && S.battery < 1);
+  UI.setFlash(now < S.flashReady ? Math.ceil((S.flashReady - now) / 1000) : S.battery < C.FLASH.cost ? 'low' : 'ready');
 
   // tell the server where we are, ten times a second
   if (playing && me.state === 'alive' && !S.scare && now - S.sendAt > 100) {
@@ -1051,6 +1093,7 @@ if (DEBUG) {
       S.me.pitch = pitch;
     },
     interact,
+    flash,
     // a still monster ('vampire', 'creature', 'zombie') or ghost of our own, to look at
     preview(kind, x, z, yaw = 0, state = 'patrol') {
       const o = kind === 'ghost' ? new Ghost(scene) : makeMonster(scene, kind, 'p' + x);

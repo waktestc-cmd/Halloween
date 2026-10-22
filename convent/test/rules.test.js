@@ -95,6 +95,41 @@ try {
   assert.ok((await once(b, 'dev:where')).monsters.find((m) => m.kind === 'vampire').stunned, 'the Count flinches from the light');
   console.log('ok: the Count flinches from a flashlight');
 
+  // Q: Bob's flash dazzles the zombie in front of him and vanishes the ghost there, not the Count behind
+  const fl = { x: 20, z: 14 }; // the north gallery corridor, facing east along it
+  const where = async () => (b.emit('dev:where'), once(b, 'dev:where'));
+  for (let i = 0; i < 30 && (await where()).monsters.find((m) => m.kind === 'vampire').stunned; i++) await sleep(150);
+  const ws = await where();
+  const zombie = ws.monsters.find((m) => m.kind === 'zombie');
+  const count = ws.monsters.find((m) => m.kind === 'vampire');
+  b.emit('dev:place', { id: zombie.id, x: fl.x + 3, z: fl.z });
+  b.emit('dev:place', { id: count.id, x: fl.x - 3, z: fl.z });
+  b.emit('dev:place', { id: ws.ghosts[0].id, x: fl.x + 4, z: fl.z + 0.5 });
+  b.emit('dev:tp', fl);
+  await sleep(60);
+  b.emit('state', { ...fl, yaw: -Math.PI / 2, battery: 1 });
+  b.emit('flash', { yaw: -Math.PI / 2 });
+  const flashed = await once(b, 'flashed');
+  assert.equal(flashed.monsters, 1, 'one monster dazzled');
+  assert.equal(flashed.ghosts, 1, 'one ghost vanished');
+  assert.ok(Math.abs(flashed.battery - 0.75) < 0.01, 'the flash costs a quarter of the battery');
+  const wf = await where();
+  assert.ok(wf.monsters.find((m) => m.id === zombie.id).stunned, 'the zombie in front is dazzled');
+  assert.ok(!wf.monsters.find((m) => m.id === count.id).stunned, 'the Count behind is not');
+  assert.ok(!wf.ghosts.find((g) => g.id === ws.ghosts[0].id).alive, 'the ghost in front vanishes');
+  // straight away again: not ready yet
+  b.emit('flash', { yaw: -Math.PI / 2 });
+  assert.ok((await once(b, 'flash-no')).wait > 5, 'the flash needs time to recharge');
+  // later, but with too little battery: no
+  b.emit('dev:time', { t: wf.t + 11 });
+  b.emit('state', { ...fl, yaw: -Math.PI / 2, battery: 0.1 });
+  b.emit('flash', { yaw: -Math.PI / 2 });
+  assert.ok((await once(b, 'flash-no')).battery < 0.25, 'the flash needs a quarter of the battery');
+  b.emit('state', { ...fl, yaw: -Math.PI / 2, battery: 1 });
+  b.emit('flash', { yaw: -Math.PI / 2 });
+  await once(b, 'flashed');
+  console.log('ok: the flash dazzles what is in front, banishes ghosts, costs battery and recharges');
+
   // 3. the puzzle chain, carried out by Bob
   b.emit('dev:freeze', true);
   b.emit('dev:where');

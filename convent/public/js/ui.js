@@ -135,10 +135,11 @@ export function mapSide({ stage, padlocks, keyRooms, carrying, candy = 0, lives,
     <p><b>Lives:</b> ${tester ? 'never run out (tester)' : `${lives} of ${C.LIVES}`} · <b>${clockLabel}</b> ${dawn}</p>
     <h3>Who is in the house</h3>
     <ul class="who">
-      <li>🧛 <b>The Count</b>: you hear him breathe. Shine your light in his face and he backs off.</li>
+      <li>📸 <b>Press <kbd>Q</kbd> to flash</b>: every monster in front of you is dazzled and loses you for a moment, and ghosts vanish. It uses a quarter of your battery.</li>
+      <li>🧛 <b>The Count</b>: you hear him breathe. Shine your light in his face and he backs off, or flash him.</li>
       <li>⚡ <b>The Doctor's Monster</b>: ${sleeping ? 'asleep in the Laboratory until the power is fixed.' : 'awake! Heavy footsteps, slow but sees far.'}</li>
       <li>🧟 <b>${zombies} ${zombies === 1 ? 'zombie' : 'zombies'}</b>: they groan, and shuffle around the graveyard.</li>
-      <li>👻 <b>Ghosts</b>: they hum. Hold your flashlight on one until it vanishes.</li>
+      <li>👻 <b>Ghosts</b>: they hum. Hold your flashlight on one until it vanishes, or flash it.</li>
     </ul>
     <h3>What's happening</h3>
     <ul class="news">${news.length ? news.map((n) => `<li>${esc(n)}</li>`).join('') : '<li>All quiet, for now.</li>'}</ul>`;
@@ -155,6 +156,14 @@ export function setTimer(sec, finale) {
   const s = Math.max(0, Math.ceil(sec));
   $('timer').innerHTML = `<small>${finale ? 'Door closes in' : 'Dawn in'}</small>${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   $('timer').classList.toggle('urgent', finale || s < 60);
+}
+// the flash (Q): ready, a countdown in seconds, or 'low' when the battery is under a quarter
+let flashLabel = '';
+export function setFlash(state) {
+  const label = state === 'ready' ? 'Flash ready <kbd>Q</kbd>' : state === 'low' ? 'Flash needs more battery' : `Flash ready in ${state} s`;
+  if (label === flashLabel) return;
+  $('flash-state').innerHTML = flashLabel = label;
+  $('flash-state').classList.toggle('ready', state === 'ready');
 }
 let batteryLabel = '';
 export function setBars(battery, stamina, lightOn, charging) {
