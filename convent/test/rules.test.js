@@ -111,6 +111,7 @@ try {
   b.emit('dev:place', { id: zombie.id, x: fl.x + 3, z: fl.z });
   b.emit('dev:place', { id: count.id, x: fl.x - 3, z: fl.z });
   b.emit('dev:place', { id: ws.ghosts[0].id, x: fl.x + 4, z: fl.z + 0.5 });
+  for (const g of ws.ghosts.slice(1)) b.emit('dev:place', { id: g.id, x: 6, z: 42 }); // the others well away, in the crypt
   b.emit('dev:tp', fl);
   await sleep(60);
   b.emit('state', { ...fl, yaw: -Math.PI / 2, battery: 1 });
@@ -164,13 +165,15 @@ try {
   };
   const stage = () => once(b, 'stage');
   await take('fuse');
-  // G: Bob puts the fuse down in front of him, on the floor, then picks it up again
-  const [bx0, bz0] = [box('fuse').x, box('fuse').z];
+  // G: Bob, in the gallery facing east along it, puts the fuse down in front of him
+  const [bx0, bz0] = [12, 14];
+  b.emit('dev:tp', { x: bx0, z: bz0 });
+  await sleep(60);
   b.emit('dev:where');
   const here = (await once(b, 'dev:where')).loose.length;
   const dropped = until(b, 'feed', (f) => /^Bob dropped the fuse in the /.test(f.text));
   const emptied = until(b, 'me', (m) => m.carrying === null);
-  b.emit('drop', { yaw: 0 });
+  b.emit('drop', { yaw: -Math.PI / 2 });
   await Promise.all([dropped, emptied]);
   b.emit('dev:where');
   const lying = (await once(b, 'dev:where')).loose;
@@ -178,7 +181,7 @@ try {
   const it = lying.find((l) => l.item === 'fuse');
   const [ic, ir] = L.tileOf(it.x, it.z);
   assert.ok(L.floorTile(ic, ir) && L.at(ic, ir) !== '+', 'it lies on a floor tile, not in a doorway');
-  assert.ok(Math.hypot(it.x - bx0, it.z - bz0) < 1.3, 'just in front of Bob');
+  assert.ok(Math.abs(it.x - (bx0 + 0.8)) < 0.05 && Math.abs(it.z - bz0) < 0.05, 'about 0.8 m in front of Bob');
   // Carol arrives late and picks it up; when she leaves, it falls to the floor again for Bob
   const c = player('Carol');
   await once(c, 'welcome');

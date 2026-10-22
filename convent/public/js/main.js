@@ -1083,6 +1083,7 @@ if (DEBUG) {
     renderer,
     haunts,
     candy,
+    sound,
     socket,
     L,
     get aim() {
