@@ -153,10 +153,15 @@ export function setTimer(sec, finale) {
   $('timer').innerHTML = `<small>${finale ? 'Door closes in' : 'Dawn in'}</small>${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   $('timer').classList.toggle('urgent', finale || s < 60);
 }
-export function setBars(battery, stamina, lightOn) {
+let batteryLabel = '';
+export function setBars(battery, stamina, lightOn, charging) {
   $('battery-fill').style.width = `${Math.round(battery * 100)}%`;
   $('battery').classList.toggle('low', battery < 0.2);
-  $('battery').classList.toggle('off', !lightOn);
+  $('battery').classList.toggle('off', !lightOn && !charging);
+  $('battery').classList.toggle('charging', !!charging);
+  // say what the flashlight is doing, in words
+  const label = lightOn && battery <= 0 ? 'Flashlight dead: press <kbd>F</kbd> to recharge' : charging ? 'Flashlight off, recharging' : 'Flashlight <kbd>F</kbd>';
+  if (label !== batteryLabel) $('battery-label').innerHTML = batteryLabel = label;
   $('stamina-fill').style.width = `${Math.round(stamina * 100)}%`;
   $('stamina').classList.toggle('show', stamina < 0.98);
 }

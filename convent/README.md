@@ -13,7 +13,7 @@ before dawn. (It began as *Escape the Convent*; the folder keeps that name.)
 | **Mouse** | Look around (click the screen once to start) |
 | **Shift** | Run. It's faster, but the monsters hear it, and you run out of breath after a few seconds |
 | **E**, **Space** or **click** | Open a door, search a drawer, hide, use the fuse box, the desk or the front door |
-| **F** | Flashlight on or off. It lights your way but lets the monsters see you from further off, and the battery runs down |
+| **F** | Flashlight on or off. It lights your way but lets the monsters see you from further off, and the battery runs down. Switch it off for a while and it slowly charges up again |
 | **M** | Map: every room by name, you as an arrow, the others as dots, and a card with your goal, what you carry, who is in the house and the latest news |
 | **Esc** | Settings: volume, music, brightness, mouse speed, arrow-key turning, gentle mode, bigger text, full screen |
 

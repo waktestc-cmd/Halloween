@@ -123,6 +123,7 @@ export class Game {
       wakeAt: null,
       hidden: null,
       carrying: null,
+      battery: 1, // the browser runs the flashlight; we keep its charge so a refresh doesn't refill it
       stats: { caught: 0, found: 0, placed: 0, escapedAt: 0, closest: 99 },
     });
   }
@@ -168,6 +169,8 @@ export class Game {
       this.broadcastLobby();
     });
     socket.on('state', (m = {}) => {
+      const battery = Number(m.battery);
+      if (me && this.phase === 'PLAYING' && Number.isFinite(battery)) me.battery = Math.max(0, Math.min(1, battery));
       if (!me || this.phase !== 'PLAYING' || me.state !== 'alive' || me.hidden != null) return;
       const x = Number(m.x);
       const z = Number(m.z);
@@ -214,6 +217,7 @@ export class Game {
       }
       if (item === 'battery') {
         this.boxes.delete(p.id);
+        me.battery = Math.min(1, me.battery + C.BATTERY.refill);
         socket.emit('found', { prop: p.id, item: 'battery' });
         return this.markSearched(p.id);
       }
@@ -929,7 +933,7 @@ export class Game {
     return [...this.players.values()].filter((p) => p.online || this.phase !== 'LOBBY').map((p) => ({ id: p.id, name: p.name, look: p.look, lives: p.lives, state: p.state, carrying: p.carrying, online: p.online }));
   }
   mine(p) {
-    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };
+    return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, battery: Math.round(p.battery * 1000) / 1000, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };
   }
   broadcastLobby() {
     this.io.to('players').to('hosts').emit('roster', this.roster());

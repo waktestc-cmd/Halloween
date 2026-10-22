@@ -32,7 +32,7 @@ try {
   // listen for both welcomes before waiting on either, or the second can arrive unheard
   const a = player('Alice');
   const b = player('Bob');
-  await Promise.all([once(a, 'welcome'), once(b, 'welcome')]);
+  const [aWelcome] = await Promise.all([once(a, 'welcome'), once(b, 'welcome')]);
   host.emit('start');
   await once(a, 'start');
   b.emit('dev:freeze', true);
@@ -64,6 +64,14 @@ try {
   a.emit('dev:where');
   await once(a, 'dev:where');
   console.log('ok: three catches and you are out');
+
+  // the flashlight's charge survives a refresh: the same browser comes back with it
+  a.emit('state', { x: 1, z: 1, battery: 0.3 });
+  await sleep(60);
+  const a2 = io(URL, { transports: ['websocket'], forceNew: true });
+  a2.emit('join', { name: 'Alice', look: 1, token: aWelcome.token });
+  assert.equal((await once(a2, 'welcome')).me.battery, 0.3, 'the battery level comes back after a refresh');
+  console.log('ok: a refresh keeps the flashlight battery');
 
   // 2. the Count shrinks back from Bob's flashlight
   b.emit('dev:where');

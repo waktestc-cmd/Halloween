@@ -72,7 +72,9 @@ export const HAUNT = { first: 25, every: [28, 55] };
 // when nobody has found the fuse (or the brass key) for this long, the house gives a clue to its room
 export const HINT = { after: 180 };
 
-export const BATTERY = { drainPerSec: 1 / 200, refill: 0.5, spares: 8 };
+// the flashlight: it runs down while on, and slowly charges up again while switched off
+// (from empty to full in a minute, starting a moment after you switch it off)
+export const BATTERY = { drainPerSec: 1 / 200, refill: 0.5, spares: 16, rechargeAfter: 2, rechargePerSec: 1 / 60 };
 
 export const ITEMS = {
   fuse: { name: 'Fuse', hint: 'Bring it to the fuse box in the gallery' },

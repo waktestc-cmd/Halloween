@@ -87,6 +87,7 @@ const S = {
   doors: {},
   me: { x: L.SPAWN.x, z: L.SPAWN.z, yaw: L.SPAWN.yaw, pitch: 0, lives: C.LIVES, state: 'alive', carrying: null, hidden: null, safeUntil: 0 },
   battery: 1,
+  offFor: 0, // seconds the flashlight has been switched off (it recharges after a moment)
   stamina: 1,
   light: true,
   t: 0, // server clock
@@ -262,6 +263,8 @@ function applyState(m) {
 function applyMe(m, jump) {
   const was = S.me.hidden;
   Object.assign(S.me, { lives: m.lives, state: m.state, carrying: m.carrying, hidden: m.hidden, safeUntil: m.safeUntil, tester: m.tester, secrets: m.secrets });
+  // a refresh or reconnect carries on with the battery you had
+  if (jump && m.battery != null) S.battery = m.battery;
   if (jump || (was != null && m.hidden == null)) {
     S.me.x = m.x;
     S.me.z = m.z;
@@ -390,7 +393,7 @@ document.addEventListener('keydown', (e) => {
   if (S.me.hidden != null && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'KeyE', 'Space'].includes(e.code)) return socket.emit('unhide');
   if (e.code === 'KeyE' || e.code === 'Space') interact();
   if (e.code === 'KeyF') {
-    if (!S.light && S.battery <= 0) return UI.toast('Your flashlight is dead. Look for batteries in drawers and cupboards.');
+    if (!S.light && S.battery < 0.02) return UI.toast('Your flashlight is still recharging. Leave it off a little longer, or find batteries in drawers.');
     S.light = !S.light;
     sound.click();
   }
@@ -794,22 +797,31 @@ function frame() {
     }
   }
 
-  // flashlight and battery
-  if (playing && me.state === 'alive' && S.light) S.battery = Math.max(0, S.battery - dt * C.BATTERY.drainPerSec);
-  if (S.battery <= 0 && S.light) {
-    S.light = false;
-    UI.toast('Your flashlight died. Find batteries in drawers and cupboards.');
+  // flashlight and battery: it runs down while on, and charges up again while switched off
+  if (playing && me.state === 'alive') {
+    if (S.light) {
+      S.battery = Math.max(0, S.battery - dt * C.BATTERY.drainPerSec);
+      S.offFor = 0;
+    } else {
+      S.offFor += dt;
+      if (S.offFor > C.BATTERY.rechargeAfter) S.battery = Math.min(1, S.battery + dt * C.BATTERY.rechargePerSec);
+    }
   }
+  if (S.battery <= 0 && S.light && !S.toldDead) {
+    S.toldDead = true;
+    UI.toast('Your flashlight died. Press F to switch it off and it slowly recharges. Batteries in drawers help too.', 7000);
+  }
+  if (S.battery > 0.05) S.toldDead = false;
   // the flashlight stutters when the battery is low, and when something is close
   const flick = S.battery < 0.2 || S.dread > 0.35 ? (Math.sin(t * 31) * Math.sin(t * 7.3) > 1 - Math.max(S.dread * 0.5, S.battery < 0.2 ? 0.4 : 0) ? 0.25 : 1) : 1;
-  torch.intensity = S.light && me.hidden == null ? 22 * (0.55 + 0.45 * Math.min(1, S.battery * 3)) * flick : 0;
+  torch.intensity = S.light && S.battery > 0 && me.hidden == null ? 22 * (0.55 + 0.45 * Math.min(1, S.battery * 3)) * flick : 0;
   torch.visible = me.state === 'alive';
-  UI.setBars(S.battery, S.stamina, S.light);
+  UI.setBars(S.battery, S.stamina, S.light, !S.light && S.offFor > C.BATTERY.rechargeAfter && S.battery < 1);
 
   // tell the server where we are, ten times a second
   if (playing && me.state === 'alive' && !S.scare && now - S.sendAt > 100) {
     S.sendAt = now;
-    socket.emit('state', { x: +me.x.toFixed(2), z: +me.z.toFixed(2), yaw: +me.yaw.toFixed(2), run, moving, light: S.light && S.battery > 0 });
+    socket.emit('state', { x: +me.x.toFixed(2), z: +me.z.toFixed(2), yaw: +me.yaw.toFixed(2), run, moving, light: S.light && S.battery > 0, battery: +S.battery.toFixed(3) });
   }
 
   // everyone else

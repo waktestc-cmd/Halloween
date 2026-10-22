@@ -321,6 +321,9 @@ body.playing #hud {
 #battery.off {
   opacity: 0.5;
 }
+#battery.charging b {
+  background: #8fd08a;
+}
 #stamina {
   opacity: 0;
   transition: opacity 0.4s;
