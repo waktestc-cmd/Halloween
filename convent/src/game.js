@@ -188,7 +188,7 @@ export class Game {
       const d = L.DOORS.find((d) => d.id === m.id);
       if (!this.can(me) || !d || d.arch) return;
       if (d.front) return this.useFront(me);
-      if (!this.near(me, L.centre(d.c, d.r), C.REACH + 0.8)) return;
+      if (!this.within(me, { kind: 'door', id: d.id })) return;
       this.doors[d.id] = !this.doors[d.id];
       this.emitDoors();
       this.sfx(this.doors[d.id] ? 'door-open' : 'door-close', ...L.centre(d.c, d.r));
@@ -196,7 +196,7 @@ export class Game {
     });
     socket.on('search', (m = {}) => {
       const p = L.PROPS[m.prop | 0];
-      if (!this.can(me) || !p || !p.box || !this.near(me, [p.x, p.z], C.REACH + Math.max(p.hw, p.hd))) return;
+      if (!this.can(me) || !p || !p.box || !this.within(me, { kind: 'search', prop: p.id })) return;
       this.noise(me, C.NOISE.search);
       const item = this.boxes.get(p.id);
       if (!item) {
@@ -229,7 +229,7 @@ export class Game {
     });
     socket.on('hide', (m = {}) => {
       const p = L.PROPS[m.prop | 0];
-      if (!this.can(me) || !p || !p.hide || this.hidden.has(p.id) || !this.near(me, [p.x, p.z], C.REACH + Math.max(p.hw, p.hd))) {
+      if (!this.can(me) || !p || !p.hide || this.hidden.has(p.id) || !this.within(me, { kind: 'hide', prop: p.id })) {
         if (p && this.hidden.has(p.id)) socket.emit('toast', 'Someone is already hiding there!');
         return;
       }
@@ -278,6 +278,12 @@ export class Game {
   }
   near(me, [x, z], r) {
     return Math.hypot(me.x - x, me.z - z) <= r;
+  }
+  // close enough to use it, by the same rule the browser uses to show the hint; a little extra
+  // allows for the position we have being a moment old
+  within(me, act) {
+    const s = L.useSpot(act);
+    return !!s && this.near(me, [s.x, s.z], C.REACH + s.extra + 0.5);
   }
 
   /* ---------- the night ---------- */
@@ -341,7 +347,7 @@ export class Game {
   }
 
   useFuse(me) {
-    if (this.stage !== 'power' || !this.near(me, [L.FUSEBOX.x, L.FUSEBOX.z], C.REACH + 0.6)) return;
+    if (this.stage !== 'power' || !this.within(me, { kind: 'fusebox' })) return;
     if (me.carrying !== 'fuse') return me.socket.emit('toast', 'The fuse box is missing a fuse.');
     me.carrying = null;
     me.stats.placed++;
@@ -361,7 +367,7 @@ export class Game {
 
   useDesk(me) {
     const d = L.OFFICE_DESK;
-    if (!this.near(me, [d.x, d.z], C.REACH + 1)) return;
+    if (!this.within(me, { kind: 'desk' })) return;
     if (this.stage === 'power') return me.socket.emit('toast', "The desk is locked. It's too dark to see the lock anyway.");
     if (this.stage !== 'desk') return me.socket.emit('note', this.note());
     if (me.carrying !== 'brass') return me.socket.emit('toast', 'The desk is locked with a small brass lock.');
@@ -381,7 +387,7 @@ export class Game {
 
   useFront(me) {
     const [fx, fz] = L.centre(L.FRONT.c, L.FRONT.r);
-    if (!this.near(me, [fx, fz], C.REACH + 1)) return;
+    if (!this.within(me, { kind: 'front' })) return;
     if (this.stage === 'escape') return;
     if (!/^key\d$/.test(me.carrying || '')) {
       const left = 3 - this.padlocks;

@@ -488,11 +488,17 @@ function findAim() {
       const [x, z] = L.centre(d.c, d.r);
       const dist = Math.hypot(x - S.me.x, z - S.me.z);
       const ang = Math.acos(Math.max(-1, Math.min(1, ((x - S.me.x) * fx + (z - S.me.z) * fz) / (dist || 1))));
-      if (dist < Math.min(best + 0.8, 2.4) && ang < 0.6) {
+      // a door you look at within reach counts even while it swings or stands open
+      if ((dist < Math.min(best + 0.8, 2.4) && ang < 0.6) || (dist < C.REACH + 0.8 && ang < 0.4 && !act)) {
         best = dist - 0.8;
         act = { kind: d.front ? 'front' : 'door', id: d.id, dist };
       }
     }
+  }
+  // pointing at something you are not yet close enough to use (the server would refuse it)
+  if (act) {
+    const spot = L.useSpot(act);
+    if (spot && Math.hypot(spot.x - S.me.x, spot.z - S.me.z) > C.REACH + spot.extra) act.far = true;
   }
   // items dropped on the floor: look roughly at them
   for (const [id, l] of S.loose) {
@@ -501,8 +507,10 @@ function findAim() {
   }
   return act;
 }
+const CLOSER = { door: 'open the door', front: 'reach the front door', search: 'search it', hide: 'hide there', fusebox: 'reach the fuse box', desk: 'reach the desk' };
 function describe(a) {
   if (!a) return null;
+  if (a.far) return [`Step closer to ${CLOSER[a.kind] || 'reach it'}`, ''];
   const carrying = S.me.carrying;
   switch (a.kind) {
     case 'door':
@@ -530,7 +538,7 @@ function describe(a) {
 function interact() {
   if (S.me.state !== 'alive' || S.scare) return;
   const a = aim;
-  if (!a) return;
+  if (!a || a.far) return;
   if (a.kind === 'door' || a.kind === 'front') {
     if (a.kind === 'front') return socket.emit('use', { what: 'front' });
     return socket.emit('door', { id: a.id });

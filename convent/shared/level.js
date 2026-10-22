@@ -221,6 +221,22 @@ export const FRONT = DOORS.find((d) => d.front);
 // you are out once you are past the front door
 export const ESCAPE_Z = (FRONT.r + 0.9) * TILE;
 
+// What you use and where you have to stand to use it: its centre, and how much further than REACH
+// still counts. The server and the browser both go by this, so the "Press E" hint only shows when
+// pressing E will work.
+export function useSpot(act) {
+  if (act.kind === 'door' || act.kind === 'front') {
+    const d = DOORS.find((d) => d.id === act.id) || FRONT;
+    const [x, z] = centre(d.c, d.r);
+    return { x, z, extra: d.front ? 1 : 0.8 };
+  }
+  if (act.kind === 'fusebox') return { x: FUSEBOX.x, z: FUSEBOX.z, extra: 0.6 };
+  if (act.kind === 'desk') return { x: OFFICE_DESK.x, z: OFFICE_DESK.z, extra: 1 };
+  const p = PROPS[act.prop];
+  if (p) return { x: p.x, z: p.z, extra: Math.max(p.hw, p.hd) };
+  return null;
+}
+
 // where things can be hidden: every searchable prop
 export const BOXES = PROPS.filter((p) => p.box);
 export const HIDES = PROPS.filter((p) => p.hide);
