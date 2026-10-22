@@ -21,6 +21,7 @@
 | `door-slam.mp3` | | Pixabay: flutie8211 "door slamming 2" (551015) | Pixabay Content License |
 | `heartbeat.mp3` | | Pixabay: lenspulse "intense cinematic heartbeat" (584627) | Pixabay Content License |
 | `thunder.mp3`, `thunder-2.mp3` (first 10 s) | | Pixabay: u_q2hb2391vb "thunder clap" (521194), soundreality "thunder sound" (375727) | Pixabay Content License |
+| `evil-laugh.wav` (the house laughs as the night starts, on the big screen and every laptop) | | From the Pumpkin Smash game in this repository (`evillaugh.ogg`, supplied by the team, converted to WAV). Originally from Plants vs. Zombies (PopCap/EA) | Plants vs. Zombies, rights handled by the organiser |
 | `jump-scare.wav` | | Made by the organiser with Adobe Firefly | Organiser's |
 | Plaster walls, stone, tiles, wood, cloth, portraits | drawn in code (`public/js/textures.js`, `actors.js`) | Made for this game | Ours |
 | Rain, wind, drone, chase music, clock, drips, music box, wail, creaks, the Count's breathing and hiss, footsteps of the Doctor's Monster | made in code (`public/js/audio.js`) | Made for this game | Ours |
@@ -36,7 +37,7 @@ again once the files above were copied from them; they are still in the git hist
 `public/assets/models/models.json` lists a model for each kind of furniture, the player costumes, the
 zombies, and a `recolor` table that repaints the Kenney furniture colours in older, darker ones. The Count
 and the Doctor's Monster are built from shapes in `public/js/actors.js`: the cartoon pack has nothing
-frightening enough for them. The Evil Laugh from Pumpkin Smash is not used (its rights were never cleared).
+frightening enough for them. The evil laugh from Pumpkin Smash plays as the night starts; the organiser handles its rights.
 
 ## Still wanted
 

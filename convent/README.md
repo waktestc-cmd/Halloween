@@ -69,7 +69,8 @@ node tools/bots.js 20 --url http://localhost:3000   # fake players for trying it
 ```
 
 - Open `/host?key=<HOST_KEY>` on the big screen. It shows a QR code and the join address.
-- The host picks Easy, Normal or Scary and starts the night.
+- The big screen's lobby is a dark house: a window lights up, with their costume and name, for each guest who comes in.
+- The host picks Easy, Normal or Scary and presses **Open the house**. The house laughs, on the big screen and every laptop.
 - During the game the big screen shows the whole map, including where the monsters and ghosts are (the players can't see that), progress, and news as it happens.
 
 ## Putting it online (Google Cloud Run)

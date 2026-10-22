@@ -11,6 +11,7 @@ const FILES = {
   found: ['sfx-pumpkin-found'],
   hit: ['sfx-hit'],
   win: ['sfx-win'],
+  laugh: ['evil-laugh'], // the house laughs as the night starts (from Pumpkin Smash)
   // optional recordings: drop these in to replace the made-up sounds
   ambience: ['ambience'],
   chase: ['chase'],

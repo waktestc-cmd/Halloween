@@ -171,6 +171,8 @@ function clearHouse() {
   sound.setChase(0);
 }
 socket.on('start', (m) => {
+  // the house laughs as the doors lock behind you
+  sound.play('laugh', { vol: UI.settings.gentle ? 0.45 : 0.9 });
   clearHouse();
   haunts.reset();
   applyState(m);
