@@ -138,9 +138,23 @@ try {
   const [ic, ir] = L.tileOf(it.x, it.z);
   assert.ok(L.floorTile(ic, ir) && L.at(ic, ir) !== '+', 'it lies on a floor tile, not in a doorway');
   assert.ok(Math.hypot(it.x - bx0, it.z - bz0) < 1.3, 'just in front of Bob');
-  b.emit('pickup', { id: it.id });
+  // Carol arrives late and picks it up; when she leaves, it falls to the floor again for Bob
+  const c = player('Carol');
+  await once(c, 'welcome');
+  c.emit('dev:tp', { x: it.x + 0.5, z: it.z });
+  await sleep(60);
+  c.emit('pickup', { id: it.id });
+  assert.equal((await until(c, 'me', (m) => m.carrying != null)).carrying, 'fuse', 'someone else picks the fuse up');
+  const left = until(b, 'feed', (f) => /^Carol dropped the fuse/.test(f.text));
+  c.disconnect();
+  await left;
+  b.emit('dev:where');
+  const again = (await once(b, 'dev:where')).loose.find((l) => l.item === 'fuse');
+  b.emit('dev:tp', { x: again.x, z: again.z + 0.5 });
+  await sleep(60);
+  b.emit('pickup', { id: again.id });
   assert.equal((await until(b, 'me', (m) => m.carrying != null)).carrying, 'fuse', 'Bob picks the fuse up again');
-  console.log('ok: G drops what you carry, and it can be picked up');
+  console.log('ok: G drops what you carry, and someone else can pick it up');
 
   // candy: scattered on clear floor (never the guest bedrooms or a doorway); walking onto one picks it up
   b.emit('dev:where');
