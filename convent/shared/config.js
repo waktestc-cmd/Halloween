@@ -6,8 +6,10 @@ export const RESPAWN_SAFE = 5; // seconds nothing can touch you after waking up 
 
 export const WALK = 3.0;
 export const RUN = 5.0;
-export const STAMINA = 6; // seconds of running before you are out of breath
-export const STAMINA_BACK = 0.6; // regained per second while not running
+// Running saves you: ten seconds of it outruns the Count (3.85 m/s on Normal, 4.2 on Scary, against
+// your 5) by about 8 to 11 m, enough to get round a corner and out of his sight.
+export const STAMINA = 10; // seconds of running before you are out of breath
+export const STAMINA_BACK = 1.2; // seconds of running regained per second while walking (more standing still)
 export const REACH = 2.2; // how far you can reach to open, search or hide
 
 // what every monster does; each kind below scales the speeds and how far it sees

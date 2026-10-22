@@ -11,7 +11,7 @@ before dawn. (It began as *Escape the Convent*; the folder keeps that name.)
 | --- | --- |
 | **W A S D** or **arrow keys** | Walk (left and right arrows turn you, unless you switch that off in Settings) |
 | **Mouse** | Look around (click the screen once to start) |
-| **Shift** | Run. It's faster, but the monsters hear it, and you run out of breath after a few seconds |
+| **Shift** | Run. It's faster, but the monsters hear it, and you run out of breath after about ten seconds. Running is how you get away from a monster |
 | **E**, **Space** or **click** | Open a door, search a drawer, hide, use the fuse box, the desk or the front door |
 | **F** | Flashlight on or off. It lights your way but lets the monsters see you from further off, and the battery runs down. Switch it off for a while and it slowly charges up again |
 | **G** | Drop what you carry, just in front of you. Anyone can pick it up with **E** |
