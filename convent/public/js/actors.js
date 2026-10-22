@@ -14,9 +14,11 @@ const soldier = () =>
   new GLTFLoader().loadAsync('/assets/models/Soldier.glb').then((g) => ({ scene: g.scene, animations: g.animations, scale: 1, spec: { turn: 180, tint: 'VanguardBodyMat', tintBoost: 2.2 } }));
 const cast = characters('player');
 // the figure for one player: one of the listed files, picked from their id so it stays the same
-async function figureFor(id) {
+// the costume they picked on the join screen, or one picked from their id when there is none
+async function figureFor(info) {
   const c = await cast;
-  return (c.count && (await c.get(hash(id)))) || soldier();
+  const i = Number.isInteger(info.costume) ? info.costume : hash(info.id || info.name);
+  return (c.count && (await c.get(i))) || soldier();
 }
 const hash = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
@@ -63,7 +65,7 @@ export class Avatar {
     this.bulb = bulb;
     this.root.add(bulb);
     scene.add(this.root);
-    figureFor(info.id || info.name).then((f) => this.dress(f)).catch((e) => console.warn('no figure', e));
+    figureFor(info).then((f) => this.dress(f)).catch((e) => console.warn('no figure', e));
   }
   dress(f) {
     if (!f || this.body || this.gone) return;

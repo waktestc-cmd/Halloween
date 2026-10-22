@@ -394,12 +394,10 @@ document.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   S.keys[e.code] = true;
   if (S.phase !== 'PLAYING') return;
-  // any key (but Esc) steps you inside, or back in after the settings
+  // any key (but Esc) steps you inside, or back in after the settings, and does nothing else
+  // (a walking key you keep holding walks you on once you are in)
   const panel = UI.shown();
-  if ((panel === 'panel-begin' || panel === 'panel-paused') && e.code !== 'Escape' && S.me.state === 'alive' && !S.scare) {
-    lock();
-    if (!['KeyM', 'Tab', 'KeyE', 'Space', 'KeyF', 'KeyQ'].includes(e.code)) return;
-  }
+  if ((panel === 'panel-begin' || panel === 'panel-paused') && e.code !== 'Escape' && S.me.state === 'alive' && !S.scare) return lock();
   if (e.code === 'KeyM' || e.code === 'Tab') toggleMap();
   if (S.me.state !== 'alive') {
     if (e.code === 'Space' || e.code === 'ArrowRight') nextWatch();
@@ -407,8 +405,9 @@ document.addEventListener('keydown', (e) => {
   }
   if (S.me.hidden != null && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'KeyE', 'Space'].includes(e.code)) return socket.emit('unhide');
   if (e.code === 'KeyE' || e.code === 'Space') interact();
-  // G: put down what you carry, for someone else to pick up
+  // Q: a flash that dazzles whatever is in front of you
   if (e.code === 'KeyQ') flash();
+  // G: put down what you carry, for someone else to pick up
   if (e.code === 'KeyG' && S.me.hidden == null && !S.scare) {
     if (!S.me.carrying) UI.toast('Your hands are empty. Nothing to drop.', 2000);
     else socket.emit('drop', { yaw: +S.me.yaw.toFixed(2) });
