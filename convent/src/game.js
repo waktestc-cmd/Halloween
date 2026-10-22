@@ -272,6 +272,12 @@ export class Game {
       socket.on('dev:where', () => socket.emit('dev:where', { boxes: [...this.boxes], monsters: this.monsters.map((n) => ({ kind: n.kind, x: n.x, z: n.z, yaw: n.yaw, state: n.state, stunned: this.t < n.stunUntil })), ghosts: this.ghosts.map((g) => ({ x: g.x, z: g.z, alive: g.alive })) }));
       socket.on('dev:tp', (m = {}) => me && Object.assign(me, { x: Number(m.x), z: Number(m.z) }));
       socket.on('dev:freeze', (on) => (this.frozen = !!on));
+      // put something in your hands (or empty them), to try a rule out of order
+      socket.on('dev:give', (m = {}) => {
+        if (!me) return;
+        me.carrying = C.ITEMS[m.item] ? m.item : null;
+        socket.emit('me', this.mine(me));
+      });
     }
     socket.on('disconnect', () => {
       if (!me) return;
@@ -337,7 +343,8 @@ export class Game {
   }
 
   hideItems() {
-    // one item per hiding place; the iron keys go to three different rooms away from the office
+    // one item per hiding place. The iron keys are not in the house yet: they turn up once the
+    // Count's desk is open (placeKeys), so nobody can unlock the front door out of order.
     const boxes = shuffle(L.BOXES.filter((b) => b.room !== 'd'));
     const used = new Set();
     const take = (pred) => {
@@ -347,19 +354,32 @@ export class Game {
     };
     this.boxes.set(take((b) => b.room !== 'c').id, 'fuse');
     this.boxes.set(take((b) => b.room !== 'o').id, 'brass');
-    const rooms = new Set();
-    for (const k of ['key1', 'key2', 'key3']) {
-      const b = take((b) => b.room !== 'o' && b.room !== 'e' && !rooms.has(b.room));
-      rooms.add(b.room);
-      this.boxes.set(b.id, k);
-      this.keyRooms.push(b.room);
-    }
     for (let i = 0; i < C.BATTERY.spares; i++) {
       const b = boxes.find((b) => !used.has(b.id));
       if (!b) break;
       used.add(b.id);
       this.boxes.set(b.id, 'battery');
     }
+  }
+
+  // the desk is open: the three iron keys go into three different rooms (never the study or the
+  // entrance hall), each in a hiding place nobody has emptied yet if there is one
+  placeKeys() {
+    const boxes = shuffle(L.BOXES.filter((b) => b.room !== 'd' && b.room !== 'o' && b.room !== 'e'));
+    // best: not searched and empty; then searched and empty; last, a box with batteries in it
+    const rank = (b) => (this.boxes.has(b.id) ? 2 : this.searched.has(b.id) ? 1 : 0);
+    boxes.sort((a, b) => rank(a) - rank(b));
+    this.keyRooms = [];
+    let reused = false;
+    for (const k of ['key1', 'key2', 'key3']) {
+      const b = boxes.find((b) => !this.keyRooms.includes(b.room) && this.boxes.get(b.id) !== 'fuse' && this.boxes.get(b.id) !== 'brass' && !/^key/.test(this.boxes.get(b.id) || ''));
+      this.boxes.set(b.id, k);
+      this.keyRooms.push(b.room);
+      // a place someone already emptied loses its tick on the map, so people look again
+      if (this.searched.delete(b.id)) reused = true;
+    }
+    if (reused) this.io.to('players').to('hosts').emit('searched', [...this.searched]);
+    for (const p of this.players.values()) if (p.tester) p.socket.emit('me', this.mine(p));
   }
 
   newGhost(id) {
@@ -396,6 +416,7 @@ export class Game {
     me.carrying = null;
     me.stats.placed++;
     this.stage = 'keys';
+    this.placeKeys();
     this.sfx('unlock', d.x, d.z);
     this.say(`${me.name} opened the desk and found a note: the iron keys are in the ${this.keyRooms.map((k) => L.ROOMS[k].name).join(', the ')}.`);
     this.emitStage();
@@ -411,6 +432,8 @@ export class Game {
     const [fx, fz] = L.centre(L.FRONT.c, L.FRONT.r);
     if (!this.within(me, { kind: 'front' })) return;
     if (this.stage === 'escape') return;
+    // the padlocks only give once the power is back and the desk is open
+    if (this.stage !== 'keys') return me.socket.emit('toast', "The padlocks won't budge yet. First the power, then the Count's desk.");
     if (!/^key\d$/.test(me.carrying || '')) {
       const left = 3 - this.padlocks;
       return me.socket.emit('toast', `The front door is locked with ${left} padlock${left === 1 ? '' : 's'}.`);

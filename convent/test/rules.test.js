@@ -83,7 +83,19 @@ try {
   // 3. the puzzle chain, carried out by Bob
   b.emit('dev:freeze', true);
   b.emit('dev:where');
-  const w = await once(b, 'dev:where');
+  let w = await once(b, 'dev:where');
+  const [fx, fz] = L.centre(L.FRONT.c, L.FRONT.r);
+  // no iron key anywhere before the desk is open, and the front door will not take one yet
+  assert.ok(!w.boxes.some(([, it]) => /^key/.test(it)), 'no iron key is hidden before the desk');
+  b.emit('dev:give', { item: 'key1' });
+  await once(b, 'me');
+  b.emit('dev:tp', { x: fx, z: fz - 1.5 });
+  await sleep(60);
+  b.emit('use', { what: 'front' });
+  assert.match(await once(b, 'toast'), /won't budge/, 'the front door refuses a key before the desk');
+  b.emit('dev:give', { item: null });
+  await once(b, 'me');
+  console.log('ok: no iron keys before the desk, and the padlocks refuse one');
   assert.equal(w.monsters.find((m) => m.kind === 'creature').state, 'asleep', "the Doctor's Monster sleeps until the power is back");
   const box = (item) => L.PROPS[w.boxes.find(([, it]) => it === item)[0]];
   const take = async (item) => {
@@ -109,7 +121,13 @@ try {
   const st = await stage();
   assert.equal(st.stage, 'keys');
   assert.equal(st.keyRooms.length, 3);
-  const [fx, fz] = L.centre(L.FRONT.c, L.FRONT.r);
+  // the keys appear now, one in each room the note names
+  b.emit('dev:where');
+  w = await once(b, 'dev:where');
+  const keyBoxes = w.boxes.filter(([, it]) => /^key/.test(it));
+  assert.equal(keyBoxes.length, 3, 'three iron keys after the desk');
+  assert.deepEqual(keyBoxes.map(([id]) => L.PROPS[id].room).sort(), [...st.keyRooms].sort(), 'the keys are in exactly the rooms on the note');
+  assert.equal(new Set(st.keyRooms).size, 3, 'three different rooms');
   for (const k of ['key1', 'key2', 'key3']) {
     assert.ok(st.keyRooms.includes(box(k).room), 'the note names the room of ' + k);
     await take(k);
