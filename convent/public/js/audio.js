@@ -196,7 +196,7 @@ export class Sound {
     lp.type = 'lowpass';
     lp.frequency.value = 5000;
     this.rainGain = ctx.createGain();
-    this.rainGain.gain.value = 0.05;
+    this.rainGain.gain.value = 0.012;
     rain.connect(bp).connect(lp).connect(this.rainGain).connect(this.sfxBus);
     // wind moaning through the building
     const wind = noise();
@@ -275,7 +275,7 @@ export class Sound {
     }
   }
   setRain(near) {
-    if (this.rainGain) this.rainGain.gain.setTargetAtTime(0.025 + near * 0.12, this.ctx.currentTime, 0.4);
+    if (this.rainGain) this.rainGain.gain.setTargetAtTime(0.006 + near * 0.03, this.ctx.currentTime, 0.4);
   }
   setChase(level) {
     if (this.chaseGain) this.chaseGain.gain.setTargetAtTime(level * 0.55, this.ctx.currentTime, level > 0 ? 0.3 : 2.5);
