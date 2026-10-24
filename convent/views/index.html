@@ -82,31 +82,44 @@
           <p class="quiet">The house opens when the host says so. Watch the big screen.</p>
         </div>
       </div>
-      <p id="roster-count"></p>
-      <ul id="roster"></ul>
-      <div class="howto">
-        <h3>How to play</h3>
-        <div class="keys">
-          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys<span>Walk</span></div>
-          <div><kbd>Mouse</kbd><span>Look around</span></div>
-          <div><kbd>Shift</kbd><span>Run (they hear it)</span></div>
-          <div><kbd>E</kbd> or click<span>Open, search, hide</span></div>
-          <div><kbd>F</kbd><span>Flashlight on/off</span></div>
-          <div><kbd>G</kbd><span>Drop what you carry</span></div>
-          <div><kbd>Q</kbd><span>Flash: dazzles monsters, ghosts vanish</span></div>
-          <div><kbd>M</kbd><span>Map</span></div>
-          <div><kbd>Esc</kbd><span>Settings</span></div>
+      <div class="l-pages" data-page="1">
+        <div class="l-page" id="l-page-1">
+          <p id="roster-count"></p>
+          <ul id="roster"></ul>
+          <div class="howto">
+            <h3>Controls</h3>
+            <div class="keys">
+              <div><span class="k"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Walk (or arrow keys)</span></div>
+              <div><span class="k"><kbd>Mouse</kbd></span><span>Look around</span></div>
+              <div><span class="k"><kbd>Shift</kbd></span><span>Run (they hear it)</span></div>
+              <div><span class="k"><kbd>E</kbd></span><span>Open, search, hide (or click)</span></div>
+              <div><span class="k"><kbd>F</kbd></span><span>Flashlight on/off</span></div>
+              <div><span class="k"><kbd>G</kbd></span><span>Drop what you carry</span></div>
+              <div><span class="k"><kbd>Q</kbd></span><span>Flash: dazzles monsters, ghosts vanish</span></div>
+              <div><span class="k"><kbd>M</kbd></span><span>Map</span></div>
+              <div><span class="k"><kbd>Esc</kbd></span><span>Settings</span></div>
+            </div>
+          </div>
         </div>
-        <ol>
-          <li><b>The monsters</b> walk the halls, and you hear them coming: <b>the Count</b> breathes (shine your flashlight in his face and he backs off for a moment), <b>the Doctor's Monster</b> stomps (he wakes when the power comes back), <b>the zombies</b> groan in the graveyard. If one sees you, run, or hide in a wardrobe or under a bed.</li>
-          <li><b>The ghosts</b> hum as they float slowly toward you. Walk away, or hold your flashlight on them until they vanish.</li>
-          <li><b>Three lives.</b> Caught once or twice, you wake up back in the guest bedrooms. The third time, you're out.</li>
-          <li><b>Escape together:</b> fix the fuse box, open the Count's desk, find the three iron keys, unlock the front door.</li>
-          <li><b>Trick or treat:</b> wrapped sweets lie all over the house. Just walk over them to collect them. Each one adds to your score.</li>
-        </ol>
+        <div class="l-page" id="l-page-2">
+          <div class="howto">
+            <h3>The night</h3>
+            <div class="rules">
+              <div><b>Monsters</b>The Count breathes (shine your flashlight in his face and he backs off). The Doctor's Monster stomps once the power is back. Zombies groan in the graveyard. If one sees you, run, or hide in a wardrobe or under a bed.</div>
+              <div><b>Ghosts</b>They hum as they float slowly toward you. Walk away, or hold your flashlight on them until they vanish.</div>
+              <div><b>Three lives</b>Caught once or twice, you wake up back in the guest bedrooms. The third time, you're out.</div>
+              <div><b>Escape together</b>Fix the fuse box, open the Count's desk, find the three iron keys, unlock the front door.</div>
+              <div><b>Trick or treat</b>Wrapped sweets lie all over the house. Walk over them to collect them; each one adds to your score.</div>
+            </div>
+          </div>
+          <div class="win" id="tips"></div>
+        </div>
       </div>
-      <div class="win" id="tips"></div>
-      <button id="btn-settings-lobby" type="button" class="ghost">Settings</button>
+      <div class="l-nav">
+        <button id="btn-settings-lobby" type="button" class="ghost">Settings</button>
+        <span class="l-dots" aria-hidden="true"><i class="on"></i><i></i></span>
+        <button id="btn-lobby-page" type="button" class="cta">Next: the rules &rarr;</button>
+      </div>
       <div class="settings" id="settings-lobby"></div>
     </div>
   </section>

@@ -1134,3 +1134,144 @@ tr.me td {
 .ps #roster em {
   color: var(--ash);
 }
+
+/* the lobby in two pages: who is here and the controls, then the rules; no long scroll */
+.ps .card.lobby {
+  font-size: 15px;
+  padding: 28px 34px 22px;
+  margin: auto;
+}
+.lobby .l-top h2 {
+  font-size: 44px;
+}
+.lobby .window {
+  width: 84px;
+  height: 100px;
+  padding: 12px 8px 0;
+}
+.lobby .l-page {
+  display: none;
+}
+.lobby .l-pages[data-page='1'] #l-page-1,
+.lobby .l-pages[data-page='2'] #l-page-2 {
+  display: block;
+  animation: l-in 0.25s ease-out;
+}
+@keyframes l-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+.lobby #roster {
+  max-height: 96px;
+  overflow-y: auto;
+  gap: 6px;
+}
+.lobby .howto h3 {
+  margin: 14px 0 8px;
+}
+.lobby .howto .keys {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.lobby .howto .keys > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(237, 227, 207, 0.05);
+  border-radius: 4px;
+}
+.lobby .howto .keys span {
+  font-size: 0.9em;
+  line-height: 1.25;
+}
+.lobby .keys .k {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.lobby .rules {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.lobby .rules > div {
+  padding: 10px 12px;
+  background: rgba(237, 227, 207, 0.05);
+  border-radius: 4px;
+  border-top: 2px solid rgba(255, 122, 26, 0.5);
+  color: var(--dim);
+  line-height: 1.35;
+  font-size: 0.93em;
+}
+.lobby .rules b {
+  display: block;
+  color: var(--bone);
+  font-size: 1.05em;
+  margin-bottom: 3px;
+}
+.lobby .rules > div:first-child {
+  grid-column: span 2;
+}
+.lobby.p2 .l-top {
+  display: none;
+}
+.lobby .tips {
+  columns: 2;
+  column-gap: 28px;
+}
+.lobby .tips li {
+  break-inside: avoid;
+}
+.lobby .win {
+  margin: 12px 0 0;
+  padding: 2px 16px 6px;
+  font-size: 0.93em;
+}
+.lobby .win h3 {
+  margin: 10px 0 6px;
+}
+.lobby .tips li {
+  margin-bottom: 0.3em;
+}
+.l-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(237, 227, 207, 0.1);
+}
+.l-nav .cta {
+  padding: 10px 20px;
+}
+.l-dots {
+  display: flex;
+  gap: 8px;
+}
+.l-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(237, 227, 207, 0.25);
+}
+.l-dots i.on {
+  background: #ff7a1a;
+}
+@media (max-width: 640px) {
+  .lobby .howto .keys {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .lobby .rules {
+    grid-template-columns: 1fr;
+  }
+  .lobby .rules > div:first-child {
+    grid-column: auto;
+  }
+  .lobby .tips {
+    columns: 1;
+  }
+}

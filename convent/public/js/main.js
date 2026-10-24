@@ -367,6 +367,17 @@ for (const id of ['panel-begin', 'panel-paused']) $(id).addEventListener('click'
   if (e.target.closest('.settings') || e.target.closest('button[data-noresume]')) return;
   lock();
 });
+{
+  // the lobby has two pages: the controls, then the rules
+  const pages = document.querySelector('.l-pages');
+  const go = (n) => {
+    pages.dataset.page = n;
+    document.querySelector('.card.lobby').classList.toggle('p2', n === 2);
+    document.querySelectorAll('.l-dots i').forEach((d, i) => d.classList.toggle('on', i === n - 1));
+    $('btn-lobby-page').innerHTML = n === 1 ? 'Next: the rules &rarr;' : '&larr; Back to the controls';
+  };
+  $('btn-lobby-page').addEventListener('click', () => go(pages.dataset.page === '1' ? 2 : 1));
+}
 $('btn-settings-lobby').addEventListener('click', () => $('settings-lobby').classList.toggle('on'));
 document.addEventListener('pointerlockchange', () => {
   S.locked = document.pointerLockElement === canvas;
