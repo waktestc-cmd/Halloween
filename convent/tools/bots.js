@@ -38,6 +38,7 @@ for (let i = 0; i < n; i++) {
   s.on('connect', () => s.emit('join', { name: testers ? 'tester' : NAMES[i % NAMES.length] + (i >= NAMES.length ? ' ' + i : ''), look: i % 8 }));
   s.on('welcome', (m) => m.me && Object.assign(me, { x: m.me.x, z: m.me.z }));
   s.on('start', () => (me.path = []));
+  s.on('placed', (m) => Object.assign(me, { x: m.x, z: m.z, path: [] }));
   s.on('me', (m) => {
     if (m.state !== 'alive') me.dead = true;
   });

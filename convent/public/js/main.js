@@ -195,6 +195,8 @@ socket.on('lobby', (m) => {
   UI.show('panel-lobby');
 });
 socket.on('me', (m) => applyMe(m));
+// the night starts: the house puts you in your own room
+socket.on('placed', (m) => applyMe(m, true));
 socket.on('doors', (d) => {
   for (const [id, open] of Object.entries(d)) {
     if (S.doors[id] !== open) world.setDoor(id, open);

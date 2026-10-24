@@ -67,7 +67,7 @@ export const GHOST = {
 export const NOISE = { walk: 2.5, run: 10, door: 11, search: 6, padlock: 30, drop: 9 };
 
 export const DURATION = {
-  night: 20 * 60, // until dawn
+  night: 12 * 60, // until dawn
   grace: 40, // the monsters and ghosts stay still at first while everyone gets their bearings
   finale: 120, // once the front door is open
 };
@@ -76,7 +76,7 @@ export const DURATION = {
 export const HAUNT = { first: 25, every: [28, 55] };
 
 // when nobody has found the fuse (or the brass key) for this long, the house gives a clue to its room
-export const HINT = { after: 180 };
+export const HINT = { after: 120 };
 
 // the flashlight: it runs down while on, and slowly charges up again while switched off
 // (from empty to full in a minute, starting a moment after you switch it off)

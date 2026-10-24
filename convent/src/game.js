@@ -393,12 +393,38 @@ export class Game {
       if (slab) [x, z] = [slab.x, slab.z];
       return { id: 'n' + i, kind, name: K.name, x, z, yaw: 0, state: K.sleeps ? 'asleep' : 'idle', path: [], wait: 0, target: null, sawAt: -99, last: null, gloatUntil: 0, pullFrom: null, heard: null, hum: i, stunUntil: 0, flinchAgain: 0 };
     });
+    this.spreadPlayers();
     const ghosts = Math.min(C.GHOST.max, Math.round((C.GHOST.base + Math.floor(n / C.GHOST.perPlayers)) * this.level.ghosts));
     this.ghosts = Array.from({ length: ghosts }, (_, i) => this.newGhost('g' + i));
     this.hauntAt = GRACE + C.HAUNT.first;
     this.say('The doors lock behind you. Find a way out before dawn.');
     this.io.to('players').to('hosts').emit('start', this.publicState());
     for (const p of this.players.values()) p.socket.emit('me', this.mine(p));
+    for (const p of this.players.values()) p.socket.emit('placed', this.mine(p));
+  }
+
+  // everyone wakes up in a different room, away from the monsters' own rooms and from each other;
+  // after a catch you still wake in the guest bedrooms
+  spreadPlayers() {
+    const monsterRooms = new Set(this.monsters.map((m) => C.KINDS[m.kind].home));
+    const rooms = Object.keys(L.ROOMS).filter((k) => !monsterRooms.has(k) && !L.ROOMS[k].outdoor);
+    const order = rooms.sort(() => Math.random() - 0.5);
+    const taken = [];
+    let i = 0;
+    for (const p of this.players.values()) {
+      const room = order[i++ % order.length];
+      const tiles = tilesIn(room);
+      let spot = null;
+      for (let k = 0; k < 40 && !spot; k++) {
+        const [x, z] = L.centre(...pick(tiles));
+        const farFromMonsters = this.monsters.every((m) => dist(m, { x, z }) > 14);
+        const farFromPlayers = k > 25 || taken.every((q) => dist(q, { x, z }) > 3);
+        if (clearSpot(x, z) && farFromMonsters && farFromPlayers) spot = { x, z };
+      }
+      if (!spot) continue; // keeps the guest bedrooms
+      taken.push(spot);
+      Object.assign(p, { x: spot.x, z: spot.z, yaw: Math.random() * Math.PI * 2 });
+    }
   }
 
   hideItems() {
