@@ -91,12 +91,26 @@ const tilesIn = (room) => WALK_TILES.filter(([c, r]) => L.at(c, r) === room);
 const PATROL = Object.keys(L.ROOMS).filter((k) => k !== 'd');
 
 export class Game {
-  constructor(io) {
+  // room: where this game's messages go, so several games can share one server. solo: a game of one
+  // person's own, which they start, restart and set the difficulty of themselves (no big screen)
+  constructor(io, { room = 'main', solo = false } = {}) {
     this.io = io;
+    this.solo = solo;
+    this.rp = room + ':players';
+    this.rh = room + ':hosts';
     this.players = new Map();
     this.hosts = new Set();
+    this.idleSince = Date.now();
     this.reset();
-    setInterval(() => this.tick(), TICK * 1000);
+    this.timer = setInterval(() => this.tick(), TICK * 1000);
+  }
+
+  destroy() {
+    clearInterval(this.timer);
+  }
+
+  online() {
+    return [...this.players.values()].filter((p) => p.online).length;
   }
 
   reset() {
@@ -147,12 +161,12 @@ export class Game {
   /* ---------- connections ---------- */
   attachHost(socket) {
     this.hosts.add(socket);
-    socket.join('hosts');
+    socket.join(this.rh);
     socket.emit('welcome', { host: true, ...this.publicState() });
     socket.on('start', (m = {}) => this.start(m));
     socket.on('reset', () => {
       this.reset();
-      this.io.to('players').to('hosts').emit('lobby', this.publicState());
+      this.io.to(this.rp).to(this.rh).emit('lobby', this.publicState());
     });
     // the host can call dawn early: everyone gets the results as they stand
     socket.on('finish', () => this.end());
@@ -186,7 +200,15 @@ export class Game {
         this.players.set(me.id, me);
       }
       me.tester = TESTERS && /^tester$/i.test(name);
-      socket.join('players');
+      socket.join(this.rp);
+      if (this.solo && !socket.soloWired) {
+        socket.soloWired = true;
+        socket.on('start', (m = {}) => this.start({ difficulty: m.difficulty }));
+        socket.on('reset', () => {
+          this.reset();
+          this.io.to(this.rp).emit('lobby', this.publicState());
+        });
+      }
       socket.emit('welcome', { id: me.id, token: me.token, ...this.publicState(), me: this.mine(me) });
       this.broadcastLobby();
     });
@@ -398,7 +420,7 @@ export class Game {
     this.ghosts = Array.from({ length: ghosts }, (_, i) => this.newGhost('g' + i));
     this.hauntAt = GRACE + C.HAUNT.first;
     this.say('The doors lock behind you. Find a way out before dawn.');
-    this.io.to('players').to('hosts').emit('start', this.publicState());
+    this.io.to(this.rp).to(this.rh).emit('start', this.publicState());
     for (const p of this.players.values()) p.socket.emit('me', this.mine(p));
     for (const p of this.players.values()) p.socket.emit('placed', this.mine(p));
   }
@@ -463,7 +485,7 @@ export class Game {
       // a place someone already emptied loses its tick on the map, so people look again
       if (this.searched.delete(b.id)) reused = true;
     }
-    if (reused) this.io.to('players').to('hosts').emit('searched', [...this.searched]);
+    if (reused) this.io.to(this.rp).to(this.rh).emit('searched', [...this.searched]);
     for (const p of this.players.values()) if (p.tester) p.socket.emit('me', this.mine(p));
   }
 
@@ -649,7 +671,7 @@ export class Game {
     best((p) => p.caught > 0, (a, b) => b.caught - a.caught, 'Monster magnet', 'Caught the most times');
     best((p) => p.closest < 2.5, (a, b) => a.closest - b.closest, 'Closest call', 'Felt its breath');
     this.result = { escaped, total: list.length, list, awards, won: escaped > 0 };
-    this.io.to('players').to('hosts').emit('end', this.result);
+    this.io.to(this.rp).to(this.rh).emit('end', this.result);
   }
 
   /* ---------- noise, sight and the monsters ---------- */
@@ -1009,7 +1031,7 @@ export class Game {
       if (this.candy.size < C.CANDY.max) this.addCandy(true);
     }
     if (this.tickN % SEND_EVERY === 0) this.snapshot();
-    if (this.tickN % 20 === 0) this.io.to('hosts').emit('stats', this.hostStats());
+    if (this.tickN % 20 === 0) this.io.to(this.rh).emit('stats', this.hostStats());
     // once the front door is open the escape always gets its full time, even past dawn
     if (this.stage === 'escape') {
       if (this.t - this.finaleAt > C.DURATION.finale) this.end();
@@ -1030,7 +1052,7 @@ export class Game {
       if (tell && people.some((p) => Math.hypot(p.x - x, p.z - z) < 3)) continue;
       const it = { id: ++this.candyN, x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
       this.candy.set(it.id, it);
-      if (tell) this.io.to('players').to('hosts').emit('candy+', [it.id, it.x, it.z]);
+      if (tell) this.io.to(this.rp).to(this.rh).emit('candy+', [it.id, it.x, it.z]);
       return it;
     }
     return null;
@@ -1041,7 +1063,7 @@ export class Game {
       if (Math.hypot(it.x - me.x, it.z - me.z) > C.CANDY.reach) continue;
       this.candy.delete(it.id);
       me.stats.candy++;
-      this.io.to('players').to('hosts').emit('candy-', it.id);
+      this.io.to(this.rp).to(this.rh).emit('candy-', it.id);
       me.socket.emit('yum', { id: it.id, candy: me.stats.candy });
     }
   }
@@ -1050,7 +1072,7 @@ export class Game {
   markSearched(id) {
     if (this.searched.has(id)) return;
     this.searched.add(id);
-    this.io.to('players').to('hosts').emit('searched', [...this.searched]);
+    this.io.to(this.rp).to(this.rh).emit('searched', [...this.searched]);
     for (const p of this.players.values()) if (p.tester) p.socket.emit('me', this.mine(p));
   }
 
@@ -1070,7 +1092,7 @@ export class Game {
     if (!room) return;
     const text = `Listen… something rattles in the ${L.ROOMS[room].name}. The ${C.ITEMS[want].name.toLowerCase()}?`;
     this.say(text);
-    this.io.to('players').emit('toast', text);
+    this.io.to(this.rp).emit('toast', text);
   }
 
   /* ---------- telling everyone ---------- */
@@ -1085,7 +1107,7 @@ export class Game {
       g: this.ghosts.map((g) => [g.id, r(g.x), r(g.z), g.alive ? 1 : 0, g.chasing ? 1 : 0]),
       l: this.loose.map((l) => [l.id, l.item, r(l.x), r(l.z)]),
     };
-    this.io.to('players').to('hosts').volatile.emit('tick', msg);
+    this.io.to(this.rp).to(this.rh).volatile.emit('tick', msg);
   }
 
   publicState() {
@@ -1122,22 +1144,22 @@ export class Game {
     return { id: p.id, lives: p.lives, state: p.state, carrying: p.carrying, battery: Math.round(p.battery * 1000) / 1000, candy: p.stats.candy, hidden: p.hidden, safeUntil: p.safeUntil, x: p.x, z: p.z, yaw: p.yaw, tester: !!p.tester, secrets: p.tester ? [...this.boxes].filter(([, it]) => it !== 'battery') : null };
   }
   broadcastLobby() {
-    this.io.to('players').to('hosts').emit('roster', this.roster());
+    this.io.to(this.rp).to(this.rh).emit('roster', this.roster());
   }
   emitDoors() {
-    this.io.to('players').to('hosts').emit('doors', this.doors);
+    this.io.to(this.rp).to(this.rh).emit('doors', this.doors);
   }
   emitStage() {
-    this.io.to('players').to('hosts').emit('stage', { stage: this.stage, padlocks: this.padlocks, keyRooms: this.stage === 'keys' || this.stage === 'escape' ? this.keyRooms : [], finaleAt: this.finaleAt, roster: this.roster() });
+    this.io.to(this.rp).to(this.rh).emit('stage', { stage: this.stage, padlocks: this.padlocks, keyRooms: this.stage === 'keys' || this.stage === 'escape' ? this.keyRooms : [], finaleAt: this.finaleAt, roster: this.roster() });
   }
   // who: which kind of monster made it, when it matters for the sound
   sfx(kind, x, z, who) {
-    this.io.to('players').to('hosts').emit('sfx', { kind, x, z, who });
+    this.io.to(this.rp).to(this.rh).emit('sfx', { kind, x, z, who });
   }
   say(text) {
     this.feed.push({ t: this.t, text });
     if (this.feed.length > 50) this.feed.shift();
-    this.io.to('players').to('hosts').emit('feed', { t: this.t, text });
-    this.io.to('hosts').emit('roster', this.roster());
+    this.io.to(this.rp).to(this.rh).emit('feed', { t: this.t, text });
+    this.io.to(this.rh).emit('roster', this.roster());
   }
 }

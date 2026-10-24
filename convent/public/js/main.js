@@ -123,7 +123,17 @@ const S = {
 const serverNow = () => S.t + (performance.now() - S.tAt) / 1000;
 
 /* ---------- network ---------- */
-const socket = io({ transports: ['websocket', 'polling'] });
+// the big game (the host's screen starts it), or a game of your own: a made-up id keeps it yours over a refresh
+const store = { get: (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { /* kept for this visit only */ } } };
+let solo = false; // every visit starts at the join screen; "Play on my own" picks your game
+let gid = store.get('convent-gid') || Math.random().toString(36).slice(2, 12).padEnd(10, 'x');
+store.set('convent-gid', gid);
+const socket = io({ transports: ['websocket', 'polling'], auth: (cb) => cb(solo ? { mode: 'solo', gid } : {}) });
+function setMode(wantSolo) {
+  if (solo === wantSolo) return;
+  solo = wantSolo;
+  socket.disconnect().connect(); // reconnect into the other game; the join below waits for it
+}
 let token = '';
 try {
   token = localStorage.getItem('convent-token') || '';
@@ -143,6 +153,8 @@ socket.on('welcome', (m) => {
     /* ignore */
   }
   joinScreen.stop(); // the turning figure is not needed any more
+  $('l-solo').hidden = !solo;
+  document.querySelector('.l-top .quiet').textContent = solo ? 'Your own game. Choose how hard, then start when you are ready.' : 'The house opens when the host says so. Watch the big screen.';
   applyState(m);
   if (m.me) applyMe(m.me, true);
   if (m.phase === 'LOBBY') UI.show('panel-lobby');
@@ -398,6 +410,35 @@ for (const id of ['panel-begin', 'panel-paused']) $(id).addEventListener('click'
     else box.classList.remove('gone');
   });
 }
+// two ways in: the big game, or your own
+$('btn-enter').addEventListener('click', () => setMode(false));
+$('btn-solo').addEventListener('click', () => {
+  setMode(true);
+  $('join-form').requestSubmit();
+});
+{
+  let level = 'normal';
+  for (const b of document.querySelectorAll('#l-level button'))
+    b.addEventListener('click', () => {
+      level = b.dataset.level;
+      for (const x of document.querySelectorAll('#l-level button')) x.classList.toggle('on', x === b);
+    });
+  $('btn-solo-start').addEventListener('click', () => socket.emit('start', { difficulty: level }));
+  $('btn-again').addEventListener('click', () => socket.emit('reset'));
+}
+// the big game is only offered while a big screen is open (or people are already inside it)
+async function checkBigGame() {
+  try {
+    const s = await (await fetch('/status', { cache: 'no-store' })).json();
+    const open = s.hostOn || s.inside > 0 || s.phase !== 'LOBBY';
+    $('btn-enter').hidden = !open;
+    $('j-note').textContent = open ? 'Play on my own: just you, any time, no big screen needed.' : 'No big screen is open right now, so you can play on your own.';
+  } catch (e) {
+    /* keep what is showing */
+  }
+}
+checkBigGame();
+setInterval(() => document.getElementById('panel-join').classList.contains('on') && checkBigGame(), 8000);
 $('btn-settings-lobby').addEventListener('click', () => $('settings-lobby').classList.toggle('on'));
 document.addEventListener('pointerlockchange', () => {
   S.locked = document.pointerLockElement === canvas;
@@ -792,6 +833,8 @@ function showResults(r) {
   $('scores').innerHTML = r.list
     .map((p) => `<tr class="${p.id === S.id ? 'me' : ''}"><td>${p.name.replace(/[<>&]/g, '')}</td><td>${{ escaped: 'Escaped', dead: 'Taken', kept: 'Still inside' }[p.state]}</td><td>${p.candy || 0}</td><td>${p.score}</td></tr>`)
     .join('');
+  $('btn-again').hidden = !solo;
+  $('result-next').hidden = solo;
   UI.show('panel-results');
 }
 

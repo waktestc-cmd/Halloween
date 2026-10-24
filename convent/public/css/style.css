@@ -1284,7 +1284,7 @@ tr.me td {
   margin-top: 14px;
   color: var(--ash);
   font-size: 0.9em;
-  transition: opacity 0.6s;
+  transition: opacity 0.6s, height 0.3s 0.6s, margin 0.3s 0.6s;
 }
 .l-load .bar {
   flex: none;
@@ -1306,4 +1306,50 @@ tr.me td {
 }
 .l-load.gone {
   opacity: 0;
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* two ways in on the join screen, and the start controls of a game of your own */
+.j-go .ghost {
+  margin-top: 10px;
+  width: 100%;
+}
+.j-note {
+  margin: 8px 0 0;
+  color: var(--ash);
+  font-size: 0.85em;
+}
+.l-solo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 122, 26, 0.07);
+  border-left: 4px solid #ff7a1a;
+}
+.l-solo[hidden] {
+  display: none;
+}
+.l-solo .seg {
+  display: flex;
+  gap: 6px;
+}
+.l-solo .seg button {
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(237, 227, 207, 0.2);
+  background: transparent;
+  color: var(--bone);
+}
+.l-solo .seg button.on {
+  background: #ff7a1a;
+  color: #0a0908;
+  border-color: #ff7a1a;
+}
+.l-solo .cta {
+  margin-left: auto;
+  padding: 10px 20px;
 }
