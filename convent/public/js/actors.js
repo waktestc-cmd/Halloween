@@ -1111,3 +1111,11 @@ export function looseItem(scene, item) {
   scene.add(g);
   return g;
 }
+
+// fetch the figures while people wait in the lobby: the costumes in the house, and the zombies
+export function warmCast(costumes = []) {
+  cast.then((c) => c.count && new Set(costumes).forEach((i) => c.get(Number.isInteger(i) ? i : 0)));
+}
+export function warmZombies() {
+  zombieCast.then((c) => { for (let i = 0; i < c.count; i++) c.get(i); });
+}

@@ -14,11 +14,12 @@
 // "tone" darkens and greys its colours to suit the house (0 to 1, default 0.35).
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { track } from './loading.js';
 
 const loader = new GLTFLoader();
 const files = new Map();
 const loadFile = (url) => {
-  if (!files.has(url)) files.set(url, loader.loadAsync(url).catch((e) => (console.warn('model failed to load:', url, e.message), null)));
+  if (!files.has(url)) files.set(url, track(loader.loadAsync(url)).catch((e) => (console.warn('model failed to load:', url, e.message), null)));
   return files.get(url);
 };
 

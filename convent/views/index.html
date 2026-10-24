@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,500..900,0..100,0..1;1,9..144,500..900,0..100,0..1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
   <script type="importmap">
-    { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+    { "imports": { "three": "/vendor/three/build/three.module.min.js", "three/addons/": "/vendor/three/examples/jsm/" } }
   </script>
 </head>
 <body>
@@ -82,6 +82,7 @@
           <p class="quiet">The house opens when the host says so. Watch the big screen.</p>
         </div>
       </div>
+      <div class="l-load" id="l-load"><div class="bar"><i id="l-load-bar"></i></div><span id="l-load-text">Getting the house ready…</span></div>
       <div class="l-pages" data-page="1">
         <div class="l-page" id="l-page-1">
           <p id="roster-count"></p>

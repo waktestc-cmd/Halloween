@@ -1275,3 +1275,35 @@ tr.me td {
     columns: 1;
   }
 }
+
+/* what the house is still fetching, while you wait in the lobby */
+.l-load {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--ash);
+  font-size: 0.9em;
+  transition: opacity 0.6s;
+}
+.l-load .bar {
+  flex: none;
+  width: 160px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(237, 227, 207, 0.12);
+  overflow: hidden;
+}
+.l-load .bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #ff7a1a;
+  transition: width 0.3s;
+}
+.l-load.done .bar i {
+  background: #7fbf6a;
+}
+.l-load.gone {
+  opacity: 0;
+}

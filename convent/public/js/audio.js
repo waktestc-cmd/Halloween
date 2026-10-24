@@ -1,6 +1,7 @@
 // Sound: recorded effects from /assets/sounds, plus a few made here (rain, wind, the ghosts' hum,
 // her bell, the ghosts, a heartbeat). Sounds in the house are placed in 3D around you.
 // Any recording dropped into /assets/sounds with a name from FILES replaces the made-up version.
+import { track } from './loading.js';
 
 const FILES = {
   step: ['sfx-step-1', 'sfx-step-2', 'sfx-step-3', 'sfx-step-4'],
@@ -48,7 +49,7 @@ export class Sound {
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.ambience();
-    for (const [k, names] of Object.entries(FILES)) this.load(k, names);
+    for (const [k, names] of Object.entries(FILES)) track(this.load(k, names)); // each group counts once, so the lobby bar knows the total
   }
   setVolume(v) {
     Object.assign(this.vol, v);

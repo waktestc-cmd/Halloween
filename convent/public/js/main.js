@@ -5,7 +5,7 @@ import { io } from '/socket.io/socket.io.esm.min.js';
 import * as L from '/shared/level.js';
 import * as C from '/shared/config.js';
 import { buildWorld } from './world.js';
-import { Avatar, makeMonster, Ghost, looseItem } from './actors.js';
+import { Avatar, makeMonster, Ghost, looseItem, warmCast, warmZombies } from './actors.js';
 import { Sound } from './audio.js';
 import { Dust, Haunts, setDanger } from './atmosphere.js';
 import { propModels } from './models.js';
@@ -331,6 +331,8 @@ const joinScreen = setupJoin(({ name, costume, look }) => {
     .then((r) => r.json())
     .catch(() => [])
     .then((files) => sound.start(files));
+  warmCast([costume]);
+  warmZombies();
   socket.emit('join', { name, look, costume, token });
 });
 // who is inside, each in their costume
@@ -339,6 +341,7 @@ function renderRoster() {
   if (!el) return;
   el.innerHTML = S.roster.map((p) => `<li style="--c:${C.LOOKS[p.look] || '#666'}"><span class="silw">${costumeSVG(p.costume ?? 0)}</span>${p.name.replace(/[<>&]/g, '')}${p.id === S.id ? ' <em>(you)</em>' : ''}</li>`).join('');
   $('roster-count').innerHTML = `<span class="num">${S.roster.length}</span> inside.`;
+  warmCast(S.roster.map((p) => p.costume)); // your own first, then everyone else's, before the night starts
   const mine = S.roster.find((p) => p.id === S.id);
   if (mine && $('l-window').dataset.i !== String(mine.costume)) {
     $('l-window').dataset.i = mine.costume;
@@ -377,6 +380,21 @@ for (const id of ['panel-begin', 'panel-paused']) $(id).addEventListener('click'
     $('btn-lobby-page').innerHTML = n === 1 ? 'Next: the rules &rarr;' : '&larr; Back to the controls';
   };
   $('btn-lobby-page').addEventListener('click', () => go(pages.dataset.page === '1' ? 2 : 1));
+}
+// the bar in the lobby: what the house is still fetching
+{
+  let hide = 0;
+  window.addEventListener('loading', (e) => {
+    const { done, total } = e.detail;
+    const box = $('l-load');
+    if (!box) return;
+    clearTimeout(hide);
+    $('l-load-bar').style.width = (total ? (100 * done) / total : 0) + '%';
+    $('l-load-text').textContent = done >= total ? 'The house is ready.' : `Getting the house ready… ${done} of ${total}`;
+    box.classList.toggle('done', done >= total);
+    if (done >= total) hide = setTimeout(() => box.classList.add('gone'), 1500);
+    else box.classList.remove('gone');
+  });
 }
 $('btn-settings-lobby').addEventListener('click', () => $('settings-lobby').classList.toggle('on'));
 document.addEventListener('pointerlockchange', () => {
