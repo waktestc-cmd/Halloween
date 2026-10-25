@@ -1353,3 +1353,43 @@ tr.me td {
   margin-left: auto;
   padding: 10px 20px;
 }
+
+/* the story before the night */
+#panel-story {
+  background: radial-gradient(ellipse at 50% 30%, #1d140d, #050406 70%);
+}
+.card.story {
+  width: min(680px, 100%);
+  padding: 40px 44px;
+  background: rgba(10, 9, 8, 0.85);
+  border-radius: 4px;
+}
+.card.story h2 {
+  font-size: 40px;
+  margin: 4px 0 18px;
+}
+.card.story p {
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--bone);
+  opacity: 0;
+  animation: story-in 1.4s ease-out forwards;
+}
+.card.story .kicker {
+  opacity: 1;
+  animation: none;
+}
+.card.story .cta {
+  margin-top: 20px;
+  width: 100%;
+}
+@keyframes story-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -55,7 +55,7 @@
     <div class="join">
       <div class="j-intro">
         <h1 class="title display">{{TITLE}}</h1>
-        <p class="lede">Blackwood Manor, Halloween night. The guests are locked in, and the house is waking up. Get out before dawn.</p>
+        <p class="lede" id="j-lede">Blackwood Manor, Halloween night. The guests are locked in, and the house is waking up. Get out before dawn.</p>
       </div>
       <div class="j-who">
         <div class="j-hero" id="j-hero"><canvas id="j-preview"></canvas><div id="j-sil"></div></div>
@@ -136,6 +136,16 @@
   </section>
 
   <!-- 3. click to step in (and come back after Esc) -->
+  <!-- 3a. the story, as the night starts -->
+  <section class="panel ps" id="panel-story">
+    <div class="card story">
+      <p class="kicker">Tonight</p>
+      <h2 class="display" id="story-title"></h2>
+      <div id="story-text"></div>
+      <button id="btn-story" type="button" class="cta">Step inside</button>
+    </div>
+  </section>
+
   <section class="panel" id="panel-begin">
     <div class="card center">
       <p class="kicker">The doors lock behind you</p>

@@ -431,3 +431,59 @@ body:not([data-phase='PLAYING']) #h-finish {
   color: var(--bone);
   border-color: var(--ember);
 }
+
+/* the story on the big screen, over the map as the night starts */
+#h-story {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 35%, #1d140d, #050406 75%);
+  cursor: pointer;
+}
+#h-story[hidden] {
+  display: none;
+}
+.story-card {
+  width: min(1000px, 88vw);
+}
+.story-card .display {
+  font-size: clamp(30px, 4.4vw, 62px);
+  line-height: 1.05;
+  margin: 8px 0 24px;
+}
+.story-card p {
+  font-size: clamp(17px, 1.8vw, 28px);
+  line-height: 1.45;
+  margin: 0 0 0.8em;
+  opacity: 0;
+  animation: h-story-in 1.6s ease-out forwards;
+}
+.story-card .kicker {
+  opacity: 1;
+  animation: none;
+}
+.story-card .story-skip {
+  margin-top: 28px;
+  font-size: 16px;
+  opacity: 0.5;
+  animation: none;
+}
+@keyframes h-story-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.story-card .kicker {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 14px;
+  color: #ff7a1a;
+}

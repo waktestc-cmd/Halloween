@@ -3,6 +3,7 @@
 import { io } from '/socket.io/socket.io.esm.min.js';
 import * as L from '/shared/level.js';
 import * as C from '/shared/config.js';
+import { STORY } from '/shared/story.js';
 import { drawMap } from './ui.js';
 import { costumeImage, costumeSVG } from './costumes.js';
 
@@ -158,7 +159,21 @@ socket.on('stats', (m) => {
   S.stats = m;
   renderPlayers();
 });
+// the story on the big screen as the night starts: about 16 seconds, or a click
+let storyTimer = 0;
+function tellStory() {
+  $('h-story-title').textContent = STORY.title;
+  $('h-story-text').innerHTML = STORY.paras.map((t, i) => `<p style="animation-delay:${0.4 + i * 3.2}s">${t}</p>`).join('');
+  $('h-story').hidden = false;
+  clearTimeout(storyTimer);
+  storyTimer = setTimeout(() => ($('h-story').hidden = true), 17000);
+}
+$('h-story').addEventListener('click', () => {
+  clearTimeout(storyTimer);
+  $('h-story').hidden = true;
+});
 socket.on('start', (m) => {
+  tellStory();
   laugh(); // the house laughs as the doors lock (if another screen started it)
   $('h-feed').innerHTML = '';
   S.stats = null;

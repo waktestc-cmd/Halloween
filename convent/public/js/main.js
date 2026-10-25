@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { io } from '/socket.io/socket.io.esm.min.js';
 import * as L from '/shared/level.js';
 import * as C from '/shared/config.js';
+import { STORY } from '/shared/story.js';
 import { buildWorld } from './world.js';
 import { Avatar, makeMonster, Ghost, looseItem, warmCast, warmZombies } from './actors.js';
 import { Sound } from './audio.js';
@@ -196,7 +197,7 @@ socket.on('start', (m) => {
   S.battery = 1;
   S.stamina = 1;
   S.light = true;
-  beginPrompt();
+  beginPrompt(true);
 });
 socket.on('lobby', (m) => {
   clearHouse();
@@ -364,11 +365,16 @@ function renderRoster() {
 }
 
 /* ---------- pointer lock: click to step in, Esc for settings ---------- */
-function beginPrompt() {
+// the story, told once as the night starts (not again after a refresh)
+$('story-title').textContent = STORY.title;
+$('story-text').innerHTML = STORY.paras.map((t, i) => `<p style="animation-delay:${0.3 + i * 2.2}s">${t}</p>`).join('');
+$('j-lede').textContent = STORY.short;
+function beginPrompt(story = false) {
   S.phase = 'PLAYING';
   if (S.me.state !== 'alive') return applyMe({ ...S.me });
-  UI.show('panel-begin');
+  UI.show(story ? 'panel-story' : 'panel-begin');
 }
+$('btn-story').addEventListener('click', () => lock());
 function lock() {
   sound.start();
   canvas.requestPointerLock?.();
@@ -469,7 +475,7 @@ document.addEventListener('keydown', (e) => {
   // any key (but Esc) steps you inside, or back in after the settings, and does nothing else
   // (a walking key you keep holding walks you on once you are in)
   const panel = UI.shown();
-  if ((panel === 'panel-begin' || panel === 'panel-paused') && e.code !== 'Escape' && S.me.state === 'alive' && !S.scare) return lock();
+  if ((panel === 'panel-begin' || panel === 'panel-paused' || panel === 'panel-story') && e.code !== 'Escape' && S.me.state === 'alive' && !S.scare) return lock();
   if (e.code === 'KeyM' || e.code === 'Tab') toggleMap();
   if (S.me.state !== 'alive') {
     if (e.code === 'Space' || e.code === 'ArrowRight') nextWatch();
