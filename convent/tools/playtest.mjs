@@ -35,12 +35,31 @@ const browser = await chromium.launch({
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
 });
 const errors = [];
+// does this browser have WebGL at all? (the player page needs it)
+{
+  const p = await browser.newPage();
+  const info = await p.evaluate(() => {
+    const gl = document.createElement('canvas').getContext('webgl2') || document.createElement('canvas').getContext('webgl');
+    if (!gl) return 'NO WEBGL';
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'webgl present';
+  });
+  note(info !== 'NO WEBGL', 'this browser has WebGL', info);
+  await p.close();
+}
 async function open(name, url, size) {
   const ctx = await browser.newContext({ viewport: size });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${name}: ${e}`));
   page.on('console', (m) => m.type() === 'error' && !/favicon|404/.test(m.text()) && errors.push(`${name}: ${m.text()}`));
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  const t0 = Date.now();
+  await page.goto(url, { waitUntil: 'commit', timeout: 120000 });
+  // a player page builds the whole 3D house in software before the join screen appears: give it time
+  if (name !== 'host') {
+    await page.waitForSelector('#panel-join.on, #panel-nogl.on', { timeout: 300000 });
+    if (await page.$('#panel-nogl.on')) throw new Error(`${name}: "This browser can't show 3D" (WebGL is not available in this browser)`);
+  } else await page.waitForSelector('#h-lobby', { timeout: 120000 });
+  console.log(`     (${name} ready after ${Math.round((Date.now() - t0) / 1000)} s)`);
   return page;
 }
 const on = (page, sel) => page.$eval(sel, (e) => e.classList.contains('on')).catch(() => false);
