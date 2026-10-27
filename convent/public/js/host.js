@@ -4,6 +4,7 @@ import { io } from '/socket.io/socket.io.esm.min.js';
 import * as L from '/shared/level.js';
 import * as C from '/shared/config.js';
 import { STORY } from '/shared/story.js';
+import { mountPatch, reveal } from './harvest.js';
 import { drawMap } from './ui.js';
 import { costumeImage, costumeSVG } from './costumes.js';
 
@@ -148,9 +149,12 @@ socket.on('welcome', (m) => {
   apply(m);
   for (const f of m.feed || []) addFeed(f.text);
   if (m.result) results(m.result);
+  if (m.harvest) harvest(m.harvest);
 });
 socket.on('roster', (r) => apply({ roster: r }));
 socket.on('lobby', (m) => {
+  $('h-harvest').hidden = true;
+  spook(false);
   S.stats = null;
   $('h-feed').innerHTML = '';
   apply(m);
@@ -180,6 +184,48 @@ socket.on('start', (m) => {
   apply(m);
 });
 socket.on('stage', (m) => apply(m));
+
+/* ---------- the pumpkin patch: the top scorer picks, everyone watches ---------- */
+const dark = [new Audio('/assets/sounds/nun-hum.mp3'), new Audio('/assets/sounds/heartbeat.mp3')];
+dark.forEach((a, i) => ((a.loop = true), (a.volume = i ? 0.35 : 0.45)));
+const spook = (on) => dark.forEach((a) => (on ? a.play().catch(() => {}) : a.pause()));
+let patchShown = '';
+function harvest(h) {
+  if (!h) return;
+  const box = $('h-harvest');
+  if (h.open) {
+    $('h-harvest-title').textContent = `${h.winner.name} scored the most. Choose a pumpkin.`;
+    $('h-harvest-msg').textContent = 'One of six has a prize inside. They all look the same.';
+    $('h-harvest-msg').className = 'harvest-msg';
+    mountPatch($('h-patch'), h.pumpkins);
+    patchShown = 'open';
+    box.hidden = false;
+    spook(true);
+  } else if (h.result) {
+    if (box.hidden || patchShown === 'open') {
+      if (!$('h-patch').querySelector('.pk')) mountPatch($('h-patch'), h.pumpkins);
+      box.hidden = false;
+    }
+    patchShown = 'done';
+    const r = h.result;
+    reveal($('h-patch'), r);
+    $('h-harvest-title').textContent = r.won ? `${h.winner.name} wins: ${r.text}` : `${h.winner.name}: not this one…`;
+    $('h-harvest-msg').textContent = r.won ? 'The prize was inside!' : `The prize was in pumpkin ${r.prizeAt + 1}.`;
+    $('h-harvest-msg').className = 'harvest-msg' + (r.won ? ' won' : '');
+    const win = new Audio(r.won ? '/assets/sounds/sfx-win.mp3' : '/assets/sounds/ghost-boo.mp3');
+    win.volume = 0.8;
+    setTimeout(() => win.play().catch(() => {}), 900);
+    setTimeout(() => spook(false), 9000);
+  } else {
+    box.hidden = true;
+    spook(false);
+  }
+}
+socket.on('harvest', harvest);
+$('h-harvest').addEventListener('click', () => {
+  $('h-harvest').hidden = true;
+  spook(false);
+});
 socket.on('feed', (f) => addFeed(f.text));
 socket.on('searched', (ids) => (S.searched = ids));
 socket.on('candy+', ([id, x, z]) => S.candy.set(id, { x, z }));
@@ -198,7 +244,7 @@ for (const b of document.querySelectorAll('#h-level button'))
   });
 $('h-start').addEventListener('click', () => {
   laugh(); // played from the click itself, so the browser lets it
-  socket.emit('start', { difficulty: level });
+  socket.emit('start', { difficulty: level, prize: $('h-prize').checked });
 });
 
 /* ---------- the evil laugh, the moment the night starts ---------- */

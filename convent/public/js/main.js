@@ -5,6 +5,7 @@ import { io } from '/socket.io/socket.io.esm.min.js';
 import * as L from '/shared/level.js';
 import * as C from '/shared/config.js';
 import { STORY } from '/shared/story.js';
+import { mountPatch, reveal } from './harvest.js';
 import { buildWorld } from './world.js';
 import { Avatar, makeMonster, Ghost, looseItem, warmCast, warmZombies } from './actors.js';
 import { Sound } from './audio.js';
@@ -160,7 +161,10 @@ socket.on('welcome', (m) => {
   if (m.me) applyMe(m.me, true);
   if (m.phase === 'LOBBY') UI.show('panel-lobby');
   else if (m.phase === 'PLAYING') beginPrompt();
-  else if (m.phase === 'RESULTS') showResults(m.result);
+  else if (m.phase === 'RESULTS') {
+    showResults(m.result);
+    if (m.harvest) onHarvest(m.harvest);
+  }
 });
 socket.on('roster', (r) => {
   S.roster = r;
@@ -200,6 +204,8 @@ socket.on('start', (m) => {
   beginPrompt(true);
 });
 socket.on('lobby', (m) => {
+  $('harvest-note').hidden = true;
+  sound.scary(false);
   clearHouse();
   applyState(m);
   S.phase = 'LOBBY';
@@ -281,6 +287,58 @@ socket.on('spotted', (m) => {
 socket.on('sfx', (m) => onSfx(m));
 socket.on('hit', (m) => onHit(m));
 socket.on('end', (r) => showResults(r));
+// the pumpkin patch: the top scorer harvests one of six; everyone else watches how it goes
+function onHarvest(h) {
+  if (!h) return;
+  const me = h.winner.id === S.id;
+  const note = $('harvest-note');
+  const done = $('btn-harvest-done');
+  const say = (t, won) => {
+    note.hidden = false;
+    note.textContent = t;
+    note.style.color = won ? '#ffd35a' : '';
+  };
+  if (h.open) {
+    if (!me) return say(`${h.winner.name} scored the most, and is choosing a pumpkin in the graveyard…`);
+    $('harvest-title').textContent = 'You scored the most. Choose a pumpkin.';
+    $('harvest-msg').textContent = 'One of the six has a prize inside. They all look the same.';
+    $('harvest-msg').className = 'harvest-msg';
+    done.hidden = true;
+    mountPatch($('harvest-patch'), h.pumpkins, {
+      interactive: true,
+      onPick: (i) => {
+        sound.play('found', { vol: 0.9 });
+        socket.emit('harvest:pick', { i });
+      },
+    });
+    UI.show('panel-harvest');
+    sound.scary(true);
+  } else if (h.result) {
+    const r = h.result;
+    const won = r.won;
+    say(won ? `${h.winner.name} found the prize: ${r.text}` : `${h.winner.name} picked pumpkin ${r.pick + 1}. Nothing inside this time.`, won);
+    if (!me) return;
+    if (!$('harvest-patch').querySelector('.pk')) mountPatch($('harvest-patch'), h.pumpkins);
+    reveal($('harvest-patch'), r);
+    $('harvest-title').textContent = won ? r.text : 'Not this one…';
+    $('harvest-msg').textContent = won ? 'Show this screen to the organiser!' : `The prize was in pumpkin ${r.prizeAt + 1}.`;
+    $('harvest-msg').className = 'harvest-msg' + (won ? ' won' : '');
+    setTimeout(() => (won ? sound.play('win', { vol: 0.9 }) : sound.play('boo', { vol: UI.settings.gentle ? 0.3 : 0.6 })), 900);
+    done.hidden = false;
+    UI.show('panel-harvest');
+    setTimeout(() => sound.scary(false), 9000);
+  } else if (!h.result) {
+    // nobody picked in time
+    say('The pumpkins were left in the graveyard.');
+    sound.scary(false);
+    if (me) UI.show('panel-results');
+  }
+}
+socket.on('harvest', onHarvest);
+$('btn-harvest-done').addEventListener('click', () => {
+  sound.scary(false);
+  UI.show('panel-results');
+});
 socket.on('tick', (m) => onTick(m));
 
 function applyState(m) {

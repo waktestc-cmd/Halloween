@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,500..900,0..100,0..1;1,9..144,500..900,0..100,0..1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="stylesheet" href="/css/host.css" />
+  <link rel="stylesheet" href="/css/harvest.css" />
 </head>
 <body class="host">
   <header>
@@ -36,6 +37,7 @@
           <button type="button" data-level="normal" class="on">Normal</button>
           <button type="button" data-level="scary">Scary</button>
         </div>
+        <label class="prize-opt"><input type="checkbox" id="h-prize" checked /> Pumpkin prize at dawn</label>
         <button id="h-start" class="cta" type="button">Open the house</button>
       </div>
     </section>
@@ -45,6 +47,15 @@
         <h2 class="display" id="h-story-title"></h2>
         <div id="h-story-text"></div>
         <p class="story-skip">Click to begin</p>
+      </div>
+    </section>
+    <section id="h-harvest" hidden>
+      <div class="harvest-card">
+        <p class="kicker">The graveyard at dawn</p>
+        <h2 class="display" id="h-harvest-title"></h2>
+        <div id="h-patch"></div>
+        <p class="harvest-msg" id="h-harvest-msg"></p>
+        <p class="story-skip">Click to close</p>
       </div>
     </section>
     <section id="h-game">

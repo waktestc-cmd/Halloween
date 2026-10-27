@@ -165,6 +165,25 @@ export class Sound {
     }
     return src;
   }
+  // the graveyard at dawn: a low hum and a slow heartbeat, with whispers and thunder now and then
+  scary(on) {
+    if (!this.ctx) return;
+    if (this.dark) {
+      clearInterval(this.dark.timer);
+      for (const l of this.dark.loops) {
+        l.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.6);
+        setTimeout(() => l.src.stop(), 3000);
+      }
+      this.dark = null;
+    }
+    if (!on) return;
+    const loops = [this.loopFile('hum', 0.5), this.loopFile('heartbeat', 0.45)].filter(Boolean);
+    const timer = setInterval(() => {
+      this.play(Math.random() < 0.5 ? 'whisper' : 'boo', { vol: 0.25 });
+      if (Math.random() < 0.4) this.play('thunder', { vol: 0.35 });
+    }, 6500);
+    this.dark = { loops, timer };
+  }
   loopFile(key, vol) {
     const list = this.buffers.get(key);
     if (!list) return null;

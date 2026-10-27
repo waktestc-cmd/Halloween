@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,500..900,0..100,0..1;1,9..144,500..900,0..100,0..1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/harvest.css" />
   <script type="importmap">
     { "imports": { "three": "/vendor/three/build/three.module.min.js", "three/addons/": "/vendor/three/examples/jsm/" } }
   </script>
@@ -185,6 +186,17 @@
     </div>
   </section>
 
+  <!-- 4b. the pumpkin patch, for whoever scored the most -->
+  <section class="panel ps" id="panel-harvest">
+    <div class="card harvest">
+      <p class="kicker">The graveyard at dawn</p>
+      <h2 class="display harvest-title" id="harvest-title"></h2>
+      <div id="harvest-patch"></div>
+      <p class="harvest-msg" id="harvest-msg"></p>
+      <button id="btn-harvest-done" type="button" class="cta" hidden>See the results</button>
+    </div>
+  </section>
+
   <!-- 5. dawn -->
   <section class="panel" id="panel-results">
     <div class="card wide">
@@ -192,6 +204,7 @@
       <h2 id="result-title"></h2>
       <ul id="awards"></ul>
       <table><thead><tr><th>Name</th><th></th><th>Candy</th><th>Score</th></tr></thead><tbody id="scores"></tbody></table>
+      <p id="harvest-note" hidden></p>
       <p class="lede" id="result-next">The host can start another night.</p>
       <button id="btn-again" type="button" class="cta" hidden>Play again</button>
     </div>

@@ -487,3 +487,51 @@ body:not([data-phase='PLAYING']) #h-finish {
   font-size: 14px;
   color: #ff7a1a;
 }
+
+/* the pumpkin patch on the big screen */
+#h-harvest {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 35%, #1d140d, #050406 75%);
+  cursor: pointer;
+}
+#h-harvest[hidden] {
+  display: none;
+}
+.harvest-card {
+  width: min(1200px, 92vw);
+}
+.harvest-card .kicker {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 14px;
+  color: #ff7a1a;
+}
+.harvest-card .display {
+  font-size: clamp(28px, 4vw, 56px);
+  line-height: 1.05;
+  margin: 8px 0 18px;
+}
+.harvest-card .patch {
+  height: min(60vh, 560px);
+}
+.harvest-card .harvest-msg {
+  font-size: clamp(18px, 2vw, 30px);
+}
+.harvest-card .story-skip {
+  margin-top: 14px;
+  font-size: 15px;
+  opacity: 0.5;
+}
+.prize-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 18px;
+  color: var(--ash, #aaa);
+  font-size: 15px;
+}

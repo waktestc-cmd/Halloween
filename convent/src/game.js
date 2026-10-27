@@ -134,6 +134,8 @@ export class Game {
     this.candyN = 0;
     this.candyAt = 0;
     this.result = null;
+    this.harvest = null;
+    clearTimeout(this.harvestTimer);
     this.level = this.level || C.DIFFICULTY.normal;
     for (const p of this.players.values()) this.freshPlayer(p);
   }
@@ -212,6 +214,7 @@ export class Game {
       socket.emit('welcome', { id: me.id, token: me.token, ...this.publicState(), me: this.mine(me) });
       this.broadcastLobby();
     });
+    socket.on('harvest:pick', (m = {}) => this.pickPumpkin(me, Number(m.i)));
     socket.on('state', (m = {}) => {
       const battery = Number(m.battery);
       if (me && this.phase === 'PLAYING' && Number.isFinite(battery)) me.battery = Math.max(0, Math.min(1, battery));
@@ -398,6 +401,7 @@ export class Game {
     if (this.phase === 'PLAYING') return;
     this.reset();
     this.level = C.DIFFICULTY[opts.difficulty] || C.DIFFICULTY.normal;
+    this.prizeOn = !!opts.prize && !this.solo; // the prize belongs to the group game, never to a game of one
     if (!this.players.size) return;
     this.phase = 'PLAYING';
     this.t = 0;
@@ -672,6 +676,39 @@ export class Game {
     best((p) => p.closest < 2.5, (a, b) => a.closest - b.closest, 'Closest call', 'Felt its breath');
     this.result = { escaped, total: list.length, list, awards, won: escaped > 0 };
     this.io.to(this.rp).to(this.rh).emit('end', this.result);
+    console.log('[night]', JSON.stringify({ players: list.length, escaped, prize: !!this.prizeOn, top: list[0] && list[0].name }));
+    if (this.prizeOn && list.length) {
+      // the top score (ties: escaped first, then caught fewer times, then the earlier escape)
+      const top = [...list].sort((a, b) => b.score - a.score || (b.state === 'escaped') - (a.state === 'escaped') || a.caught - b.caught || (a.escapedAt || 1e9) - (b.escapedAt || 1e9))[0];
+      const result = this.result;
+      this.harvestTimer = setTimeout(() => this.openHarvest(top, result), (process.env.PRIZE_DELAY != null ? Number(process.env.PRIZE_DELAY) : C.PRIZE.delay) * 1000);
+    }
+  }
+
+  /* ---------- the pumpkin patch ---------- */
+  harvestView() {
+    const h = this.harvest;
+    return h ? { winner: { id: h.winnerId, name: h.name }, pumpkins: C.PRIZE.pumpkins, result: h.result, open: !h.result && !h.expired } : null;
+  }
+  openHarvest(top, result) {
+    if (this.phase !== 'RESULTS' || this.result !== result) return;
+    this.harvest = { winnerId: top.id, name: top.name, result: null, expired: false };
+    this.io.to(this.rp).to(this.rh).emit('harvest', this.harvestView());
+    this.harvestTimer = setTimeout(() => {
+      if (!this.harvest || this.harvest.result) return;
+      this.harvest.expired = true;
+      this.io.to(this.rp).to(this.rh).emit('harvest', this.harvestView());
+    }, C.PRIZE.claim * 1000);
+  }
+  // the winner picks one pumpkin; the prize pumpkin is drawn now, with real randomness
+  pickPumpkin(me, i) {
+    const h = this.harvest;
+    if (!h || h.result || h.expired || this.phase !== 'RESULTS' || !me || me.id !== h.winnerId) return;
+    if (!Number.isInteger(i) || i < 0 || i >= C.PRIZE.pumpkins) return;
+    const prizeAt = crypto.randomInt(C.PRIZE.pumpkins);
+    h.result = { pick: i, prizeAt, won: i === prizeAt, text: C.PRIZE.text };
+    console.log('[harvest]', JSON.stringify({ winner: h.name, pick: i, prizeAt, won: h.result.won, at: new Date().toISOString() }));
+    this.io.to(this.rp).to(this.rh).emit('harvest', this.harvestView());
   }
 
   /* ---------- noise, sight and the monsters ---------- */
@@ -1124,6 +1161,7 @@ export class Game {
       feed: this.feed.slice(-8),
       finaleAt: this.finaleAt,
       result: this.result,
+      harvest: this.phase === 'RESULTS' ? this.harvestView() : null,
       grace: GRACE,
       dev: DEV,
     };
