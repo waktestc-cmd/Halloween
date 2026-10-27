@@ -34,7 +34,7 @@ export function mountPatch(el, count, { interactive = false, onPick = () => {} }
 }
 
 // the reveal, the same on every screen: the picked pumpkin splits open, then the others do.
-// r: { pick, prizeAt, won, text }
+// r: { pick, numbers, prizeAt, won, text }: a number from 1 to 6 inside each, and the 6 is the prize
 export function reveal(el, r) {
   const btns = [...el.querySelectorAll('.pk')];
   el.classList.remove('pickable');
@@ -43,7 +43,7 @@ export function reveal(el, r) {
     const b = btns[i];
     if (!b) return;
     b.classList.add('open', prize ? 'prize' : 'empty');
-    b.querySelector('.pk-inside').textContent = prize ? r.text : '';
+    b.querySelector('.pk-inside').textContent = r.numbers ? r.numbers[i] : '';
   };
   btns[r.pick]?.classList.add('picked');
   setTimeout(() => open(r.pick, r.won), 900);

@@ -118,6 +118,7 @@ export const COSTUMES = [
 
 export const LOOKS = ['#6b4a3a', '#2f4a6b', '#4a6b3a', '#6b3a5a', '#7a6a3a', '#3a6b6b', '#5a3a6b', '#6b5a4a'];
 
-// the pumpkin patch: at dawn the top scorer harvests one of six pumpkins; exactly one has the prize.
-// The pick is made on the server with real randomness, so nobody (not even the game) can steer it.
-export const PRIZE = { pumpkins: 6, text: 'Friday off!', delay: 6, claim: 90 }; // delay: seconds after the results; claim: seconds to choose
+// the pumpkin patch: at dawn the top scorer harvests one of six pumpkins. Each hides a number from 1 to 6,
+// shuffled on the server with real randomness at the moment of the pick; the prize is the pumpkin with the
+// winning number, so exactly one in six. (There is no time limit: the winner takes as long as they like.)
+export const PRIZE = { pumpkins: 6, winning: 6, text: 'Half a day off!', delay: 6 }; // delay: seconds after the results

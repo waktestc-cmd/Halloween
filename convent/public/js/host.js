@@ -194,8 +194,8 @@ function harvest(h) {
   if (!h) return;
   const box = $('h-harvest');
   if (h.open) {
-    $('h-harvest-title').textContent = `${h.winner.name} scored the most. Choose a pumpkin.`;
-    $('h-harvest-msg').textContent = 'One of six has a prize inside. They all look the same.';
+    $('h-harvest-title').textContent = `${h.winner.name} scored the most, and walks into the graveyard…`;
+    $('h-harvest-msg').textContent = 'Six pumpkins hang there. Each hides a number from 1 to 6, and one of them is the 6.';
     $('h-harvest-msg').className = 'harvest-msg';
     mountPatch($('h-patch'), h.pumpkins);
     patchShown = 'open';
@@ -209,8 +209,8 @@ function harvest(h) {
     patchShown = 'done';
     const r = h.result;
     reveal($('h-patch'), r);
-    $('h-harvest-title').textContent = r.won ? `${h.winner.name} wins: ${r.text}` : `${h.winner.name}: not this one…`;
-    $('h-harvest-msg').textContent = r.won ? 'The prize was inside!' : `The prize was in pumpkin ${r.prizeAt + 1}.`;
+    $('h-harvest-title').textContent = r.won ? `${h.winner.name} found the 6: ${r.text}` : `${h.winner.name} found a ${r.number}…`;
+    $('h-harvest-msg').textContent = r.won ? 'The 6 was inside!' : `The 6 was in pumpkin ${r.prizeAt + 1}.`;
     $('h-harvest-msg').className = 'harvest-msg' + (r.won ? ' won' : '');
     const win = new Audio(r.won ? '/assets/sounds/sfx-win.mp3' : '/assets/sounds/ghost-boo.mp3');
     win.volume = 0.8;

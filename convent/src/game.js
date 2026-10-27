@@ -688,26 +688,26 @@ export class Game {
   /* ---------- the pumpkin patch ---------- */
   harvestView() {
     const h = this.harvest;
-    return h ? { winner: { id: h.winnerId, name: h.name }, pumpkins: C.PRIZE.pumpkins, result: h.result, open: !h.result && !h.expired } : null;
+    return h ? { winner: { id: h.winnerId, name: h.name }, pumpkins: C.PRIZE.pumpkins, result: h.result, open: !h.result } : null;
   }
   openHarvest(top, result) {
     if (this.phase !== 'RESULTS' || this.result !== result) return;
-    this.harvest = { winnerId: top.id, name: top.name, result: null, expired: false };
+    this.harvest = { winnerId: top.id, name: top.name, result: null };
     this.io.to(this.rp).to(this.rh).emit('harvest', this.harvestView());
-    this.harvestTimer = setTimeout(() => {
-      if (!this.harvest || this.harvest.result) return;
-      this.harvest.expired = true;
-      this.io.to(this.rp).to(this.rh).emit('harvest', this.harvestView());
-    }, C.PRIZE.claim * 1000);
   }
-  // the winner picks one pumpkin; the prize pumpkin is drawn now, with real randomness
+  // the winner picks one pumpkin; the numbers 1 to 6 are dealt into the pumpkins now, with real randomness
   pickPumpkin(me, i) {
     const h = this.harvest;
-    if (!h || h.result || h.expired || this.phase !== 'RESULTS' || !me || me.id !== h.winnerId) return;
+    if (!h || h.result || this.phase !== 'RESULTS' || !me || me.id !== h.winnerId) return;
     if (!Number.isInteger(i) || i < 0 || i >= C.PRIZE.pumpkins) return;
-    const prizeAt = crypto.randomInt(C.PRIZE.pumpkins);
-    h.result = { pick: i, prizeAt, won: i === prizeAt, text: C.PRIZE.text };
-    console.log('[harvest]', JSON.stringify({ winner: h.name, pick: i, prizeAt, won: h.result.won, at: new Date().toISOString() }));
+    const numbers = Array.from({ length: C.PRIZE.pumpkins }, (_, k) => k + 1);
+    for (let k = numbers.length - 1; k > 0; k--) {
+      const j = crypto.randomInt(k + 1);
+      [numbers[k], numbers[j]] = [numbers[j], numbers[k]];
+    }
+    const number = numbers[i];
+    h.result = { pick: i, numbers, number, prizeAt: numbers.indexOf(C.PRIZE.winning), won: number === C.PRIZE.winning, text: C.PRIZE.text };
+    console.log('[harvest]', JSON.stringify({ winner: h.name, pick: i, number, numbers, won: h.result.won, at: new Date().toISOString() }));
     this.io.to(this.rp).to(this.rh).emit('harvest', this.harvestView());
   }
 

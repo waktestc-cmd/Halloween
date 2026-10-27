@@ -6,6 +6,7 @@ import * as L from '/shared/level.js';
 import * as C from '/shared/config.js';
 import { STORY } from '/shared/story.js';
 import { mountPatch, reveal } from './harvest.js';
+import { createPatch, START as PATCH_START } from './patch3d.js';
 import { buildWorld } from './world.js';
 import { Avatar, makeMonster, Ghost, looseItem, warmCast, warmZombies } from './actors.js';
 import { Sound } from './audio.js';
@@ -206,6 +207,7 @@ socket.on('start', (m) => {
 socket.on('lobby', (m) => {
   $('harvest-note').hidden = true;
   sound.scary(false);
+  leavePatch();
   clearHouse();
   applyState(m);
   S.phase = 'LOBBY';
@@ -288,6 +290,55 @@ socket.on('sfx', (m) => onSfx(m));
 socket.on('hit', (m) => onHit(m));
 socket.on('end', (r) => showResults(r));
 // the pumpkin patch: the top scorer harvests one of six; everyone else watches how it goes
+// the 3D patch: the winner walks into the graveyard and harvests a hanging pumpkin
+const P = { on: false, patch: null, aim: -1, h: null, result: null };
+async function enterPatch() {
+  try {
+    if (!P.patch) {
+      const make = await propModels(); // a builder: asks for a model of a prop type, fitted to a size
+      P.patch = createPatch(scene, world.solids, make ? make({ type: 'pumpkin', id: 0, w: 0.8, d: 0.8, h: 0.7 }) : null);
+    }
+  } catch (e) {
+    // no 3D patch on this laptop: the flat one still works
+    $('harvest-patch').hidden = false;
+    $('btn-harvest-go').hidden = true;
+    mountPatch($('harvest-patch'), P.h.pumpkins, { interactive: true, onPick: (i) => (sound.play('found', { vol: 0.9 }), socket.emit('harvest:pick', { i })) });
+    return;
+  }
+  clearHouse();
+  P.patch.show(true);
+  P.on = true;
+  P.result = null;
+  Object.assign(S.me, { x: PATCH_START.x, z: PATCH_START.z, yaw: PATCH_START.yaw, pitch: 0, hidden: null });
+  S.light = true;
+  document.body.classList.add('patch');
+  $('btn-patch-done').hidden = true;
+  $('patch-msg').hidden = false;
+  $('patch-msg').textContent = 'Choose carefully. Each pumpkin hides a number from 1 to 6, and one of them is the 6.';
+  UI.show(null);
+  canvas.requestPointerLock?.();
+}
+function leavePatch() {
+  if (!P.on) return;
+  P.on = false;
+  P.patch?.show(false);
+  document.body.classList.remove('patch');
+  $('patch-msg').hidden = true;
+  $('btn-patch-done').hidden = true;
+  document.exitPointerLock();
+}
+function pickAimed() {
+  if (!P.on || P.result || P.aim < 0) return;
+  P.result = { picking: true };
+  sound.play('found', { vol: 0.9 });
+  socket.emit('harvest:pick', { i: P.aim });
+}
+$('btn-harvest-go').addEventListener('click', enterPatch);
+$('btn-patch-done').addEventListener('click', () => {
+  leavePatch();
+  sound.scary(false);
+  UI.show('panel-results');
+});
 function onHarvest(h) {
   if (!h) return;
   const me = h.winner.id === S.id;
@@ -300,38 +351,41 @@ function onHarvest(h) {
   };
   if (h.open) {
     if (!me) return say(`${h.winner.name} scored the most, and is choosing a pumpkin in the graveyard…`);
-    $('harvest-title').textContent = 'You scored the most. Choose a pumpkin.';
-    $('harvest-msg').textContent = 'One of the six has a prize inside. They all look the same.';
+    P.h = h;
+    $('harvest-title').textContent = 'You scored the most.';
+    $('harvest-msg').textContent = 'Walk into the graveyard and pick one of the six hanging pumpkins. Be careful: each hides a number from 1 to 6, and one of them is the 6.';
     $('harvest-msg').className = 'harvest-msg';
     done.hidden = true;
-    mountPatch($('harvest-patch'), h.pumpkins, {
-      interactive: true,
-      onPick: (i) => {
-        sound.play('found', { vol: 0.9 });
-        socket.emit('harvest:pick', { i });
-      },
-    });
+    $('harvest-patch').innerHTML = '';
+    $('harvest-patch').hidden = true;
+    $('btn-harvest-go').hidden = false;
     UI.show('panel-harvest');
     sound.scary(true);
   } else if (h.result) {
     const r = h.result;
     const won = r.won;
-    say(won ? `${h.winner.name} found the prize: ${r.text}` : `${h.winner.name} picked pumpkin ${r.pick + 1}. Nothing inside this time.`, won);
+    say(won ? `${h.winner.name} found the 6: ${r.text}` : `${h.winner.name} found a ${r.number}. Not the 6 this time.`, won);
     if (!me) return;
+    setTimeout(() => (won ? sound.play('win', { vol: 0.9 }) : sound.play('boo', { vol: UI.settings.gentle ? 0.3 : 0.6 })), 1900);
+    setTimeout(() => sound.scary(false), 11000);
+    if (P.on) {
+      P.result = r;
+      P.patch.reveal(r);
+      $('patch-msg').textContent = won ? `You found the 6. ${r.text}` : `You found a ${r.number}. The 6 was in another pumpkin.`;
+      $('patch-msg').className = won ? 'won' : '';
+      setTimeout(() => ($('btn-patch-done').hidden = false), 5200);
+      return;
+    }
+    // back after a refresh, or no 3D patch: the flat patch shows the reveal
+    $('harvest-patch').hidden = false;
+    $('btn-harvest-go').hidden = true;
     if (!$('harvest-patch').querySelector('.pk')) mountPatch($('harvest-patch'), h.pumpkins);
     reveal($('harvest-patch'), r);
-    $('harvest-title').textContent = won ? r.text : 'Not this one…';
-    $('harvest-msg').textContent = won ? 'Show this screen to the organiser!' : `The prize was in pumpkin ${r.prizeAt + 1}.`;
+    $('harvest-title').textContent = won ? r.text : `A ${r.number}…`;
+    $('harvest-msg').textContent = won ? 'You found the 6. Show this screen to the organiser!' : `The 6 was in pumpkin ${r.prizeAt + 1}.`;
     $('harvest-msg').className = 'harvest-msg' + (won ? ' won' : '');
-    setTimeout(() => (won ? sound.play('win', { vol: 0.9 }) : sound.play('boo', { vol: UI.settings.gentle ? 0.3 : 0.6 })), 900);
     done.hidden = false;
     UI.show('panel-harvest');
-    setTimeout(() => sound.scary(false), 9000);
-  } else if (!h.result) {
-    // nobody picked in time
-    say('The pumpkins were left in the graveyard.');
-    sound.scary(false);
-    if (me) UI.show('panel-results');
   }
 }
 socket.on('harvest', onHarvest);
@@ -510,6 +564,7 @@ document.addEventListener('pointerlockchange', () => {
   else if (S.phase === 'PLAYING' && S.me.state === 'alive' && !S.scare) UI.show('panel-paused');
 });
 canvas.addEventListener('click', () => {
+  if (P.on) return S.locked ? pickAimed() : canvas.requestPointerLock?.();
   if (S.phase !== 'PLAYING') return;
   if (S.me.state !== 'alive') return nextWatch();
   if (!S.locked) return lock();
@@ -517,7 +572,7 @@ canvas.addEventListener('click', () => {
 });
 $('panel-out').addEventListener('click', () => nextWatch());
 document.addEventListener('mousemove', (e) => {
-  if (!S.locked || S.me.state !== 'alive' || S.scare) return;
+  if (!S.locked || (S.me.state !== 'alive' && !P.on) || S.scare) return;
   const k = 0.0008 + UI.settings.sensitivity * 0.0034;
   S.me.yaw -= e.movementX * k;
   S.me.pitch -= e.movementY * k * (UI.settings.invert ? -1 : 1);
@@ -526,9 +581,10 @@ document.addEventListener('mousemove', (e) => {
 const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyF', 'KeyG', 'KeyM', 'KeyQ', 'Space', 'Tab']);
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
-  if (GAME_KEYS.has(e.code) && S.phase === 'PLAYING') e.preventDefault();
+  if (GAME_KEYS.has(e.code) && (S.phase === 'PLAYING' || P.on)) e.preventDefault();
   if (e.repeat) return;
   S.keys[e.code] = true;
+  if (P.on) return e.code === 'KeyE' || e.code === 'Space' ? pickAimed() : undefined;
   if (S.phase !== 'PLAYING') return;
   // any key (but Esc) steps you inside, or back in after the settings, and does nothing else
   // (a walking key you keep holding walks you on once you are in)
@@ -945,7 +1001,7 @@ function frame() {
   let moving = false;
   let run = false;
 
-  if (playing && me.state === 'alive' && me.hidden == null && !S.scare && (S.locked || !UI.shown())) ({ moving, run } = move(dt));
+  if ((playing && me.state === 'alive' && me.hidden == null && !S.scare && (S.locked || !UI.shown())) || (P.on && (S.locked || !UI.shown()))) ({ moving, run } = move(dt));
   if (S.scare) updateScare(dt);
 
   // the camera: your eyes, or a hiding place, or someone you watch
@@ -1003,7 +1059,7 @@ function frame() {
   // the flash: a burst far brighter than the torch, for a moment
   const burst = Math.max(0, 1 - (now - S.flashAt) / 300);
   if (burst > 0) torch.intensity = Math.max(torch.intensity, 110 * burst);
-  torch.visible = me.state === 'alive';
+  torch.visible = me.state === 'alive' || P.on;
   UI.setBars(S.battery, S.stamina, S.light, !S.light && S.offFor > C.BATTERY.rechargeAfter && S.battery < 1);
   UI.setFlash(now < S.flashReady ? Math.ceil((S.flashReady - now) / 1000) : S.battery < C.FLASH.cost ? 'low' : 'ready');
 
@@ -1121,7 +1177,11 @@ function frame() {
   }
 
   // what you are pointing at
-  if (playing && me.state === 'alive' && me.hidden == null && !S.scare) {
+  if (P.on) {
+    P.patch.update();
+    P.aim = P.patch.aim(camera, !P.result);
+    UI.setPrompt(P.aim >= 0 ? 'Harvest this pumpkin' : null);
+  } else if (playing && me.state === 'alive' && me.hidden == null && !S.scare) {
     aim = findAim();
     const d = describe(aim);
     if (Array.isArray(d)) UI.setPrompt(d[0], '');
